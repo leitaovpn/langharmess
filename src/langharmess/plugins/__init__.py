@@ -1,6 +1,5 @@
 """Concrete plugin implementations."""
 
-from langharmess.plugins.llm import LLMPlugin
 from langharmess.plugins.loop.cache.template_cache import TemplateCachePlugin
 from langharmess.plugins.loop.checkpointer.template_checkpointer import (
     TemplateCheckpointerPlugin,
@@ -15,6 +14,7 @@ from langharmess.plugins.loop.interrupt_after.template_interrupt_after import (
 from langharmess.plugins.loop.interrupt_before.template_interrupt_before import (
     TemplateInterruptBeforePlugin,
 )
+from langharmess.plugins.loop.llm.llm import LLMPlugin
 from langharmess.plugins.loop.middleware.template_middleware import (
     TemplateMiddlewarePlugin,
 )
@@ -29,10 +29,10 @@ from langharmess.plugins.loop.store.template_store import TemplateStorePlugin
 from langharmess.plugins.loop.system_prompt.template_system_prompt import (
     TemplateSystemPromptPlugin,
 )
+from langharmess.plugins.loop.tools.tools import ToolPlugin
 from langharmess.plugins.loop.transformers.template_transformers import (
     TemplateTransformersPlugin,
 )
-from langharmess.plugins.tools import ToolPlugin
 
 __all__ = [
     "LLMPlugin",

@@ -1,4 +1,4 @@
-"""LLM plugin."""
+"""LLM plugin implementation."""
 
 from __future__ import annotations
 

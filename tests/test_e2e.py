@@ -77,7 +77,7 @@ def descriptors(tmp_path: Path) -> PluginRegistry:
             PluginDescriptor(
                 name="llm",
                 version="1.0.0",
-                module="langharmess.plugins.llm",
+                module="langharmess.plugins.loop.llm.llm",
                 factory="llm-plugin-factory",
                 instance="llm",
                 specification="agent.plugin.llm",
@@ -87,7 +87,7 @@ def descriptors(tmp_path: Path) -> PluginRegistry:
             PluginDescriptor(
                 name="tools",
                 version="1.0.0",
-                module="langharmess.plugins.tools",
+                module="langharmess.plugins.loop.tools.tools",
                 factory="tools-plugin-factory",
                 instance="tools",
                 specification="agent.plugin.tools",

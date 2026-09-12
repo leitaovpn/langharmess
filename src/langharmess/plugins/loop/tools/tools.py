@@ -1,4 +1,4 @@
-"""Tool plugin."""
+"""Tool plugin implementation."""
 
 from __future__ import annotations
 
