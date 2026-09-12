@@ -18,6 +18,7 @@ PUBLIC_MODULES = [
     "langharmess_core.plugins",
     "langharmess_core.plugins.loop.llm.llm",
     "langharmess_core.plugins.loop.tools.tools",
+    "langharmess_core.plugins.loop.tools.workspace",
     "langharmess_core.plugins.loop.middleware.template_middleware",
     "langharmess_core.plugins.loop.system_prompt.template_system_prompt",
     "langharmess_core.plugins.loop.response_format.template_response_format",

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 import langharmess_core.agent_loop as agent_loop_module
@@ -177,6 +177,79 @@ def test_plugin_lifecycle_and_agent_invocation(
             "system-prompt-a",
             "system-prompt-b",
         }
+
+        workspace_descriptor = PluginDescriptor(
+            name="workspace-tools",
+            version="1.0.0",
+            module="langharmess_core.plugins.loop.tools.workspace",
+            factory="workspace-tools-plugin-factory",
+            instance="workspace-tools",
+            specification="agent.plugin.tools",
+            properties={"plugin.tools.root_dir": str(tmp_path)},
+        )
+        model = manager.get_service("agent.plugin.llm").get_model()
+        original_responses = model.responses
+        manager.install_plugin(workspace_descriptor)
+        try:
+            model.responses = [
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "write_file",
+                            "args": {
+                                "file_path": "tool-proof.txt",
+                                "text": "file-tool-ok",
+                            },
+                            "id": "write-call",
+                            "type": "tool_call",
+                        }
+                    ],
+                ),
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "read_file",
+                            "args": {"file_path": "tool-proof.txt"},
+                            "id": "read-call",
+                            "type": "tool_call",
+                        }
+                    ],
+                ),
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "bash",
+                            "args": {"commands": "printf bash-tool-ok"},
+                            "id": "bash-call",
+                            "type": "tool_call",
+                        }
+                    ],
+                ),
+                AIMessage(content="tools completed"),
+            ]
+            model.i = 0
+
+            tool_result = loop.invoke("Exercise the workspace tools")
+            tool_messages = [
+                message
+                for message in tool_result["messages"]
+                if isinstance(message, ToolMessage)
+            ]
+            assert (tmp_path / "tool-proof.txt").read_text() == "file-tool-ok"
+            assert [message.name for message in tool_messages] == [
+                "write_file",
+                "read_file",
+                "bash",
+            ]
+            assert "file-tool-ok" in str(tool_messages[1].content)
+            assert "bash-tool-ok" in str(tool_messages[2].content)
+        finally:
+            model.responses = original_responses
+            model.i = 0
+            manager.uninstall_plugin("workspace-tools")
 
         async def verify_sqlite_memory() -> None:
             sqlite_path = tmp_path / "checkpoints.sqlite3"

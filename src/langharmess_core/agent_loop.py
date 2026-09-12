@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from langchain.agents import create_agent
+from langchain_core.messages import ToolMessage
 from pelix.ipopo.decorators import (
     BindField,
     ComponentFactory,
@@ -325,22 +326,44 @@ class PluginAgentLoop:
 
     async def astream(
         self, message: str, *, thread_id: str | None = None
-    ) -> AsyncIterator[Any]:
+    ) -> AsyncIterator[dict[str, Any]]:
         if self._graph is None:
             raise RuntimeError("Agent graph is not built; no LLM plugin is available")
         config = {"configurable": {"thread_id": thread_id}} if thread_id else None
-        async for chunk in self._graph.astream(
+        async for stream_type, chunk in self._graph.astream(
             {"messages": [{"role": "user", "content": message}]},
             config=config,
-            stream_mode="messages",
+            stream_mode=["messages", "updates"],
         ):
-            if isinstance(chunk, tuple):
-                message = chunk[0]
-                content = str(getattr(message, "content", ""))
-            else:
-                content = str(chunk)
-            if content:
-                yield content
+            if stream_type == "messages":
+                streamed_message = chunk[0]
+                if isinstance(streamed_message, ToolMessage):
+                    continue
+                if getattr(streamed_message, "tool_calls", None) or getattr(
+                    streamed_message, "tool_call_chunks", None
+                ):
+                    continue
+                content = str(getattr(streamed_message, "content", ""))
+                if content:
+                    yield {"type": "assistant", "content": content}
+                continue
+
+            for update in chunk.values():
+                for updated_message in update.get("messages", []):
+                    if isinstance(updated_message, ToolMessage):
+                        yield {
+                            "type": "tool_output",
+                            "name": updated_message.name or "tool",
+                            "tool_call_id": updated_message.tool_call_id,
+                            "output": str(updated_message.content),
+                        }
+                    for tool_call in getattr(updated_message, "tool_calls", []):
+                        yield {
+                            "type": "tool_call",
+                            "name": tool_call["name"],
+                            "tool_call_id": tool_call["id"],
+                            "args": tool_call["args"],
+                        }
 
     def describe(self) -> dict[str, Any]:
         llm_info = self._llm_provider.get_plugin_info() if self._llm_provider else None

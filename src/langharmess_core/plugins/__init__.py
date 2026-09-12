@@ -31,6 +31,7 @@ from langharmess_core.plugins.loop.system_prompt.template_system_prompt import (
     TemplateSystemPromptPlugin,
 )
 from langharmess_core.plugins.loop.tools.tools import ToolPlugin
+from langharmess_core.plugins.loop.tools.workspace import WorkspaceToolsPlugin
 from langharmess_core.plugins.loop.transformers.template_transformers import (
     TemplateTransformersPlugin,
 )
@@ -51,5 +52,6 @@ __all__ = [
     "TemplateStorePlugin",
     "TemplateSystemPromptPlugin",
     "ToolPlugin",
+    "WorkspaceToolsPlugin",
     "TemplateTransformersPlugin",
 ]

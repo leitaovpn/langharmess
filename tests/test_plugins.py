@@ -14,6 +14,7 @@ from langharmess_core.plugins.loop.middleware.template_middleware import (
     TemplateMiddlewarePlugin,
 )
 from langharmess_core.plugins.loop.tools.tools import ToolPlugin
+from langharmess_core.plugins.loop.tools.workspace import WorkspaceToolsPlugin
 
 
 def test_llm_plugin_uses_injected_model_instance() -> None:
@@ -72,6 +73,19 @@ def test_tool_plugin_wraps_callables() -> None:
     plugin._tool_functions = None
     tools = plugin.get_tools()
     assert tools and tools[0].name == "add"
+
+
+def test_workspace_tools_plugin_provides_file_and_bash_tools(tmp_path) -> None:
+    plugin = WorkspaceToolsPlugin()
+    plugin._root_dir = str(tmp_path)
+    tools = {tool.name: tool for tool in plugin.get_tools()}
+
+    assert {"read_file", "write_file", "list_directory", "bash"} <= tools.keys()
+    assert "workspace-ok" in tools["bash"].invoke({"commands": "printf workspace-ok"})
+    assert plugin.get_plugin_info() == {
+        "name": "workspace-tools",
+        "version": "1.0.0",
+    }
 
 
 def test_tool_plugin_keeps_existing_base_tools() -> None:

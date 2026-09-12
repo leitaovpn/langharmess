@@ -13,7 +13,7 @@ from langharmess_api.contracts import (
     SPEC_RATE_LIMIT,
     SPEC_ROUTE,
 )
-from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_CHECKPOINTER
+from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_CHECKPOINTER, SPEC_TOOL
 from langharmess_plugin.plugin_manager import PluginManager
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 
@@ -78,6 +78,15 @@ def create_app() -> FastAPI:
                     properties={
                         "plugin.checkpoint.path": "langharmess_checkpoints.sqlite3"
                     },
+                ),
+                PluginDescriptor(
+                    name="workspace-tools",
+                    version="1.0.0",
+                    module="langharmess_core.plugins.loop.tools.workspace",
+                    factory="workspace-tools-plugin-factory",
+                    instance="workspace-tools",
+                    specification=SPEC_TOOL,
+                    properties={"plugin.tools.root_dir": "."},
                 ),
                 PluginDescriptor(
                     name="api-stream",

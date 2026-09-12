@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 import langharmess_cli.plugins.commands.template_health as health_module
@@ -63,8 +65,16 @@ def test_interactive_runner_stream_request(
         def raise_for_status(self):
             return None
 
-        def iter_text(self):
-            return ["chunk1", "chunk2"]
+        def iter_lines(self):
+            return [
+                json.dumps(
+                    {"type": "tool_call", "name": "bash", "args": {"commands": "pwd"}}
+                ),
+                json.dumps(
+                    {"type": "tool_output", "name": "bash", "output": "/workspace"}
+                ),
+                json.dumps({"type": "assistant", "content": "done"}),
+            ]
 
     captured = {}
 
@@ -83,8 +93,9 @@ def test_interactive_runner_stream_request(
     )
     runner.do_stream("hello")
     output = capsys.readouterr().out
-    assert "chunk1" in output
-    assert "chunk2" in output
+    assert "[tool call] bash {'commands': 'pwd'}" in output
+    assert "[tool output] bash: /workspace" in output
+    assert "done" in output
     assert captured["json"] == {
         "input": "hello",
         "model": "deepseek-v4-flash",

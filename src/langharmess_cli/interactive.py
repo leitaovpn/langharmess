@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import cmd
+import json
 from collections.abc import Iterable, Mapping
 from uuid import uuid4
 
@@ -50,8 +51,14 @@ class InteractiveCLIRunner(cmd.Cmd):
             timeout=None,
         ) as response:
             response.raise_for_status()
-            for chunk in response.iter_text():
-                print(chunk, end="", flush=True)
+            for line_text in response.iter_lines():
+                event = json.loads(line_text)
+                if event["type"] == "assistant":
+                    print(event["content"], end="", flush=True)
+                elif event["type"] == "tool_call":
+                    print(f"\n[tool call] {event['name']} {event['args']}")
+                elif event["type"] == "tool_output":
+                    print(f"[tool output] {event['name']}: {event['output']}")
         print()
 
     def do_exit(self, line: str) -> bool:

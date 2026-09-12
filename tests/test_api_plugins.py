@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessage, ToolMessage
 
 from langharmess_api.dependencies import get_db_session
 from langharmess_api.plugins.auth.template_auth import TemplateAuthPlugin
@@ -71,8 +72,41 @@ def test_health_route_has_router_and_dependency() -> None:
 def test_agent_loop_astream_yields_message_contents() -> None:
     class FakeGraph:
         async def astream(self, input_data, config=None, stream_mode=None):
-            yield (type("M", (), {"content": "hello"})(), "metadata")
-            yield (type("M", (), {"content": "world"})(), "metadata")
+            yield ("messages", (AIMessage(content="hello"), "metadata"))
+            yield (
+                "updates",
+                {
+                    "model": {
+                        "messages": [
+                            AIMessage(
+                                content="",
+                                tool_calls=[
+                                    {
+                                        "name": "bash",
+                                        "args": {"commands": "pwd"},
+                                        "id": "call-1",
+                                        "type": "tool_call",
+                                    }
+                                ],
+                            )
+                        ]
+                    }
+                },
+            )
+            yield (
+                "updates",
+                {
+                    "tools": {
+                        "messages": [
+                            ToolMessage(
+                                content="/workspace",
+                                name="bash",
+                                tool_call_id="call-1",
+                            )
+                        ]
+                    }
+                },
+            )
 
     loop = PluginAgentLoop()
     loop._graph = FakeGraph()
@@ -82,15 +116,29 @@ def test_agent_loop_astream_yields_message_contents() -> None:
 
     import asyncio
 
-    assert asyncio.run(collect()) == ["hello", "world"]
+    assert asyncio.run(collect()) == [
+        {"type": "assistant", "content": "hello"},
+        {
+            "type": "tool_call",
+            "name": "bash",
+            "tool_call_id": "call-1",
+            "args": {"commands": "pwd"},
+        },
+        {
+            "type": "tool_output",
+            "name": "bash",
+            "tool_call_id": "call-1",
+            "output": "/workspace",
+        },
+    ]
 
 
 def test_stream_route_plugin_streams_agent_output() -> None:
     class FakeAgentLoop:
         async def astream(self, message, *, thread_id=None):
             assert thread_id == "session-1"
-            yield "hello"
-            yield "world"
+            yield {"type": "assistant", "content": "hello"}
+            yield {"type": "assistant", "content": "world"}
 
     plugin = StreamRoutePlugin()
     plugin._agent_loop = FakeAgentLoop()
@@ -113,7 +161,10 @@ def test_stream_route_plugin_streams_agent_output() -> None:
         },
     )
     assert response.status_code == 200
-    assert response.text == "helloworld"
+    assert response.text == (
+        '{"type": "assistant", "content": "hello"}\n'
+        '{"type": "assistant", "content": "world"}\n'
+    )
     assert descriptors[0].name == "runtime-llm"
     assert descriptors[0].properties == {
         "plugin.model.name": "test-model",

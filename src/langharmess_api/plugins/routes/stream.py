@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -67,12 +68,14 @@ class StreamRoutePlugin:
                 raise HTTPException(status_code=503, detail="Agent loop unavailable")
 
             async def generate() -> AsyncIterator[str]:
-                async for text in self._agent_loop.astream(
+                async for event in self._agent_loop.astream(
                     payload.input, thread_id=payload.session_id
                 ):
-                    yield text
+                    yield f"{json.dumps(event, ensure_ascii=False)}\n"
 
-            return StreamingResponse(generate(), media_type="text/plain")
+            return StreamingResponse(
+                generate(), media_type="application/x-ndjson"
+            )
 
         return router
 
