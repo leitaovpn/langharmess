@@ -152,6 +152,9 @@ def test_main_runs_plugin_commands(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "argv", ["langharmess"])
+    monkeypatch.setenv("LANG_HARMESS_MODEL", "env-model")
+    monkeypatch.setenv("LANG_HARMESS_API_KEY", "env-key")
+    monkeypatch.setenv("LANG_HARMESS_BASE_URL", "https://models.example/v1")
 
     provider = SimpleNamespace(
         get_commands=lambda: [],
@@ -171,11 +174,21 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         def ensure_api_server(self):
             return None
 
+    captured = {}
+
     class FakeInteractive:
-        def __init__(self, *, base_url, token, commands):
+        def __init__(
+            self, *, base_url, token, model, api_key, model_base_url, commands
+        ):
             self.base_url = base_url
             self.token = token
+            self.model = model
+            self.api_key = api_key
+            self.model_base_url = model_base_url
             self.commands = commands
+            captured.update(
+                model=model, api_key=api_key, model_base_url=model_base_url
+            )
 
         def cmdloop(self):
             self.called = True
@@ -190,6 +203,11 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
 
     assert main_module.main() == 0
+    assert captured == {
+        "model": "env-model",
+        "api_key": "env-key",
+        "model_base_url": "https://models.example/v1",
+    }
 
 
 def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> None:

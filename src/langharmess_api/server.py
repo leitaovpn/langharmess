@@ -13,6 +13,7 @@ from langharmess_api.contracts import (
     SPEC_RATE_LIMIT,
     SPEC_ROUTE,
 )
+from langharmess_core.contracts import SPEC_AGENT_LOOP
 from langharmess_plugin.plugin_manager import PluginManager
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 
@@ -25,6 +26,14 @@ def create_app() -> FastAPI:
     if _MANAGER is None:
         registry = PluginRegistry(
             [
+                PluginDescriptor(
+                    name="agent-loop",
+                    version="1.0.0",
+                    module="langharmess_core.agent_loop",
+                    factory="agent-loop-factory",
+                    instance="agent-loop",
+                    specification=SPEC_AGENT_LOOP,
+                ),
                 PluginDescriptor(
                     name="api-auth",
                     version="1.0.0",

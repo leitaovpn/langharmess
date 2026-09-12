@@ -37,6 +37,23 @@ def test_llm_plugin_uses_model_name() -> None:
         llm_module.init_chat_model = original
 
 
+def test_llm_plugin_uses_openai_compatible_configuration() -> None:
+    plugin = LLMPlugin()
+    plugin._model_name = "custom-model"
+    plugin._api_key = "secret"
+    plugin._base_url = "https://models.example/v1"
+    captured = {}
+    original = llm_module.ChatOpenAI
+    llm_module.ChatOpenAI = lambda **kwargs: captured.update(kwargs) or object()
+    try:
+        plugin.get_model()
+    finally:
+        llm_module.ChatOpenAI = original
+    assert captured["model"] == "custom-model"
+    assert captured["api_key"].get_secret_value() == "secret"
+    assert captured["base_url"] == "https://models.example/v1"
+
+
 def test_llm_plugin_defaults_to_openai_model() -> None:
     plugin = LLMPlugin()
     plugin._model_instance = None

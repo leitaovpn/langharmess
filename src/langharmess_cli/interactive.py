@@ -19,24 +19,45 @@ class InteractiveCLIRunner(cmd.Cmd):
         base_url: str,
         token: str,
         commands: Iterable[InteractiveCommandSpec],
+        model: str = "gpt-4o-mini",
+        api_key: str = "",
+        model_base_url: str = "",
     ) -> None:
         super().__init__()
         self.base_url = base_url.rstrip("/")
         self.token = token
+        self.model = model
+        self.api_key = api_key
+        self.model_base_url = model_base_url.rstrip("/")
+        self.messages: list[dict[str, str]] = []
         self.commands: Mapping[str, InteractiveCommandSpec] = {
             command.name: command for command in commands
         }
 
     def do_stream(self, line: str) -> None:
+        self.messages.append({"role": "user", "content": line})
+        response_parts: list[str] = []
         with httpx.stream(
             "POST",
             f"{self.base_url}/stream",
-            json={"input": line},
+            json={
+                "input": line,
+                "model": self.model,
+                "api_key": self.api_key,
+                "base_url": self.model_base_url,
+                "messages": list(self.messages),
+            },
             headers={"Authorization": f"Bearer {self.token}"},
             timeout=None,
         ) as response:
-            for chunk in response.iter_lines():
-                print(chunk)
+            response.raise_for_status()
+            for chunk in response.iter_text():
+                response_parts.append(chunk)
+                print(chunk, end="", flush=True)
+        print()
+        self.messages.append(
+            {"role": "assistant", "content": "".join(response_parts)}
+        )
 
     def do_exit(self, line: str) -> bool:
         return True

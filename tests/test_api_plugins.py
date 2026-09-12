@@ -93,10 +93,28 @@ def test_stream_route_plugin_streams_agent_output() -> None:
 
     plugin = TemplateStreamRoutePlugin()
     plugin._agent_loop = FakeAgentLoop()
+    descriptors = []
+    plugin._plugin_registrar = type(
+        "Registrar", (), {"ensure_plugin": lambda self, item: descriptors.append(item)}
+    )()
     app = FastAPI()
     app.include_router(plugin.get_router())
 
     client = TestClient(app)
-    response = client.post("/stream", json={"input": "hi"})
+    response = client.post(
+        "/stream",
+        json={
+            "input": "hi",
+            "model": "test-model",
+            "api_key": "test-key",
+            "base_url": "https://models.example/v1",
+        },
+    )
     assert response.status_code == 200
-    assert response.text == "hello\nworld\n"
+    assert response.text == "helloworld"
+    assert descriptors[0].name == "runtime-llm"
+    assert descriptors[0].properties == {
+        "plugin.model.name": "test-model",
+        "plugin.model.api_key": "test-key",
+        "plugin.model.base_url": "https://models.example/v1",
+    }

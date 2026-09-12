@@ -119,3 +119,26 @@ def test_service_queries_with_mock_context() -> None:
     manager._context.get_all_service_references.return_value = None
     assert manager.get_services("missing") == []
     assert manager.service_properties("missing") == []
+
+
+def test_replace_plugin_replaces_descriptor_and_component() -> None:
+    manager = make_started_manager()
+    manager._context.install_bundle.return_value = Mock()
+    old = descriptor("llm")
+    manager.install_plugin(old)
+    replacement = descriptor("llm")
+    replacement.properties = {"plugin.model.name": "new-model"}
+
+    manager.replace_plugin(replacement)
+
+    assert manager.registry.get("llm") is replacement
+    assert manager.installed_names() == {"llm"}
+    assert manager._ipopo.instantiate.call_args_list[-1].args == (
+        "llm-factory",
+        "llm",
+        {"plugin.model.name": "new-model"},
+    )
+
+    calls = manager._ipopo.instantiate.call_count
+    manager.ensure_plugin(replacement)
+    assert manager._ipopo.instantiate.call_count == calls

@@ -60,22 +60,42 @@ def test_interactive_runner_stream_request(
         def __exit__(self, exc_type, exc, tb):
             return None
 
-        def iter_lines(self):
+        def raise_for_status(self):
+            return None
+
+        def iter_text(self):
             return ["chunk1", "chunk2"]
 
-    monkeypatch.setattr(
-        "langharmess_cli.interactive.httpx.stream",
-        lambda *args, **kwargs: FakeStreamResponse(),
-    )
+    captured = {}
+
+    def fake_stream(*args, **kwargs):
+        captured.update(kwargs)
+        return FakeStreamResponse()
+
+    monkeypatch.setattr("langharmess_cli.interactive.httpx.stream", fake_stream)
     runner = InteractiveCLIRunner(
         base_url="http://127.0.0.1:8000",
         token="secret",
+        model="deepseek-v4-flash",
+        api_key="model-secret",
+        model_base_url="https://models.example/v1/",
         commands=[],
     )
     runner.do_stream("hello")
     output = capsys.readouterr().out
     assert "chunk1" in output
     assert "chunk2" in output
+    assert captured["json"] == {
+        "input": "hello",
+        "model": "deepseek-v4-flash",
+        "api_key": "model-secret",
+        "base_url": "https://models.example/v1",
+        "messages": [{"role": "user", "content": "hello"}],
+    }
+    assert runner.messages == [
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": "chunk1chunk2"},
+    ]
 
 
 def test_template_health_provides_interactive_command() -> None:

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from pelix.framework import BundleContext, Framework, create_framework
+from pelix.framework import BundleContext, Framework, FrameworkFactory, create_framework
 from pelix.ipopo.constants import SERVICE_IPOPO
 
+from langharmess_plugin.contracts import SPEC_PLUGIN_REGISTRAR
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 
 
@@ -20,6 +21,7 @@ class PluginManager:
         self._ipopo: Any = None
         self._bundles: dict[str, Any] = {}
         self._bound: set[str] = set()
+        self._registration: Any = None
 
     @property
     def started(self) -> bool:
@@ -34,14 +36,18 @@ class PluginManager:
         ipopo_reference: Any = self._context.get_service_reference(SERVICE_IPOPO)
         assert ipopo_reference is not None
         self._ipopo = self._context.get_service(ipopo_reference)
+        self._registration = self._context.register_service(
+            SPEC_PLUGIN_REGISTRAR, self, {}
+        )
 
     def stop(self) -> None:
         if self._framework is None:
             return
-        self._framework.stop()
+        FrameworkFactory.delete_framework(self._framework)
         self._framework = None
         self._context = None
         self._ipopo = None
+        self._registration = None
         self._bundles.clear()
         self._bound.clear()
 
@@ -67,6 +73,22 @@ class PluginManager:
         bundle = self._bundles.pop(name)
         bundle.stop()
         bundle.uninstall()
+
+    def replace_plugin(self, descriptor: PluginDescriptor) -> None:
+        """Replace a named runtime plugin descriptor and component."""
+        if descriptor.name in self._bundles:
+            self.uninstall_plugin(descriptor.name)
+        if self.registry.get(descriptor.name) is not None:
+            self.registry.remove(descriptor.name)
+        self.registry.add(descriptor)
+        self.install_plugin(descriptor)
+
+    def ensure_plugin(self, descriptor: PluginDescriptor) -> None:
+        """Install a runtime plugin, replacing it only when configuration changes."""
+        current = self.registry.get(descriptor.name)
+        if current == descriptor and descriptor.name in self._bundles:
+            return
+        self.replace_plugin(descriptor)
 
     def bind_plugin(self, name: str) -> None:
         if name not in self._bundles:
@@ -114,7 +136,7 @@ class PluginManager:
         self._ipopo.instantiate(
             descriptor.factory,
             descriptor.instance,
-            descriptor.properties or None,
+            dict(descriptor.properties) or None,
         )
         self._bound.add(descriptor.name)
 

@@ -11,3 +11,4 @@ build/
 *.egg-info/
 .DS_Store
 plugin_registry.json
+.env

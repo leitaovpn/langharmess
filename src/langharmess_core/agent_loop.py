@@ -315,23 +315,37 @@ class PluginAgentLoop:
             transformers=self._collect_transformers() or None,
         )
 
-    def invoke(self, message: str) -> Any:
+    def invoke(self, message: str | list[dict[str, str]]) -> Any:
         if self._graph is None:
             raise RuntimeError("Agent graph is not built; no LLM plugin is available")
-        return self._graph.invoke({"messages": [{"role": "user", "content": message}]})
+        messages = (
+            [{"role": "user", "content": message}]
+            if isinstance(message, str)
+            else message
+        )
+        return self._graph.invoke({"messages": messages})
 
-    async def astream(self, message: str) -> AsyncIterator[Any]:
+    async def astream(
+        self, message: str | list[dict[str, str]]
+    ) -> AsyncIterator[Any]:
         if self._graph is None:
             raise RuntimeError("Agent graph is not built; no LLM plugin is available")
+        messages = (
+            [{"role": "user", "content": message}]
+            if isinstance(message, str)
+            else message
+        )
         async for chunk in self._graph.astream(
-            {"messages": [{"role": "user", "content": message}]},
+            {"messages": messages},
             stream_mode="messages",
         ):
             if isinstance(chunk, tuple):
                 message = chunk[0]
-                yield str(getattr(message, "content", ""))
+                content = str(getattr(message, "content", ""))
             else:
-                yield str(chunk)
+                content = str(chunk)
+            if content:
+                yield content
 
     def describe(self) -> dict[str, Any]:
         llm_info = self._llm_provider.get_plugin_info() if self._llm_provider else None

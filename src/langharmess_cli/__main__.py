@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 from langharmess_cli.api_guard import APIGuard
@@ -70,6 +71,9 @@ def main() -> int:
             runner = InteractiveCLIRunner(
                 base_url=base_url,
                 token=token,
+                model=os.environ.get("LANG_HARMESS_MODEL", "gpt-4o-mini"),
+                api_key=os.environ.get("LANG_HARMESS_API_KEY", ""),
+                model_base_url=os.environ.get("LANG_HARMESS_BASE_URL", ""),
                 commands=interactive_commands,
             )
             runner.cmdloop()
