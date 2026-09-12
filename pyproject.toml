@@ -10,10 +10,12 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.141.1",
+    "httpx>=0.28.1",
     "langchain>=1.4.0",
     "langchain-core>=1.6.2",
     "langchain-openai>=1.6.0",
     "pelix>=3.2.2",
+    "uvicorn>=0.52.4",
 ]
 
 [project.optional-dependencies]
@@ -58,7 +60,12 @@ addopts = "-ra --strict-markers"
 pythonpath = ["src"]
 
 [tool.coverage.run]
-source = ["langharmess_core", "langharmess_plugin", "langharmess_api"]
+source = [
+    "langharmess_core",
+    "langharmess_plugin",
+    "langharmess_api",
+    "langharmess_cli",
+]
 branch = true
 
 [tool.coverage.report]
