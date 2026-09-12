@@ -7,11 +7,19 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 import langharmess_core.agent_loop as agent_loop_module
+from langharmess_api.contracts import (
+    SPEC_API_SERVER,
+    SPEC_AUTH,
+    SPEC_DB,
+    SPEC_RATE_LIMIT,
+    SPEC_ROUTE,
+)
 from langharmess_core.contracts import (
     SPEC_AGENT_LOOP,
     SPEC_CACHE,
@@ -305,5 +313,95 @@ def test_plugin_lifecycle_and_agent_invocation(
         assert captured_kwargs["name"] == "my-agent"
         assert captured_kwargs["cache"] is cache
         assert captured_kwargs["transformers"] == ["transformer_a"]
+
+        api_descriptors = [
+            PluginDescriptor(
+                name="api-auth",
+                version="1.0.0",
+                module="langharmess_api.plugins.auth.template_auth",
+                factory="api-auth-template-factory",
+                instance="api-auth",
+                specification=SPEC_AUTH,
+                properties={"plugin.token": "secret"},
+            ),
+            PluginDescriptor(
+                name="api-rate-limit",
+                version="1.0.0",
+                module="langharmess_api.plugins.rate_limit.template_rate_limit",
+                factory="api-rate-limit-template-factory",
+                instance="api-rate-limit",
+                specification=SPEC_RATE_LIMIT,
+                properties={"plugin.limit": 3},
+            ),
+            PluginDescriptor(
+                name="api-db",
+                version="1.0.0",
+                module="langharmess_api.plugins.db.template_db",
+                factory="api-db-template-factory",
+                instance="api-db",
+                specification=SPEC_DB,
+            ),
+            PluginDescriptor(
+                name="api-health",
+                version="1.0.0",
+                module="langharmess_api.plugins.routes.template_health",
+                factory="api-health-route-template-factory",
+                instance="api-health",
+                specification=SPEC_ROUTE,
+            ),
+            PluginDescriptor(
+                name="api-server",
+                version="1.0.0",
+                module="langharmess_api.app",
+                factory="api-server-factory",
+                instance="api-server",
+                specification=SPEC_API_SERVER,
+            ),
+        ]
+
+        for descriptor in api_descriptors:
+            manager.install_plugin(descriptor)
+
+        api_server = manager.get_service(SPEC_API_SERVER)
+        app = api_server.build_app()
+        client = TestClient(app)
+
+        assert client.get("/health").status_code == 401
+        response = client.get(
+            "/health", headers={"Authorization": "Bearer secret"}
+        )
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok", "db": True}
+
+        client.get("/health", headers={"Authorization": "Bearer secret"})
+        client.get("/health", headers={"Authorization": "Bearer secret"})
+        too_many = client.get(
+            "/health", headers={"Authorization": "Bearer secret"}
+        )
+        assert too_many.status_code == 429
+
+        manager.get_service(SPEC_RATE_LIMIT)._hits.clear()
+
+        echo_descriptor = PluginDescriptor(
+            name="api-echo",
+            version="1.0.0",
+            module="langharmess_api.plugins.routes.template_echo",
+            factory="api-echo-route-template-factory",
+            instance="api-echo",
+            specification=SPEC_ROUTE,
+        )
+        manager.install_plugin(echo_descriptor)
+        app = api_server.build_app()
+        dynamic_client = TestClient(app)
+        assert dynamic_client.get(
+            "/echo", headers={"Authorization": "Bearer secret"}
+        ).status_code == 200
+
+        manager.uninstall_plugin("api-echo")
+        app = api_server.build_app()
+        after_remove_client = TestClient(app)
+        assert after_remove_client.get(
+            "/echo", headers={"Authorization": "Bearer secret"}
+        ).status_code == 404
     finally:
         manager.stop()
