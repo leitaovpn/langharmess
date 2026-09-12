@@ -168,3 +168,36 @@ FastAPI app。
 - 鉴权默认方案是否使用 Bearer token
 - 限流默认策略是否使用内存滑动窗口
 - DB 插件默认是否使用 SQLite 内存库
+
+## 验收矩阵
+
+| 功能 | 成功标准 | e2e 验证 |
+| --- | --- | --- |
+| 身份鉴权插件 | 缺少或错误 token 返回 401；正确 token 放行 | `test_auth_e2e.py` |
+| 限流插件 | 超过配置阈值返回 429；未超限放行 | `test_rate_limit_e2e.py` |
+| DB 插件 | 路由中可注入 DB dependency，并读取/写入测试数据 | `test_db_e2e.py` |
+| API 接口插件 | 安装 route plugin 后接口可访问 | `test_route_e2e.py` |
+| 动态扩展 | 安装新 route plugin 后路由出现；卸载后路由消失 | `test_dynamic_route_e2e.py` |
+
+## 关键接口签名草案
+
+```python
+class RouteProvider(Protocol):
+    def get_router(self) -> APIRouter: ...
+
+class AuthProvider(Protocol):
+    def get_auth_dependency(self) -> Callable[[Request], AuthContext]: ...
+
+class RateLimitProvider(Protocol):
+    def get_rate_limit_dependency(self) -> Callable[[Request], None]: ...
+
+class DBProvider(Protocol):
+    def get_session_dependency(self) -> Callable[[], Any]: ...
+```
+
+## 开发边界
+
+- 不修改 `langharmess_core` / `langharmess_plugin` 现有行为
+- 新代码只落在 `src/langharmess_api`、测试和本设计文档
+- 先 TDD，再实现；每个功能必须有 e2e 测试
+- 最终 `make check` 必须通过，覆盖率 >= 95%
