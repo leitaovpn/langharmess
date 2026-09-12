@@ -40,6 +40,9 @@ The gate order is Ruff -> mypy -> Pyright -> clean-process import check -> pytes
 - Use TDD: write a failing test first, then the implementation.
 - Do not weaken static analysis globally. Production modules stay strict.
 
+The same gate is enforced locally by `.githooks/pre-commit` and in CI by
+`.github/workflows/quality.yml`.
+
 ## Development environment
 
 - Python 3.13.
