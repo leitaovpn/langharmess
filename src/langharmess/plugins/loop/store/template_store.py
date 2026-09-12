@@ -14,7 +14,7 @@ from langharmess.contracts import SPEC_STORE
 @Property("_plugin_name", "plugin.name", "store-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @HiddenProperty("_store", "plugin.store", None)
-class StorePlugin:
+class TemplateStorePlugin:
     def __init__(self) -> None:
         self._plugin_name = "store-plugin"
         self._plugin_version = "1.0.0"

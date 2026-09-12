@@ -9,17 +9,31 @@ import pytest
 
 import langharmess.agent_loop as agent_loop_module
 from langharmess.agent_loop import PluginAgentLoop
-from langharmess.plugins.cache import CachePlugin
-from langharmess.plugins.checkpointer import CheckpointerPlugin
-from langharmess.plugins.context_schema import ContextSchemaPlugin
-from langharmess.plugins.debug import DebugPlugin
-from langharmess.plugins.interrupt_after import InterruptAfterPlugin
-from langharmess.plugins.interrupt_before import InterruptBeforePlugin
-from langharmess.plugins.name import AgentNamePlugin
-from langharmess.plugins.response_format import ResponseFormatPlugin
-from langharmess.plugins.state_schema import StateSchemaPlugin
-from langharmess.plugins.store import StorePlugin
-from langharmess.plugins.transformers import TransformersPlugin
+from langharmess.plugins.loop.cache.template_cache import TemplateCachePlugin
+from langharmess.plugins.loop.checkpointer.template_checkpointer import (
+    TemplateCheckpointerPlugin,
+)
+from langharmess.plugins.loop.context_schema.template_context_schema import (
+    TemplateContextSchemaPlugin,
+)
+from langharmess.plugins.loop.debug.template_debug import TemplateDebugPlugin
+from langharmess.plugins.loop.interrupt_after.template_interrupt_after import (
+    TemplateInterruptAfterPlugin,
+)
+from langharmess.plugins.loop.interrupt_before.template_interrupt_before import (
+    TemplateInterruptBeforePlugin,
+)
+from langharmess.plugins.loop.name.template_name import TemplateAgentNamePlugin
+from langharmess.plugins.loop.response_format.template_response_format import (
+    TemplateResponseFormatPlugin,
+)
+from langharmess.plugins.loop.state_schema.template_state_schema import (
+    TemplateStateSchemaPlugin,
+)
+from langharmess.plugins.loop.store.template_store import TemplateStorePlugin
+from langharmess.plugins.loop.transformers.template_transformers import (
+    TemplateTransformersPlugin,
+)
 
 
 def test_agent_parameter_plugins_expose_values() -> None:
@@ -30,47 +44,47 @@ def test_agent_parameter_plugins_expose_values() -> None:
     store = object()
     cache = object()
 
-    response = ResponseFormatPlugin()
+    response = TemplateResponseFormatPlugin()
     response._response_format = response_format
     assert response.get_response_format() is response_format
 
-    state = StateSchemaPlugin()
+    state = TemplateStateSchemaPlugin()
     state._state_schema = state_schema
     assert state.get_state_schema() is state_schema
 
-    context = ContextSchemaPlugin()
+    context = TemplateContextSchemaPlugin()
     context._context_schema = context_schema
     assert context.get_context_schema() is context_schema
 
-    checkpointer_plugin = CheckpointerPlugin()
+    checkpointer_plugin = TemplateCheckpointerPlugin()
     checkpointer_plugin._checkpointer = checkpointer
     assert checkpointer_plugin.get_checkpointer() is checkpointer
 
-    store_plugin = StorePlugin()
+    store_plugin = TemplateStorePlugin()
     store_plugin._store = store
     assert store_plugin.get_store() is store
 
-    cache_plugin = CachePlugin()
+    cache_plugin = TemplateCachePlugin()
     cache_plugin._cache = cache
     assert cache_plugin.get_cache() is cache
 
-    before = InterruptBeforePlugin()
+    before = TemplateInterruptBeforePlugin()
     before._items = ["a", "b"]
     assert before.get_interrupt_before() == ["a", "b"]
 
-    after = InterruptAfterPlugin()
+    after = TemplateInterruptAfterPlugin()
     after._items = ["c"]
     assert after.get_interrupt_after() == ["c"]
 
-    debug = DebugPlugin()
+    debug = TemplateDebugPlugin()
     debug._debug = True
     assert debug.get_debug() is True
 
-    name = AgentNamePlugin()
+    name = TemplateAgentNamePlugin()
     name._agent_name = "my-agent"
     assert name.get_name() == "my-agent"
 
-    transformers = TransformersPlugin()
+    transformers = TemplateTransformersPlugin()
     transformers._items = ["t1", "t2"]
     assert transformers.get_transformers() == ["t1", "t2"]
 

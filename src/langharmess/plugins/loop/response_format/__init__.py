@@ -1,0 +1,1 @@
+"""Response format plugin template."""

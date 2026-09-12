@@ -12,7 +12,7 @@ from langharmess.contracts import SPEC_NAME
 @Property("_plugin_name", "plugin.name", "agent-name-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_agent_name", "plugin.agent_name", "")
-class AgentNamePlugin:
+class TemplateAgentNamePlugin:
     def __init__(self) -> None:
         self._plugin_name = "agent-name-plugin"
         self._plugin_version = "1.0.0"

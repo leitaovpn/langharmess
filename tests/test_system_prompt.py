@@ -9,7 +9,9 @@ import pytest
 
 import langharmess.agent_loop as agent_loop_module
 from langharmess.agent_loop import PluginAgentLoop
-from langharmess.plugins.system_prompt import SystemPromptPlugin
+from langharmess.plugins.loop.system_prompt.template_system_prompt import (
+    TemplateSystemPromptPlugin,
+)
 
 
 def make_provider(text: str):
@@ -17,7 +19,7 @@ def make_provider(text: str):
 
 
 def test_system_prompt_plugin_exposes_configured_prompt() -> None:
-    plugin = SystemPromptPlugin()
+    plugin = TemplateSystemPromptPlugin()
     plugin._system_prompt = "You are a calculator."
     assert plugin.get_system_prompt() == "You are a calculator."
     assert plugin.get_plugin_info() == {

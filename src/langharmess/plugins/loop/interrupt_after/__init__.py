@@ -1,0 +1,1 @@
+"""Interrupt-after plugin template."""

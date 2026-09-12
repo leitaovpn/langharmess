@@ -14,7 +14,7 @@ from langharmess.contracts import SPEC_RESPONSE_FORMAT
 @Property("_plugin_name", "plugin.name", "response-format-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @HiddenProperty("_response_format", "plugin.response_format", None)
-class ResponseFormatPlugin:
+class TemplateResponseFormatPlugin:
     def __init__(self) -> None:
         self._plugin_name = "response-format-plugin"
         self._plugin_version = "1.0.0"

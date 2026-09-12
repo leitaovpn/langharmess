@@ -1,35 +1,53 @@
 """Concrete plugin implementations."""
 
-from langharmess.plugins.cache import CachePlugin
-from langharmess.plugins.checkpointer import CheckpointerPlugin
-from langharmess.plugins.context_schema import ContextSchemaPlugin
-from langharmess.plugins.debug import DebugPlugin
-from langharmess.plugins.interrupt_after import InterruptAfterPlugin
-from langharmess.plugins.interrupt_before import InterruptBeforePlugin
 from langharmess.plugins.llm import LLMPlugin
-from langharmess.plugins.middleware import MiddlewarePlugin
-from langharmess.plugins.name import AgentNamePlugin
-from langharmess.plugins.response_format import ResponseFormatPlugin
-from langharmess.plugins.state_schema import StateSchemaPlugin
-from langharmess.plugins.store import StorePlugin
-from langharmess.plugins.system_prompt import SystemPromptPlugin
+from langharmess.plugins.loop.cache.template_cache import TemplateCachePlugin
+from langharmess.plugins.loop.checkpointer.template_checkpointer import (
+    TemplateCheckpointerPlugin,
+)
+from langharmess.plugins.loop.context_schema.template_context_schema import (
+    TemplateContextSchemaPlugin,
+)
+from langharmess.plugins.loop.debug.template_debug import TemplateDebugPlugin
+from langharmess.plugins.loop.interrupt_after.template_interrupt_after import (
+    TemplateInterruptAfterPlugin,
+)
+from langharmess.plugins.loop.interrupt_before.template_interrupt_before import (
+    TemplateInterruptBeforePlugin,
+)
+from langharmess.plugins.loop.middleware.template_middleware import (
+    TemplateMiddlewarePlugin,
+)
+from langharmess.plugins.loop.name.template_name import TemplateAgentNamePlugin
+from langharmess.plugins.loop.response_format.template_response_format import (
+    TemplateResponseFormatPlugin,
+)
+from langharmess.plugins.loop.state_schema.template_state_schema import (
+    TemplateStateSchemaPlugin,
+)
+from langharmess.plugins.loop.store.template_store import TemplateStorePlugin
+from langharmess.plugins.loop.system_prompt.template_system_prompt import (
+    TemplateSystemPromptPlugin,
+)
+from langharmess.plugins.loop.transformers.template_transformers import (
+    TemplateTransformersPlugin,
+)
 from langharmess.plugins.tools import ToolPlugin
-from langharmess.plugins.transformers import TransformersPlugin
 
 __all__ = [
-    "AgentNamePlugin",
-    "CachePlugin",
-    "CheckpointerPlugin",
-    "ContextSchemaPlugin",
-    "DebugPlugin",
-    "InterruptAfterPlugin",
-    "InterruptBeforePlugin",
     "LLMPlugin",
-    "MiddlewarePlugin",
-    "ResponseFormatPlugin",
-    "StateSchemaPlugin",
-    "StorePlugin",
-    "SystemPromptPlugin",
+    "TemplateAgentNamePlugin",
+    "TemplateCachePlugin",
+    "TemplateCheckpointerPlugin",
+    "TemplateContextSchemaPlugin",
+    "TemplateDebugPlugin",
+    "TemplateInterruptAfterPlugin",
+    "TemplateInterruptBeforePlugin",
+    "TemplateMiddlewarePlugin",
+    "TemplateResponseFormatPlugin",
+    "TemplateStateSchemaPlugin",
+    "TemplateStorePlugin",
+    "TemplateSystemPromptPlugin",
     "ToolPlugin",
-    "TransformersPlugin",
+    "TemplateTransformersPlugin",
 ]

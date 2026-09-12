@@ -12,7 +12,7 @@ from langharmess.contracts import SPEC_DEBUG
 @Property("_plugin_name", "plugin.name", "debug-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_debug", "plugin.debug", False)
-class DebugPlugin:
+class TemplateDebugPlugin:
     def __init__(self) -> None:
         self._plugin_name = "debug-plugin"
         self._plugin_version = "1.0.0"

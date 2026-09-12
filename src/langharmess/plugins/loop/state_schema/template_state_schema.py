@@ -14,7 +14,7 @@ from langharmess.contracts import SPEC_STATE_SCHEMA
 @Property("_plugin_name", "plugin.name", "state-schema-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @HiddenProperty("_state_schema", "plugin.state_schema", None)
-class StateSchemaPlugin:
+class TemplateStateSchemaPlugin:
     def __init__(self) -> None:
         self._plugin_name = "state-schema-plugin"
         self._plugin_version = "1.0.0"

@@ -95,7 +95,7 @@ def descriptors(tmp_path: Path) -> PluginRegistry:
             PluginDescriptor(
                 name="middleware",
                 version="1.0.0",
-                module="langharmess.plugins.middleware",
+                module="langharmess.plugins.loop.middleware.template_middleware",
                 factory="middleware-plugin-factory",
                 instance="middleware",
                 specification="agent.plugin.middleware",
@@ -103,7 +103,7 @@ def descriptors(tmp_path: Path) -> PluginRegistry:
             PluginDescriptor(
                 name="system-prompt-a",
                 version="1.0.0",
-                module="langharmess.plugins.system_prompt",
+                module="langharmess.plugins.loop.system_prompt.template_system_prompt",
                 factory="system-prompt-plugin-factory",
                 instance="system-prompt-a",
                 specification=SPEC_SYSTEM_PROMPT,
@@ -112,7 +112,7 @@ def descriptors(tmp_path: Path) -> PluginRegistry:
             PluginDescriptor(
                 name="system-prompt-b",
                 version="1.0.0",
-                module="langharmess.plugins.system_prompt",
+                module="langharmess.plugins.loop.system_prompt.template_system_prompt",
                 factory="system-prompt-plugin-factory",
                 instance="system-prompt-b",
                 specification=SPEC_SYSTEM_PROMPT,
@@ -191,7 +191,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="response-format",
                 version="1.0.0",
-                module="langharmess.plugins.response_format",
+                module="langharmess.plugins.loop.response_format.template_response_format",
                 factory="response-format-plugin-factory",
                 instance="response-format",
                 specification=SPEC_RESPONSE_FORMAT,
@@ -200,7 +200,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="state-schema",
                 version="1.0.0",
-                module="langharmess.plugins.state_schema",
+                module="langharmess.plugins.loop.state_schema.template_state_schema",
                 factory="state-schema-plugin-factory",
                 instance="state-schema",
                 specification=SPEC_STATE_SCHEMA,
@@ -209,7 +209,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="context-schema",
                 version="1.0.0",
-                module="langharmess.plugins.context_schema",
+                module="langharmess.plugins.loop.context_schema.template_context_schema",
                 factory="context-schema-plugin-factory",
                 instance="context-schema",
                 specification=SPEC_CONTEXT_SCHEMA,
@@ -218,7 +218,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="checkpointer",
                 version="1.0.0",
-                module="langharmess.plugins.checkpointer",
+                module="langharmess.plugins.loop.checkpointer.template_checkpointer",
                 factory="checkpointer-plugin-factory",
                 instance="checkpointer",
                 specification=SPEC_CHECKPOINTER,
@@ -227,7 +227,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="store",
                 version="1.0.0",
-                module="langharmess.plugins.store",
+                module="langharmess.plugins.loop.store.template_store",
                 factory="store-plugin-factory",
                 instance="store",
                 specification=SPEC_STORE,
@@ -236,7 +236,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="interrupt-before",
                 version="1.0.0",
-                module="langharmess.plugins.interrupt_before",
+                module="langharmess.plugins.loop.interrupt_before.template_interrupt_before",
                 factory="interrupt-before-plugin-factory",
                 instance="interrupt-before",
                 specification=SPEC_INTERRUPT_BEFORE,
@@ -245,7 +245,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="interrupt-after",
                 version="1.0.0",
-                module="langharmess.plugins.interrupt_after",
+                module="langharmess.plugins.loop.interrupt_after.template_interrupt_after",
                 factory="interrupt-after-plugin-factory",
                 instance="interrupt-after",
                 specification=SPEC_INTERRUPT_AFTER,
@@ -254,7 +254,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="debug",
                 version="1.0.0",
-                module="langharmess.plugins.debug",
+                module="langharmess.plugins.loop.debug.template_debug",
                 factory="debug-plugin-factory",
                 instance="debug",
                 specification=SPEC_DEBUG,
@@ -263,7 +263,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="agent-name",
                 version="1.0.0",
-                module="langharmess.plugins.name",
+                module="langharmess.plugins.loop.name.template_name",
                 factory="agent-name-plugin-factory",
                 instance="agent-name",
                 specification=SPEC_NAME,
@@ -272,7 +272,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="cache",
                 version="1.0.0",
-                module="langharmess.plugins.cache",
+                module="langharmess.plugins.loop.cache.template_cache",
                 factory="cache-plugin-factory",
                 instance="cache",
                 specification=SPEC_CACHE,
@@ -281,7 +281,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="transformers",
                 version="1.0.0",
-                module="langharmess.plugins.transformers",
+                module="langharmess.plugins.loop.transformers.template_transformers",
                 factory="transformers-plugin-factory",
                 instance="transformers",
                 specification=SPEC_TRANSFORMERS,

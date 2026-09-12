@@ -14,7 +14,7 @@ from langharmess.contracts import SPEC_CHECKPOINTER
 @Property("_plugin_name", "plugin.name", "checkpointer-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @HiddenProperty("_checkpointer", "plugin.checkpointer", None)
-class CheckpointerPlugin:
+class TemplateCheckpointerPlugin:
     def __init__(self) -> None:
         self._plugin_name = "checkpointer-plugin"
         self._plugin_version = "1.0.0"

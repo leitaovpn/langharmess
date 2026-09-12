@@ -1,0 +1,1 @@
+"""Context schema plugin template."""

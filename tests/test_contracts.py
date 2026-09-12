@@ -9,13 +9,17 @@ from langharmess.contracts import (
     ToolProvider,
 )
 from langharmess.plugins.llm import LLMPlugin
-from langharmess.plugins.middleware import MiddlewarePlugin
-from langharmess.plugins.system_prompt import SystemPromptPlugin
+from langharmess.plugins.loop.middleware.template_middleware import (
+    TemplateMiddlewarePlugin,
+)
+from langharmess.plugins.loop.system_prompt.template_system_prompt import (
+    TemplateSystemPromptPlugin,
+)
 from langharmess.plugins.tools import ToolPlugin
 
 
 def test_concrete_plugins_conform_to_their_protocols() -> None:
     assert isinstance(LLMPlugin(), LLMProvider)
     assert isinstance(ToolPlugin(), ToolProvider)
-    assert isinstance(MiddlewarePlugin(), MiddlewareProvider)
-    assert isinstance(SystemPromptPlugin(), SystemPromptProvider)
+    assert isinstance(TemplateMiddlewarePlugin(), MiddlewareProvider)
+    assert isinstance(TemplateSystemPromptPlugin(), SystemPromptProvider)

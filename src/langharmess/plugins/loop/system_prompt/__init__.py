@@ -1,0 +1,1 @@
+"""System prompt plugin template."""

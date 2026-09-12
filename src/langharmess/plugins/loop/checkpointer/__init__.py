@@ -1,0 +1,1 @@
+"""Checkpointer plugin template."""

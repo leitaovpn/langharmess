@@ -14,7 +14,7 @@ from langharmess.contracts import SPEC_MIDDLEWARE
 @Provides(SPEC_MIDDLEWARE)
 @Property("_plugin_name", "plugin.name", "middleware-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
-class MiddlewarePlugin:
+class TemplateMiddlewarePlugin:
     """Provides LangChain middleware to the agent loop."""
 
     def __init__(self) -> None:

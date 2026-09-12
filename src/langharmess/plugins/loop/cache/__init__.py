@@ -1,0 +1,1 @@
+"""Cache plugin template."""

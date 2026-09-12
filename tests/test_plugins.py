@@ -10,7 +10,9 @@ from langchain_core.tools import StructuredTool
 import langharmess.plugins.llm as llm_module
 from langharmess.agent_loop import PluginAgentLoop
 from langharmess.plugins.llm import LLMPlugin
-from langharmess.plugins.middleware import MiddlewarePlugin
+from langharmess.plugins.loop.middleware.template_middleware import (
+    TemplateMiddlewarePlugin,
+)
 from langharmess.plugins.tools import ToolPlugin
 
 
@@ -79,7 +81,7 @@ def test_tool_plugin_wraps_raw_callable_and_exposes_info() -> None:
 
 
 def test_middleware_plugin_returns_unique_named_middleware() -> None:
-    plugin = MiddlewarePlugin()
+    plugin = TemplateMiddlewarePlugin()
     plugin._plugin_name = "test-middleware"
     middlewares = plugin.get_middlewares()
     assert len(middlewares) == 1

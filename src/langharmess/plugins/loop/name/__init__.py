@@ -1,0 +1,1 @@
+"""Agent name plugin template."""

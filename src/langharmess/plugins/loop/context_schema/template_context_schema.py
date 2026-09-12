@@ -14,7 +14,7 @@ from langharmess.contracts import SPEC_CONTEXT_SCHEMA
 @Property("_plugin_name", "plugin.name", "context-schema-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @HiddenProperty("_context_schema", "plugin.context_schema", None)
-class ContextSchemaPlugin:
+class TemplateContextSchemaPlugin:
     def __init__(self) -> None:
         self._plugin_name = "context-schema-plugin"
         self._plugin_version = "1.0.0"

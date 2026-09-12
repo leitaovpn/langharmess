@@ -17,7 +17,19 @@ PUBLIC_MODULES = [
     "langharmess.plugins",
     "langharmess.plugins.llm",
     "langharmess.plugins.tools",
-    "langharmess.plugins.middleware",
+    "langharmess.plugins.loop.middleware.template_middleware",
+    "langharmess.plugins.loop.system_prompt.template_system_prompt",
+    "langharmess.plugins.loop.response_format.template_response_format",
+    "langharmess.plugins.loop.state_schema.template_state_schema",
+    "langharmess.plugins.loop.context_schema.template_context_schema",
+    "langharmess.plugins.loop.checkpointer.template_checkpointer",
+    "langharmess.plugins.loop.store.template_store",
+    "langharmess.plugins.loop.interrupt_before.template_interrupt_before",
+    "langharmess.plugins.loop.interrupt_after.template_interrupt_after",
+    "langharmess.plugins.loop.debug.template_debug",
+    "langharmess.plugins.loop.name.template_name",
+    "langharmess.plugins.loop.cache.template_cache",
+    "langharmess.plugins.loop.transformers.template_transformers",
 ]
 
 

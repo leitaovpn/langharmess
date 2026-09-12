@@ -14,7 +14,7 @@ from langharmess.contracts import SPEC_TRANSFORMERS
 @Property("_plugin_name", "plugin.name", "transformers-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_items", "plugin.transformers", None)
-class TransformersPlugin:
+class TemplateTransformersPlugin:
     def __init__(self) -> None:
         self._plugin_name = "transformers-plugin"
         self._plugin_version = "1.0.0"

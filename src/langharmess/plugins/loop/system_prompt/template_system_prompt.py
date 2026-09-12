@@ -12,7 +12,7 @@ from langharmess.contracts import SPEC_SYSTEM_PROMPT
 @Property("_plugin_name", "plugin.name", "system-prompt-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_system_prompt", "plugin.system_prompt", "")
-class SystemPromptPlugin:
+class TemplateSystemPromptPlugin:
     """Provides one piece of the agent system prompt."""
 
     def __init__(self) -> None:
