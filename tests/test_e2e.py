@@ -7,12 +7,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from langharmess.contracts import SPEC_AGENT_LOOP
+from langharmess.contracts import SPEC_AGENT_LOOP, SPEC_SYSTEM_PROMPT
 from langharmess.plugin_manager import PluginManager
 from langharmess.registry import PluginDescriptor, PluginRegistry
+
+CAPTURED_MESSAGES: list[list] = []
 
 
 class ScriptedToolCallModel(BaseChatModel):
@@ -20,6 +22,7 @@ class ScriptedToolCallModel(BaseChatModel):
     i: int = 0
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        CAPTURED_MESSAGES.append([message for message in messages])
         response = self.responses[self.i]
         self.i = (self.i + 1) % len(self.responses)
         return ChatResult(generations=[ChatGeneration(message=response)])
@@ -53,7 +56,7 @@ def scripted_tool_call_model() -> ScriptedToolCallModel:
 
 def descriptors(tmp_path: Path) -> PluginRegistry:
     model = scripted_tool_call_model()
-    return PluginRegistry(
+    registry = PluginRegistry(
         [
             PluginDescriptor(
                 name="llm",
@@ -82,6 +85,24 @@ def descriptors(tmp_path: Path) -> PluginRegistry:
                 specification="agent.plugin.middleware",
             ),
             PluginDescriptor(
+                name="system-prompt-a",
+                version="1.0.0",
+                module="langharmess.plugins.system_prompt",
+                factory="system-prompt-plugin-factory",
+                instance="system-prompt-a",
+                specification=SPEC_SYSTEM_PROMPT,
+                properties={"plugin.system_prompt": "You are A."},
+            ),
+            PluginDescriptor(
+                name="system-prompt-b",
+                version="1.0.0",
+                module="langharmess.plugins.system_prompt",
+                factory="system-prompt-plugin-factory",
+                instance="system-prompt-b",
+                specification=SPEC_SYSTEM_PROMPT,
+                properties={"plugin.system_prompt": "You are B."},
+            ),
+            PluginDescriptor(
                 name="agent-loop",
                 version="1.0.0",
                 module="langharmess.agent_loop",
@@ -91,10 +112,12 @@ def descriptors(tmp_path: Path) -> PluginRegistry:
             ),
         ]
     )
+    return registry
 
 
 def test_plugin_lifecycle_and_agent_invocation(tmp_path: Path) -> None:
     registry = descriptors(tmp_path)
+    CAPTURED_MESSAGES.clear()
     manager = PluginManager(registry)
     manager.start()
     try:
@@ -106,6 +129,8 @@ def test_plugin_lifecycle_and_agent_invocation(tmp_path: Path) -> None:
 
         result = loop.invoke("What is 2 + 3?")
         assert result["messages"][-1].content == "The answer is 5."
+        assert isinstance(CAPTURED_MESSAGES[0][0], SystemMessage)
+        assert CAPTURED_MESSAGES[0][0].content == "You are A.\nYou are B."
 
         llm_props = manager.service_properties("agent.plugin.llm")
         assert llm_props[0]["plugin.version"] == "1.0.0"
@@ -118,6 +143,12 @@ def test_plugin_lifecycle_and_agent_invocation(tmp_path: Path) -> None:
         assert loop.describe()["tools"] == ["add"]
 
         manager.uninstall_plugin("middleware")
-        assert manager.installed_names() == {"llm", "tools", "agent-loop"}
+        assert manager.installed_names() == {
+            "llm",
+            "tools",
+            "agent-loop",
+            "system-prompt-a",
+            "system-prompt-b",
+        }
     finally:
         manager.stop()

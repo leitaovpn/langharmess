@@ -93,10 +93,6 @@ class PluginRegistry:
                 raise ValueError(
                     f"Plugin instance {descriptor.instance!r} is already registered"
                 )
-            if existing.factory == descriptor.factory:
-                raise ValueError(
-                    f"Plugin factory {descriptor.factory!r} is already registered"
-                )
         self._validate(descriptor)
         self._descriptors[descriptor.name] = descriptor
 

@@ -9,9 +9,16 @@ from langchain_core.language_models.chat_models import BaseChatModel
 SPEC_LLM = "agent.plugin.llm"
 SPEC_TOOL = "agent.plugin.tools"
 SPEC_MIDDLEWARE = "agent.plugin.middleware"
+SPEC_SYSTEM_PROMPT = "agent.plugin.system_prompt"
 SPEC_AGENT_LOOP = "agent.loop"
 
-ALL_PLUGIN_SPECS = (SPEC_LLM, SPEC_TOOL, SPEC_MIDDLEWARE, SPEC_AGENT_LOOP)
+ALL_PLUGIN_SPECS = (
+    SPEC_LLM,
+    SPEC_TOOL,
+    SPEC_MIDDLEWARE,
+    SPEC_SYSTEM_PROMPT,
+    SPEC_AGENT_LOOP,
+)
 
 
 @runtime_checkable
@@ -37,5 +44,14 @@ class MiddlewareProvider(Protocol):
     """Contract implemented by every ``agent.plugin.middleware`` service."""
 
     def get_middlewares(self) -> list[Any]: ...
+
+    def get_plugin_info(self) -> dict[str, str]: ...
+
+
+@runtime_checkable
+class SystemPromptProvider(Protocol):
+    """Contract implemented by every ``agent.plugin.system_prompt`` service."""
+
+    def get_system_prompt(self) -> str: ...
 
     def get_plugin_info(self) -> dict[str, str]: ...

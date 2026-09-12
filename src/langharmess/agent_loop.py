@@ -20,6 +20,7 @@ from langharmess.contracts import (
     SPEC_AGENT_LOOP,
     SPEC_LLM,
     SPEC_MIDDLEWARE,
+    SPEC_SYSTEM_PROMPT,
     SPEC_TOOL,
 )
 
@@ -29,6 +30,7 @@ from langharmess.contracts import (
 @RequiresBest("_llm_provider", SPEC_LLM, optional=False, immediate_rebind=True)
 @Requires("_tool_providers", SPEC_TOOL, aggregate=True, optional=True)
 @Requires("_middleware_providers", SPEC_MIDDLEWARE, aggregate=True, optional=True)
+@Requires("_system_prompt_providers", SPEC_SYSTEM_PROMPT, aggregate=True, optional=True)
 class PluginAgentLoop:
     """Rebuilds a LangChain agent graph when injected services change."""
 
@@ -36,6 +38,7 @@ class PluginAgentLoop:
         self._llm_provider: Any = None
         self._tool_providers: list[Any] = []
         self._middleware_providers: list[Any] = []
+        self._system_prompt_providers: list[Any] = []
         self._graph: Any = None
 
     @Validate
@@ -62,6 +65,14 @@ class PluginAgentLoop:
     def _on_middleware_unbind(self, field: str, service: Any, reference: Any) -> None:
         self._rebuild()
 
+    @BindField("_system_prompt_providers", if_valid=True)
+    def _on_system_prompt_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
+    @UnbindField("_system_prompt_providers", if_valid=True)
+    def _on_system_prompt_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
     def _collect_tools(self) -> list[Any]:
         tools: list[Any] = []
         for provider in self._tool_providers or []:
@@ -74,6 +85,16 @@ class PluginAgentLoop:
             middlewares.extend(provider.get_middlewares())
         return middlewares
 
+    def _collect_system_prompt(self) -> str | None:
+        parts = [
+            provider.get_system_prompt()
+            for provider in self._system_prompt_providers or []
+        ]
+        parts = [part for part in parts if part]
+        if not parts:
+            return None
+        return "\n".join(parts)
+
     def _rebuild(self) -> None:
         model = self._llm_provider.get_model() if self._llm_provider else None
         if model is None:
@@ -83,7 +104,7 @@ class PluginAgentLoop:
             model,
             tools=self._collect_tools(),
             middleware=self._collect_middlewares(),
-            system_prompt="You are a helpful plugin-driven agent.",
+            system_prompt=self._collect_system_prompt(),
         )
 
     def invoke(self, message: str) -> Any:

@@ -56,17 +56,18 @@ def test_registry_rejects_duplicate_names() -> None:
         registry.add(make_descriptor("llm"))
 
 
-def test_registry_rejects_duplicate_instance_or_factory() -> None:
+def test_registry_rejects_duplicate_instance_but_allows_same_factory() -> None:
     registry = PluginRegistry([make_descriptor("llm")])
-    duplicate_instance = make_descriptor("other")
+    duplicate_instance = make_descriptor("other-instance")
     duplicate_instance.instance = "llm"
     with pytest.raises(ValueError, match="instance"):
         registry.add(duplicate_instance)
 
-    duplicate_factory = make_descriptor("other")
+    duplicate_factory = make_descriptor("other-factory")
     duplicate_factory.factory = "llm-factory"
-    with pytest.raises(ValueError, match="factory"):
-        registry.add(duplicate_factory)
+    duplicate_factory.instance = "other-factory"
+    registry.add(duplicate_factory)
+    assert registry.get("other-factory") is duplicate_factory
 
 
 def test_registry_set_enabled() -> None:
