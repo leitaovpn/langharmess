@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from langharmess.registry import PluginDescriptor, PluginRegistry
+from langharmess_core.registry import PluginDescriptor, PluginRegistry
 
 
 def make_descriptor(name: str = "llm") -> PluginDescriptor:
     return PluginDescriptor(
         name=name,
         version="1.0.0",
-        module=f"langharmess.plugins.{name}",
+        module=f"langharmess_core.plugins.{name}",
         factory=f"{name}-factory",
         instance=name,
         specification=f"agent.plugin.{name}",
@@ -26,7 +26,7 @@ def test_descriptor_roundtrip() -> None:
     descriptor = PluginDescriptor(
         name="llm",
         version="1.2.3",
-        module="langharmess.plugins.llm",
+        module="langharmess_core.plugins.llm",
         factory="llm-factory",
         instance="llm",
         specification="agent.plugin.llm",
@@ -83,7 +83,7 @@ def test_registry_save_and_load(tmp_path: Path) -> None:
 
     loaded = PluginRegistry.load(path)
     assert [item.name for item in loaded.list()] == ["llm", "tools"]
-    assert loaded.get("tools").module == "langharmess.plugins.tools"
+    assert loaded.get("tools").module == "langharmess_core.plugins.tools"
 
 
 def test_registry_load_rejects_unknown_fields() -> None:

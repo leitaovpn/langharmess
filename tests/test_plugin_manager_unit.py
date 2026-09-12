@@ -8,8 +8,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from langharmess.plugin_manager import PluginManager
-from langharmess.registry import PluginDescriptor, PluginRegistry
+from langharmess_core.plugin_manager import PluginManager
+from langharmess_core.registry import PluginDescriptor, PluginRegistry
 
 
 def descriptor(name: str, enabled: bool = True) -> PluginDescriptor:

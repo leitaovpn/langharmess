@@ -1,4 +1,4 @@
-# langharmess
+# langharmess-core
 
 Plugin-driven LangChain agent using Pelix/iPOPO.
 

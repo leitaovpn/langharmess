@@ -3,7 +3,7 @@ requires = ["setuptools>=80"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "langharmess"
+name = "langharmess-core"
 version = "0.1.0"
 description = "Plugin-driven LangChain agent on Pelix/iPOPO"
 readme = "README.md"
@@ -57,7 +57,7 @@ addopts = "-ra --strict-markers"
 pythonpath = ["src"]
 
 [tool.coverage.run]
-source = ["langharmess"]
+source = ["langharmess_core"]
 branch = true
 
 [tool.coverage.report]

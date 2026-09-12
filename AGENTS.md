@@ -18,8 +18,8 @@ Current milestone:
 
 - Plugins communicate through Pelix service specifications, not by importing
   each other's concrete classes.
-- Public contracts live in `src/langharmess/contracts.py`.
-- Plugin implementations live in `src/langharmess/plugins/`.
+- Public contracts live in `src/langharmess_core/contracts.py`.
+- Plugin implementations live in `src/langharmess_core/plugins/`.
 - The agent loop is an iPOPO component that rebuilds a LangChain
   `create_agent` graph when injected services change.
 - Keep runtime plugin registration deterministic: production plugins must not
@@ -47,7 +47,7 @@ The same gate is enforced locally by `.githooks/pre-commit` and in CI by
 
 - Python 3.13.
 - Use `.venv/bin/python`.
-- Source package is `langharmess`.
+- Source package is `langharmess_core`.
 - Install hooks with `make install-hooks`.
 
 ## File ownership

@@ -7,31 +7,31 @@ from types import SimpleNamespace
 
 import pytest
 
-import langharmess.agent_loop as agent_loop_module
-from langharmess.agent_loop import PluginAgentLoop
-from langharmess.plugins.loop.cache.template_cache import TemplateCachePlugin
-from langharmess.plugins.loop.checkpointer.template_checkpointer import (
+import langharmess_core.agent_loop as agent_loop_module
+from langharmess_core.agent_loop import PluginAgentLoop
+from langharmess_core.plugins.loop.cache.template_cache import TemplateCachePlugin
+from langharmess_core.plugins.loop.checkpointer.template_checkpointer import (
     TemplateCheckpointerPlugin,
 )
-from langharmess.plugins.loop.context_schema.template_context_schema import (
+from langharmess_core.plugins.loop.context_schema.template_context_schema import (
     TemplateContextSchemaPlugin,
 )
-from langharmess.plugins.loop.debug.template_debug import TemplateDebugPlugin
-from langharmess.plugins.loop.interrupt_after.template_interrupt_after import (
+from langharmess_core.plugins.loop.debug.template_debug import TemplateDebugPlugin
+from langharmess_core.plugins.loop.interrupt_after.template_interrupt_after import (
     TemplateInterruptAfterPlugin,
 )
-from langharmess.plugins.loop.interrupt_before.template_interrupt_before import (
+from langharmess_core.plugins.loop.interrupt_before.template_interrupt_before import (
     TemplateInterruptBeforePlugin,
 )
-from langharmess.plugins.loop.name.template_name import TemplateAgentNamePlugin
-from langharmess.plugins.loop.response_format.template_response_format import (
+from langharmess_core.plugins.loop.name.template_name import TemplateAgentNamePlugin
+from langharmess_core.plugins.loop.response_format.template_response_format import (
     TemplateResponseFormatPlugin,
 )
-from langharmess.plugins.loop.state_schema.template_state_schema import (
+from langharmess_core.plugins.loop.state_schema.template_state_schema import (
     TemplateStateSchemaPlugin,
 )
-from langharmess.plugins.loop.store.template_store import TemplateStorePlugin
-from langharmess.plugins.loop.transformers.template_transformers import (
+from langharmess_core.plugins.loop.store.template_store import TemplateStorePlugin
+from langharmess_core.plugins.loop.transformers.template_transformers import (
     TemplateTransformersPlugin,
 )
 
