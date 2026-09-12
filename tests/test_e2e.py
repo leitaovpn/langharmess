@@ -6,11 +6,27 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from langharmess.contracts import SPEC_AGENT_LOOP, SPEC_SYSTEM_PROMPT
+import langharmess.agent_loop as agent_loop_module
+from langharmess.contracts import (
+    SPEC_AGENT_LOOP,
+    SPEC_CACHE,
+    SPEC_CHECKPOINTER,
+    SPEC_CONTEXT_SCHEMA,
+    SPEC_DEBUG,
+    SPEC_INTERRUPT_AFTER,
+    SPEC_INTERRUPT_BEFORE,
+    SPEC_NAME,
+    SPEC_RESPONSE_FORMAT,
+    SPEC_STATE_SCHEMA,
+    SPEC_STORE,
+    SPEC_SYSTEM_PROMPT,
+    SPEC_TRANSFORMERS,
+)
 from langharmess.plugin_manager import PluginManager
 from langharmess.registry import PluginDescriptor, PluginRegistry
 
@@ -115,7 +131,9 @@ def descriptors(tmp_path: Path) -> PluginRegistry:
     return registry
 
 
-def test_plugin_lifecycle_and_agent_invocation(tmp_path: Path) -> None:
+def test_plugin_lifecycle_and_agent_invocation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     registry = descriptors(tmp_path)
     CAPTURED_MESSAGES.clear()
     manager = PluginManager(registry)
@@ -150,5 +168,142 @@ def test_plugin_lifecycle_and_agent_invocation(tmp_path: Path) -> None:
             "system-prompt-a",
             "system-prompt-b",
         }
+
+        captured_kwargs: dict[str, object] = {}
+
+        def fake_create_agent(model, tools=None, *, system_prompt=None, **kwargs):
+            captured_kwargs["model"] = model
+            captured_kwargs["tools"] = tools
+            captured_kwargs["system_prompt"] = system_prompt
+            captured_kwargs.update(kwargs)
+            return object()
+
+        monkeypatch.setattr(agent_loop_module, "create_agent", fake_create_agent)
+
+        response_format = object()
+        state_schema = object()
+        context_schema = object()
+        checkpointer = object()
+        store = object()
+        cache = object()
+
+        parameter_descriptors = [
+            PluginDescriptor(
+                name="response-format",
+                version="1.0.0",
+                module="langharmess.plugins.agent_params",
+                factory="response-format-plugin-factory",
+                instance="response-format",
+                specification=SPEC_RESPONSE_FORMAT,
+                properties={"plugin.response_format": response_format},
+            ),
+            PluginDescriptor(
+                name="state-schema",
+                version="1.0.0",
+                module="langharmess.plugins.agent_params",
+                factory="state-schema-plugin-factory",
+                instance="state-schema",
+                specification=SPEC_STATE_SCHEMA,
+                properties={"plugin.state_schema": state_schema},
+            ),
+            PluginDescriptor(
+                name="context-schema",
+                version="1.0.0",
+                module="langharmess.plugins.agent_params",
+                factory="context-schema-plugin-factory",
+                instance="context-schema",
+                specification=SPEC_CONTEXT_SCHEMA,
+                properties={"plugin.context_schema": context_schema},
+            ),
+            PluginDescriptor(
+                name="checkpointer",
+                version="1.0.0",
+                module="langharmess.plugins.agent_params",
+                factory="checkpointer-plugin-factory",
+                instance="checkpointer",
+                specification=SPEC_CHECKPOINTER,
+                properties={"plugin.checkpointer": checkpointer},
+            ),
+            PluginDescriptor(
+                name="store",
+                version="1.0.0",
+                module="langharmess.plugins.agent_params",
+                factory="store-plugin-factory",
+                instance="store",
+                specification=SPEC_STORE,
+                properties={"plugin.store": store},
+            ),
+            PluginDescriptor(
+                name="interrupt-before",
+                version="1.0.0",
+                module="langharmess.plugins.agent_params",
+                factory="interrupt-before-plugin-factory",
+                instance="interrupt-before",
+                specification=SPEC_INTERRUPT_BEFORE,
+                properties={"plugin.interrupt_before": ["before_a", "before_b"]},
+            ),
+            PluginDescriptor(
+                name="interrupt-after",
+                version="1.0.0",
+                module="langharmess.plugins.agent_params",
+                factory="interrupt-after-plugin-factory",
+                instance="interrupt-after",
+                specification=SPEC_INTERRUPT_AFTER,
+                properties={"plugin.interrupt_after": ["after_a"]},
+            ),
+            PluginDescriptor(
+                name="debug",
+                version="1.0.0",
+                module="langharmess.plugins.agent_params",
+                factory="debug-plugin-factory",
+                instance="debug",
+                specification=SPEC_DEBUG,
+                properties={"plugin.debug": True},
+            ),
+            PluginDescriptor(
+                name="agent-name",
+                version="1.0.0",
+                module="langharmess.plugins.agent_params",
+                factory="agent-name-plugin-factory",
+                instance="agent-name",
+                specification=SPEC_NAME,
+                properties={"plugin.agent_name": "my-agent"},
+            ),
+            PluginDescriptor(
+                name="cache",
+                version="1.0.0",
+                module="langharmess.plugins.agent_params",
+                factory="cache-plugin-factory",
+                instance="cache",
+                specification=SPEC_CACHE,
+                properties={"plugin.cache": cache},
+            ),
+            PluginDescriptor(
+                name="transformers",
+                version="1.0.0",
+                module="langharmess.plugins.agent_params",
+                factory="transformers-plugin-factory",
+                instance="transformers",
+                specification=SPEC_TRANSFORMERS,
+                properties={"plugin.transformers": ["transformer_a"]},
+            ),
+        ]
+
+        for descriptor in parameter_descriptors:
+            manager.install_plugin(descriptor)
+
+        loop._rebuild()
+
+        assert captured_kwargs["response_format"] is response_format
+        assert captured_kwargs["state_schema"] is state_schema
+        assert captured_kwargs["context_schema"] is context_schema
+        assert captured_kwargs["checkpointer"] is checkpointer
+        assert captured_kwargs["store"] is store
+        assert captured_kwargs["interrupt_before"] == ["before_a", "before_b"]
+        assert captured_kwargs["interrupt_after"] == ["after_a"]
+        assert captured_kwargs["debug"] is True
+        assert captured_kwargs["name"] == "my-agent"
+        assert captured_kwargs["cache"] is cache
+        assert captured_kwargs["transformers"] == ["transformer_a"]
     finally:
         manager.stop()

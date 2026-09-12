@@ -18,10 +18,21 @@ from pelix.ipopo.decorators import (
 
 from langharmess.contracts import (
     SPEC_AGENT_LOOP,
+    SPEC_CACHE,
+    SPEC_CHECKPOINTER,
+    SPEC_CONTEXT_SCHEMA,
+    SPEC_DEBUG,
+    SPEC_INTERRUPT_AFTER,
+    SPEC_INTERRUPT_BEFORE,
     SPEC_LLM,
     SPEC_MIDDLEWARE,
+    SPEC_NAME,
+    SPEC_RESPONSE_FORMAT,
+    SPEC_STATE_SCHEMA,
+    SPEC_STORE,
     SPEC_SYSTEM_PROMPT,
     SPEC_TOOL,
+    SPEC_TRANSFORMERS,
 )
 
 
@@ -31,6 +42,52 @@ from langharmess.contracts import (
 @Requires("_tool_providers", SPEC_TOOL, aggregate=True, optional=True)
 @Requires("_middleware_providers", SPEC_MIDDLEWARE, aggregate=True, optional=True)
 @Requires("_system_prompt_providers", SPEC_SYSTEM_PROMPT, aggregate=True, optional=True)
+@RequiresBest(
+    "_response_format_provider",
+    SPEC_RESPONSE_FORMAT,
+    optional=True,
+    immediate_rebind=True,
+)
+@RequiresBest(
+    "_state_schema_provider",
+    SPEC_STATE_SCHEMA,
+    optional=True,
+    immediate_rebind=True,
+)
+@RequiresBest(
+    "_context_schema_provider",
+    SPEC_CONTEXT_SCHEMA,
+    optional=True,
+    immediate_rebind=True,
+)
+@RequiresBest(
+    "_checkpointer_provider",
+    SPEC_CHECKPOINTER,
+    optional=True,
+    immediate_rebind=True,
+)
+@RequiresBest("_store_provider", SPEC_STORE, optional=True, immediate_rebind=True)
+@Requires(
+    "_interrupt_before_providers",
+    SPEC_INTERRUPT_BEFORE,
+    aggregate=True,
+    optional=True,
+)
+@Requires(
+    "_interrupt_after_providers",
+    SPEC_INTERRUPT_AFTER,
+    aggregate=True,
+    optional=True,
+)
+@RequiresBest("_debug_provider", SPEC_DEBUG, optional=True, immediate_rebind=True)
+@RequiresBest("_name_provider", SPEC_NAME, optional=True, immediate_rebind=True)
+@RequiresBest("_cache_provider", SPEC_CACHE, optional=True, immediate_rebind=True)
+@Requires(
+    "_transformers_providers",
+    SPEC_TRANSFORMERS,
+    aggregate=True,
+    optional=True,
+)
 class PluginAgentLoop:
     """Rebuilds a LangChain agent graph when injected services change."""
 
@@ -39,6 +96,17 @@ class PluginAgentLoop:
         self._tool_providers: list[Any] = []
         self._middleware_providers: list[Any] = []
         self._system_prompt_providers: list[Any] = []
+        self._response_format_provider: Any = None
+        self._state_schema_provider: Any = None
+        self._context_schema_provider: Any = None
+        self._checkpointer_provider: Any = None
+        self._store_provider: Any = None
+        self._interrupt_before_providers: list[Any] = []
+        self._interrupt_after_providers: list[Any] = []
+        self._debug_provider: Any = None
+        self._name_provider: Any = None
+        self._cache_provider: Any = None
+        self._transformers_providers: list[Any] = []
         self._graph: Any = None
 
     @Validate
@@ -73,6 +141,100 @@ class PluginAgentLoop:
     def _on_system_prompt_unbind(self, field: str, service: Any, reference: Any) -> None:
         self._rebuild()
 
+    @BindField("_response_format_provider", if_valid=True)
+    def _on_response_format_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
+    @UnbindField("_response_format_provider")
+    def _on_response_format_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._graph = None
+
+    @BindField("_state_schema_provider", if_valid=True)
+    def _on_state_schema_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
+    @UnbindField("_state_schema_provider")
+    def _on_state_schema_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._graph = None
+
+    @BindField("_context_schema_provider", if_valid=True)
+    def _on_context_schema_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
+    @UnbindField("_context_schema_provider")
+    def _on_context_schema_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._graph = None
+
+    @BindField("_checkpointer_provider", if_valid=True)
+    def _on_checkpointer_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
+    @UnbindField("_checkpointer_provider")
+    def _on_checkpointer_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._graph = None
+
+    @BindField("_store_provider", if_valid=True)
+    def _on_store_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
+    @UnbindField("_store_provider")
+    def _on_store_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._graph = None
+
+    @BindField("_interrupt_before_providers", if_valid=True)
+    def _on_interrupt_before_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
+    @UnbindField("_interrupt_before_providers", if_valid=True)
+    def _on_interrupt_before_unbind(
+        self, field: str, service: Any, reference: Any
+    ) -> None:
+        self._rebuild()
+
+    @BindField("_interrupt_after_providers", if_valid=True)
+    def _on_interrupt_after_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
+    @UnbindField("_interrupt_after_providers", if_valid=True)
+    def _on_interrupt_after_unbind(
+        self, field: str, service: Any, reference: Any
+    ) -> None:
+        self._rebuild()
+
+    @BindField("_debug_provider", if_valid=True)
+    def _on_debug_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
+    @UnbindField("_debug_provider")
+    def _on_debug_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._graph = None
+
+    @BindField("_name_provider", if_valid=True)
+    def _on_name_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
+    @UnbindField("_name_provider")
+    def _on_name_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._graph = None
+
+    @BindField("_cache_provider", if_valid=True)
+    def _on_cache_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
+    @UnbindField("_cache_provider")
+    def _on_cache_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._graph = None
+
+    @BindField("_transformers_providers", if_valid=True)
+    def _on_transformers_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._rebuild()
+
+    @UnbindField("_transformers_providers", if_valid=True)
+    def _on_transformers_unbind(
+        self, field: str, service: Any, reference: Any
+    ) -> None:
+        self._rebuild()
+
     def _collect_tools(self) -> list[Any]:
         tools: list[Any] = []
         for provider in self._tool_providers or []:
@@ -95,6 +257,24 @@ class PluginAgentLoop:
             return None
         return "\n".join(parts)
 
+    def _collect_interrupt_before(self) -> list[str]:
+        values: list[str] = []
+        for provider in self._interrupt_before_providers or []:
+            values.extend(provider.get_interrupt_before())
+        return values
+
+    def _collect_interrupt_after(self) -> list[str]:
+        values: list[str] = []
+        for provider in self._interrupt_after_providers or []:
+            values.extend(provider.get_interrupt_after())
+        return values
+
+    def _collect_transformers(self) -> list[Any]:
+        values: list[Any] = []
+        for provider in self._transformers_providers or []:
+            values.extend(provider.get_transformers())
+        return values
+
     def _rebuild(self) -> None:
         model = self._llm_provider.get_model() if self._llm_provider else None
         if model is None:
@@ -105,6 +285,33 @@ class PluginAgentLoop:
             tools=self._collect_tools(),
             middleware=self._collect_middlewares(),
             system_prompt=self._collect_system_prompt(),
+            response_format=(
+                self._response_format_provider.get_response_format()
+                if self._response_format_provider
+                else None
+            ),
+            state_schema=(
+                self._state_schema_provider.get_state_schema()
+                if self._state_schema_provider
+                else None
+            ),
+            context_schema=(
+                self._context_schema_provider.get_context_schema()
+                if self._context_schema_provider
+                else None
+            ),
+            checkpointer=(
+                self._checkpointer_provider.get_checkpointer()
+                if self._checkpointer_provider
+                else None
+            ),
+            store=self._store_provider.get_store() if self._store_provider else None,
+            interrupt_before=self._collect_interrupt_before() or None,
+            interrupt_after=self._collect_interrupt_after() or None,
+            debug=self._debug_provider.get_debug() if self._debug_provider else False,
+            name=self._name_provider.get_name() if self._name_provider else None,
+            cache=self._cache_provider.get_cache() if self._cache_provider else None,
+            transformers=self._collect_transformers() or None,
         )
 
     def invoke(self, message: str) -> Any:
