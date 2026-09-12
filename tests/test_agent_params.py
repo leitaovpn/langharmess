@@ -9,19 +9,17 @@ import pytest
 
 import langharmess.agent_loop as agent_loop_module
 from langharmess.agent_loop import PluginAgentLoop
-from langharmess.plugins.agent_params import (
-    AgentNamePlugin,
-    CachePlugin,
-    CheckpointerPlugin,
-    ContextSchemaPlugin,
-    DebugPlugin,
-    InterruptAfterPlugin,
-    InterruptBeforePlugin,
-    ResponseFormatPlugin,
-    StateSchemaPlugin,
-    StorePlugin,
-    TransformersPlugin,
-)
+from langharmess.plugins.cache import CachePlugin
+from langharmess.plugins.checkpointer import CheckpointerPlugin
+from langharmess.plugins.context_schema import ContextSchemaPlugin
+from langharmess.plugins.debug import DebugPlugin
+from langharmess.plugins.interrupt_after import InterruptAfterPlugin
+from langharmess.plugins.interrupt_before import InterruptBeforePlugin
+from langharmess.plugins.name import AgentNamePlugin
+from langharmess.plugins.response_format import ResponseFormatPlugin
+from langharmess.plugins.state_schema import StateSchemaPlugin
+from langharmess.plugins.store import StorePlugin
+from langharmess.plugins.transformers import TransformersPlugin
 
 
 def test_agent_parameter_plugins_expose_values() -> None:

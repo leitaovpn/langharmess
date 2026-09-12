@@ -191,7 +191,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="response-format",
                 version="1.0.0",
-                module="langharmess.plugins.agent_params",
+                module="langharmess.plugins.response_format",
                 factory="response-format-plugin-factory",
                 instance="response-format",
                 specification=SPEC_RESPONSE_FORMAT,
@@ -200,7 +200,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="state-schema",
                 version="1.0.0",
-                module="langharmess.plugins.agent_params",
+                module="langharmess.plugins.state_schema",
                 factory="state-schema-plugin-factory",
                 instance="state-schema",
                 specification=SPEC_STATE_SCHEMA,
@@ -209,7 +209,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="context-schema",
                 version="1.0.0",
-                module="langharmess.plugins.agent_params",
+                module="langharmess.plugins.context_schema",
                 factory="context-schema-plugin-factory",
                 instance="context-schema",
                 specification=SPEC_CONTEXT_SCHEMA,
@@ -218,7 +218,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="checkpointer",
                 version="1.0.0",
-                module="langharmess.plugins.agent_params",
+                module="langharmess.plugins.checkpointer",
                 factory="checkpointer-plugin-factory",
                 instance="checkpointer",
                 specification=SPEC_CHECKPOINTER,
@@ -227,7 +227,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="store",
                 version="1.0.0",
-                module="langharmess.plugins.agent_params",
+                module="langharmess.plugins.store",
                 factory="store-plugin-factory",
                 instance="store",
                 specification=SPEC_STORE,
@@ -236,7 +236,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="interrupt-before",
                 version="1.0.0",
-                module="langharmess.plugins.agent_params",
+                module="langharmess.plugins.interrupt_before",
                 factory="interrupt-before-plugin-factory",
                 instance="interrupt-before",
                 specification=SPEC_INTERRUPT_BEFORE,
@@ -245,7 +245,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="interrupt-after",
                 version="1.0.0",
-                module="langharmess.plugins.agent_params",
+                module="langharmess.plugins.interrupt_after",
                 factory="interrupt-after-plugin-factory",
                 instance="interrupt-after",
                 specification=SPEC_INTERRUPT_AFTER,
@@ -254,7 +254,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="debug",
                 version="1.0.0",
-                module="langharmess.plugins.agent_params",
+                module="langharmess.plugins.debug",
                 factory="debug-plugin-factory",
                 instance="debug",
                 specification=SPEC_DEBUG,
@@ -263,7 +263,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="agent-name",
                 version="1.0.0",
-                module="langharmess.plugins.agent_params",
+                module="langharmess.plugins.name",
                 factory="agent-name-plugin-factory",
                 instance="agent-name",
                 specification=SPEC_NAME,
@@ -272,7 +272,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="cache",
                 version="1.0.0",
-                module="langharmess.plugins.agent_params",
+                module="langharmess.plugins.cache",
                 factory="cache-plugin-factory",
                 instance="cache",
                 specification=SPEC_CACHE,
@@ -281,7 +281,7 @@ def test_plugin_lifecycle_and_agent_invocation(
             PluginDescriptor(
                 name="transformers",
                 version="1.0.0",
-                module="langharmess.plugins.agent_params",
+                module="langharmess.plugins.transformers",
                 factory="transformers-plugin-factory",
                 instance="transformers",
                 specification=SPEC_TRANSFORMERS,
