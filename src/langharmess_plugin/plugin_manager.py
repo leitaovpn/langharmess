@@ -7,7 +7,7 @@ from typing import Any
 from pelix.framework import BundleContext, Framework, create_framework
 from pelix.ipopo.constants import SERVICE_IPOPO
 
-from langharmess_core.registry import PluginDescriptor, PluginRegistry
+from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 
 
 class PluginManager:

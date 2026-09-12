@@ -57,7 +57,7 @@ addopts = "-ra --strict-markers"
 pythonpath = ["src"]
 
 [tool.coverage.run]
-source = ["langharmess_core"]
+source = ["langharmess_core", "langharmess_plugin"]
 branch = true
 
 [tool.coverage.report]

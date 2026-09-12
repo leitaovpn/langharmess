@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from langharmess_core.registry import PluginDescriptor, PluginRegistry
+from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 
 
 def make_descriptor(name: str = "llm") -> PluginDescriptor:

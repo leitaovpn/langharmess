@@ -27,8 +27,8 @@ from langharmess_core.contracts import (
     SPEC_SYSTEM_PROMPT,
     SPEC_TRANSFORMERS,
 )
-from langharmess_core.plugin_manager import PluginManager
-from langharmess_core.registry import PluginDescriptor, PluginRegistry
+from langharmess_plugin.plugin_manager import PluginManager
+from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 
 CAPTURED_MESSAGES: list[list] = []
 
