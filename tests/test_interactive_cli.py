@@ -18,22 +18,29 @@ def test_interactive_command_spec() -> None:
     assert spec.handler("") == 0
 
 
-def test_interactive_runner_dispatches_plugin_command(
+def test_interactive_runner_slash_dispatches_call(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    called = []
+    class Response:
+        status_code = 200
 
-    def handler(line: str) -> int:
-        called.append(line)
-        return 0
+        def json(self):
+            return {"status": "ok"}
 
+        text = ""
+
+    monkeypatch.setattr(
+        "langharmess_cli.interactive.httpx.get",
+        lambda *args, **kwargs: Response(),
+    )
     runner = InteractiveCLIRunner(
         base_url="http://127.0.0.1:8000",
         token="secret",
-        commands=[InteractiveCommandSpec("greet", "greet", handler)],
+        commands=[],
     )
-    runner.default("greet hello")
-    assert called == ["hello"]
+    runner.default("/health")
+    assert "{'status': 'ok'}" in capsys.readouterr().out
 
 
 def test_interactive_runner_call_requests_api(
@@ -59,22 +66,57 @@ def test_interactive_runner_call_requests_api(
     assert "{'echo': 'ok'}" in capsys.readouterr().out
 
 
+def test_interactive_runner_stream_request(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeStreamResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def iter_lines(self):
+            return ["chunk1", "chunk2"]
+
+    monkeypatch.setattr(
+        "langharmess_cli.interactive.httpx.stream",
+        lambda *args, **kwargs: FakeStreamResponse(),
+    )
+    runner = InteractiveCLIRunner(
+        base_url="http://127.0.0.1:8000",
+        token="secret",
+        commands=[],
+    )
+    runner.do_stream("hello")
+    output = capsys.readouterr().out
+    assert "chunk1" in output
+    assert "chunk2" in output
+
+
 def test_template_health_provides_interactive_command() -> None:
     plugin = TemplateHealthCommandPlugin()
     commands = plugin.get_interactive_commands()
     assert [command.name for command in commands] == ["health"]
 
 
-def test_interactive_runner_unknown_command(
+def test_interactive_runner_default_streams_non_slash(
+    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    monkeypatch.setattr(
+        InteractiveCLIRunner,
+        "do_stream",
+        lambda self, line: print(f"stream:{line}"),
+    )
     runner = InteractiveCLIRunner(
         base_url="http://127.0.0.1:8000",
         token="secret",
         commands=[],
     )
-    runner.default("nope")
-    assert "Unknown command: nope" in capsys.readouterr().out
+    runner.default("hello agent")
+    assert "stream:hello agent" in capsys.readouterr().out
 
 
 def test_interactive_runner_exit_commands() -> None:

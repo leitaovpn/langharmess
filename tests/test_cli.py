@@ -151,7 +151,7 @@ def test_main_runs_plugin_commands(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["langharmess", "interactive"])
+    monkeypatch.setattr(sys, "argv", ["langharmess"])
 
     provider = SimpleNamespace(
         get_commands=lambda: [],

@@ -26,13 +26,29 @@ class InteractiveCLIRunner(cmd.Cmd):
         self.commands = {command.name: command for command in commands}
 
     def do_call(self, line: str) -> None:
-        path = line.strip().split()[0] if line.strip() else "/health"
+        path = line.strip() or "/health"
+        if not path.startswith("/"):
+            path = f"/{path}"
         response = httpx.get(
             f"{self.base_url}{path}",
             headers={"Authorization": f"Bearer {self.token}"},
             timeout=10.0,
         )
-        print(response.json())
+        if response.status_code == 200:
+            print(response.json())
+        else:
+            print(response.text)
+
+    def do_stream(self, line: str) -> None:
+        with httpx.stream(
+            "POST",
+            f"{self.base_url}/stream",
+            json={"input": line},
+            headers={"Authorization": f"Bearer {self.token}"},
+            timeout=None,
+        ) as response:
+            for chunk in response.iter_lines():
+                print(chunk)
 
     def do_exit(self, line: str) -> bool:
         return True
@@ -47,9 +63,7 @@ class InteractiveCLIRunner(cmd.Cmd):
     def default(self, line: str) -> None:
         if not line.strip():
             return
-        name, _, args = line.partition(" ")
-        command = self.commands.get(name)
-        if command is None:
-            print(f"Unknown command: {name}")
-            return
-        command.handler(args)
+        if line.startswith("/"):
+            self.do_call(line[1:])
+        else:
+            self.do_stream(line)

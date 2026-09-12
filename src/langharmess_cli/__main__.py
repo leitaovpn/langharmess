@@ -38,16 +38,19 @@ def main() -> int:
             for command in provider.get_commands()
         ]
 
-        if sys.argv[1:2] == ["interactive"]:
+        if len(sys.argv) == 1 or sys.argv[1] == "interactive":
             base_url = "http://127.0.0.1:8000"
             token = "secret"
-            for index, arg in enumerate(sys.argv[2:]):
-                if arg == "--base-url" and index + 1 < len(sys.argv[2:]):
-                    base_url = sys.argv[index + 3]
+            interactive_args = (
+                sys.argv[2:] if len(sys.argv) > 1 and sys.argv[1] == "interactive" else sys.argv[1:]
+            )
+            for index, arg in enumerate(interactive_args):
+                if arg == "--base-url" and index + 1 < len(interactive_args):
+                    base_url = interactive_args[index + 1]
                 elif arg.startswith("--base-url="):
                     base_url = arg.split("=", 1)[1]
-                elif arg == "--token" and index + 1 < len(sys.argv[2:]):
-                    token = sys.argv[index + 3]
+                elif arg == "--token" and index + 1 < len(interactive_args):
+                    token = interactive_args[index + 1]
                 elif arg.startswith("--token="):
                     token = arg.split("=", 1)[1]
             APIGuard(base_url).ensure_api_server()

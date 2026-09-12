@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 from langchain.agents import create_agent
@@ -318,6 +319,19 @@ class PluginAgentLoop:
         if self._graph is None:
             raise RuntimeError("Agent graph is not built; no LLM plugin is available")
         return self._graph.invoke({"messages": [{"role": "user", "content": message}]})
+
+    async def astream(self, message: str) -> AsyncIterator[Any]:
+        if self._graph is None:
+            raise RuntimeError("Agent graph is not built; no LLM plugin is available")
+        async for chunk in self._graph.astream(
+            {"messages": [{"role": "user", "content": message}]},
+            stream_mode="messages",
+        ):
+            if isinstance(chunk, tuple):
+                message = chunk[0]
+                yield str(getattr(message, "content", ""))
+            else:
+                yield str(chunk)
 
     def describe(self) -> dict[str, Any]:
         llm_info = self._llm_provider.get_plugin_info() if self._llm_provider else None

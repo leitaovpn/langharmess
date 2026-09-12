@@ -104,7 +104,7 @@ def test_cli_interactive_mode() -> None:
             base_url,
         ],
         env=ENV,
-        input="health\ncall /health\nexit\n",
+        input="/health\nexit\n",
         check=False,
         capture_output=True,
         text=True,

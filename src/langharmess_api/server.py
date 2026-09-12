@@ -60,6 +60,14 @@ def create_app() -> FastAPI:
                     specification=SPEC_ROUTE,
                 ),
                 PluginDescriptor(
+                    name="api-stream",
+                    version="1.0.0",
+                    module="langharmess_api.plugins.routes.template_stream",
+                    factory="api-stream-route-template-factory",
+                    instance="api-stream",
+                    specification=SPEC_ROUTE,
+                ),
+                PluginDescriptor(
                     name="api-server",
                     version="1.0.0",
                     module="langharmess_api.app",

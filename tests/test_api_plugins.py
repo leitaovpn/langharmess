@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.testclient import TestClient
 
 from langharmess_api.dependencies import get_db_session
 from langharmess_api.plugins.auth.template_auth import TemplateAuthPlugin
@@ -12,6 +13,8 @@ from langharmess_api.plugins.rate_limit.template_rate_limit import (
     TemplateRateLimitPlugin,
 )
 from langharmess_api.plugins.routes.template_health import TemplateHealthRoutePlugin
+from langharmess_api.plugins.routes.template_stream import TemplateStreamRoutePlugin
+from langharmess_core.agent_loop import PluginAgentLoop
 
 
 def test_auth_plugin_rejects_missing_token() -> None:
@@ -63,3 +66,37 @@ def test_health_route_has_router_and_dependency() -> None:
     router = plugin.get_router()
     assert router is not None
     assert get_db_session is not None
+
+
+def test_agent_loop_astream_yields_message_contents() -> None:
+    class FakeGraph:
+        async def astream(self, input_data, stream_mode=None):
+            yield (type("M", (), {"content": "hello"})(), "metadata")
+            yield (type("M", (), {"content": "world"})(), "metadata")
+
+    loop = PluginAgentLoop()
+    loop._graph = FakeGraph()
+
+    async def collect():
+        return [chunk async for chunk in loop.astream("hi")]
+
+    import asyncio
+
+    assert asyncio.run(collect()) == ["hello", "world"]
+
+
+def test_stream_route_plugin_streams_agent_output() -> None:
+    class FakeAgentLoop:
+        async def astream(self, message):
+            yield "hello"
+            yield "world"
+
+    plugin = TemplateStreamRoutePlugin()
+    plugin._agent_loop = FakeAgentLoop()
+    app = FastAPI()
+    app.include_router(plugin.get_router())
+
+    client = TestClient(app)
+    response = client.post("/stream", json={"input": "hi"})
+    assert response.status_code == 200
+    assert response.text == "hello\nworld\n"
