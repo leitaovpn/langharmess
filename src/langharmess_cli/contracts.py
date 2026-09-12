@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
@@ -22,7 +22,16 @@ class CommandSpec:
 class InteractiveCommandSpec:
     name: str
     help: str
-    handler: Callable[[str], int]
+    handler: Callable[[InteractiveCommandContext, str], bool | None]
+
+
+@runtime_checkable
+class InteractiveCommandContext(Protocol):
+    """Runtime data exposed to interactive command plugins."""
+
+    base_url: str
+    token: str
+    commands: Mapping[str, InteractiveCommandSpec]
 
 
 @runtime_checkable

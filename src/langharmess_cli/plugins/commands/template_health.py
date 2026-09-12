@@ -11,6 +11,7 @@ from langharmess_cli.api_guard import APIGuard
 from langharmess_cli.contracts import (
     SPEC_CLI_COMMAND,
     CommandSpec,
+    InteractiveCommandContext,
     InteractiveCommandSpec,
 )
 
@@ -61,16 +62,18 @@ class TemplateHealthCommandPlugin:
             )
         ]
 
-    def _interactive_handler(self, line: str) -> int:
-        base_url = self._base_url.rstrip("/")
+    def _interactive_handler(
+        self, context: InteractiveCommandContext, line: str
+    ) -> bool:
+        base_url = context.base_url.rstrip("/")
         APIGuard(base_url).ensure_api_server()
         response = httpx.get(
             f"{base_url}/health",
-            headers={"Authorization": f"Bearer {self._token}"},
+            headers={"Authorization": f"Bearer {context.token}"},
             timeout=10.0,
         )
         print(response.json())
-        return 0 if response.status_code == 200 else 1
+        return False
 
     def get_plugin_info(self) -> dict[str, str]:
         return {"name": self._plugin_name, "version": self._plugin_version}

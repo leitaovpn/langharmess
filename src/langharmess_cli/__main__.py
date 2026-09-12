@@ -22,7 +22,15 @@ def main() -> int:
                 factory="cli-health-command-factory",
                 instance="cli-health",
                 specification=SPEC_CLI_COMMAND,
-            )
+            ),
+            PluginDescriptor(
+                name="cli-shell",
+                version="1.0.0",
+                module="langharmess_cli.plugins.commands.shell",
+                factory="cli-shell-command-factory",
+                instance="cli-shell",
+                specification=SPEC_CLI_COMMAND,
+            ),
         ]
     )
     manager = PluginManager(registry)

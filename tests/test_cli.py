@@ -190,3 +190,20 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
 
     assert main_module.main() == 0
+
+
+def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["langharmess"])
+    installed = []
+    manager = SimpleNamespace(
+        start=lambda: None,
+        stop=lambda: None,
+        install_plugin=installed.append,
+        get_services=lambda spec: [],
+    )
+    monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
+    monkeypatch.setattr(main_module, "APIGuard", lambda base_url: SimpleNamespace(ensure_api_server=lambda: None))
+    monkeypatch.setattr(main_module.InteractiveCLIRunner, "cmdloop", lambda self: None)
+
+    assert main_module.main() == 0
+    assert {descriptor.name for descriptor in installed} == {"cli-health", "cli-shell"}

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import cmd
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 import httpx
 
@@ -23,21 +23,9 @@ class InteractiveCLIRunner(cmd.Cmd):
         super().__init__()
         self.base_url = base_url.rstrip("/")
         self.token = token
-        self.commands = {command.name: command for command in commands}
-
-    def do_call(self, line: str) -> None:
-        path = line.strip() or "/health"
-        if not path.startswith("/"):
-            path = f"/{path}"
-        response = httpx.get(
-            f"{self.base_url}{path}",
-            headers={"Authorization": f"Bearer {self.token}"},
-            timeout=10.0,
-        )
-        if response.status_code == 200:
-            print(response.json())
-        else:
-            print(response.text)
+        self.commands: Mapping[str, InteractiveCommandSpec] = {
+            command.name: command for command in commands
+        }
 
     def do_stream(self, line: str) -> None:
         with httpx.stream(
@@ -60,10 +48,18 @@ class InteractiveCLIRunner(cmd.Cmd):
         print()
         return True
 
+    def onecmd(self, line: str) -> bool:
+        if line.startswith("/"):
+            command_line = line[1:].strip()
+            name, _, arguments = command_line.partition(" ")
+            command = self.commands.get(name)
+            if command is None:
+                print(f"Unknown command: /{name}. Type /help for available commands.")
+                return False
+            return bool(command.handler(self, arguments.strip()))
+        return bool(super().onecmd(line))
+
     def default(self, line: str) -> None:
         if not line.strip():
             return
-        if line.startswith("/"):
-            self.do_call(line[1:])
-        else:
-            self.do_stream(line)
+        self.do_stream(line)

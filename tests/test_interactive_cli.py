@@ -9,61 +9,44 @@ import pytest
 import langharmess_cli.plugins.commands.template_health as health_module
 from langharmess_cli.contracts import InteractiveCommandSpec
 from langharmess_cli.interactive import InteractiveCLIRunner
+from langharmess_cli.plugins.commands.shell import ShellCommandPlugin
 from langharmess_cli.plugins.commands.template_health import TemplateHealthCommandPlugin
 
 
 def test_interactive_command_spec() -> None:
-    spec = InteractiveCommandSpec(name="health", help="check", handler=lambda line: 0)
+    spec = InteractiveCommandSpec(
+        name="health", help="check", handler=lambda context, line: False
+    )
     assert spec.name == "health"
-    assert spec.handler("") == 0
+    runner = InteractiveCLIRunner(base_url="http://api", token="secret", commands=[])
+    assert spec.handler(runner, "") is False
 
 
-def test_interactive_runner_slash_dispatches_call(
-    monkeypatch: pytest.MonkeyPatch,
+def test_interactive_runner_dispatches_slash_plugin_command(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    class Response:
-        status_code = 200
-
-        def json(self):
-            return {"status": "ok"}
-
-        text = ""
-
-    monkeypatch.setattr(
-        "langharmess_cli.interactive.httpx.get",
-        lambda *args, **kwargs: Response(),
+    command = InteractiveCommandSpec(
+        name="greet",
+        help="Greet somebody",
+        handler=lambda context, line: print(
+            f"{context.base_url}:{context.token}:{line}"
+        ),
     )
     runner = InteractiveCLIRunner(
         base_url="http://127.0.0.1:8000",
         token="secret",
-        commands=[],
+        commands=[command],
     )
-    runner.default("/health")
-    assert "{'status': 'ok'}" in capsys.readouterr().out
+    assert runner.onecmd("/greet Ada") is False
+    assert "http://127.0.0.1:8000:secret:Ada" in capsys.readouterr().out
 
 
-def test_interactive_runner_call_requests_api(
-    monkeypatch: pytest.MonkeyPatch,
+def test_interactive_runner_reports_unknown_slash_command(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    class Response:
-        status_code = 200
-
-        def json(self):
-            return {"echo": "ok"}
-
-    monkeypatch.setattr(
-        "langharmess_cli.interactive.httpx.get",
-        lambda *args, **kwargs: Response(),
-    )
-    runner = InteractiveCLIRunner(
-        base_url="http://127.0.0.1:8000",
-        token="secret",
-        commands=[],
-    )
-    runner.do_call("/echo")
-    assert "{'echo': 'ok'}" in capsys.readouterr().out
+    runner = InteractiveCLIRunner(base_url="http://api", token="secret", commands=[])
+    assert runner.onecmd("/missing") is False
+    assert "Unknown command: /missing" in capsys.readouterr().out
 
 
 def test_interactive_runner_stream_request(
@@ -115,8 +98,13 @@ def test_interactive_runner_default_streams_non_slash(
         token="secret",
         commands=[],
     )
-    runner.default("hello agent")
+    runner.onecmd("hello agent")
     assert "stream:hello agent" in capsys.readouterr().out
+
+
+def test_interactive_runner_ignores_empty_default() -> None:
+    runner = InteractiveCLIRunner(base_url="http://api", token="secret", commands=[])
+    assert runner.default("") is None
 
 
 def test_interactive_runner_exit_commands() -> None:
@@ -128,6 +116,38 @@ def test_interactive_runner_exit_commands() -> None:
     assert runner.do_exit("") is True
     assert runner.do_quit("") is True
     assert runner.do_EOF("") is True
+
+
+def test_shell_plugin_provides_exit_and_dynamic_help(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    commands = ShellCommandPlugin().get_interactive_commands()
+    runner = InteractiveCLIRunner(
+        base_url="http://api",
+        token="secret",
+        commands=[
+            *commands,
+            InteractiveCommandSpec(
+                name="health", help="Check health", handler=lambda context, line: False
+            ),
+        ],
+    )
+
+    assert runner.onecmd("/help") is False
+    output = capsys.readouterr().out
+    assert "/exit" in output
+    assert "/help" in output
+    assert "/health" in output
+    assert runner.onecmd("/exit") is True
+
+    assert runner.onecmd("/help health") is False
+    assert "/health: Check health" in capsys.readouterr().out
+    assert runner.onecmd("/help missing") is False
+    assert "Unknown command: /missing" in capsys.readouterr().out
+
+    plugin = ShellCommandPlugin()
+    assert plugin.get_commands() == []
+    assert plugin.get_plugin_info() == {"name": "shell-command", "version": "1.0.0"}
 
 
 def test_template_health_interactive_handler(
@@ -151,5 +171,8 @@ def test_template_health_interactive_handler(
     monkeypatch.setattr(health_module.httpx, "get", lambda *a, **k: Response())
 
     plugin = TemplateHealthCommandPlugin()
-    assert plugin._interactive_handler("") == 0
+    runner = InteractiveCLIRunner(
+        base_url="http://127.0.0.1:8000", token="secret", commands=[]
+    )
+    assert plugin._interactive_handler(runner, "") is False
     assert "{'status': 'ok'}" in capsys.readouterr().out
