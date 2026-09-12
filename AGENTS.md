@@ -2,9 +2,10 @@
 
 ## Goal
 
-This repository builds a plugin-driven LangChain agent using Pelix/iPOPO as the
-component and service container. The final target covers frontend, backend,
-agent loop, LLM, tools, and middleware as independently installable plugins.
+This repository builds a plugin-driven agent system using Pelix/iPOPO as the
+component and service container. It currently covers the agent loop, plugin
+lifecycle, an API server, and a CLI, all assembled from independently
+installable plugins.
 
 Current milestone:
 
@@ -13,17 +14,33 @@ Current milestone:
 - `agent.plugin.tools`
 - `agent.plugin.middleware`
 - `agent.loop`
+- `api.server`
+- `api.plugin.auth`
+- `api.plugin.rate_limit`
+- `api.plugin.db`
+- `api.plugin.route`
+- `cli.plugin.command`
 
 ## Architecture constraints
 
 - Plugins communicate through Pelix service specifications, not by importing
   each other's concrete classes.
-- Public contracts live in `src/langharmess_core/contracts.py`.
-- Plugin implementations live in `src/langharmess_core/plugins/`.
+- Public agent contracts live in `src/langharmess_core/contracts.py`.
+- Plugin lifecycle and registration live in `src/langharmess_plugin/`.
+- Agent plugins live in `src/langharmess_core/plugins/loop/`.
+- API plugins live in `src/langharmess_api/plugins/`.
+- CLI command plugins live in `src/langharmess_cli/plugins/commands/`.
 - The agent loop is an iPOPO component that rebuilds a LangChain
   `create_agent` graph when injected services change.
 - Keep runtime plugin registration deterministic: production plugins must not
   use `@Instantiate`; the `PluginManager` controls instantiation and teardown.
+
+## Packages
+
+- `langharmess_core`: agent loop and agent plugin contracts/implementations.
+- `langharmess_plugin`: plugin manager and registry.
+- `langharmess_api`: plugin-driven FastAPI server.
+- `langharmess_cli`: plugin-driven CLI with API auto-start.
 
 ## Quality gates
 
@@ -47,7 +64,8 @@ The same gate is enforced locally by `.githooks/pre-commit` and in CI by
 
 - Python 3.13.
 - Use `.venv/bin/python`.
-- Source package is `langharmess_core`.
+- Source packages are `langharmess_core`, `langharmess_plugin`,
+  `langharmess_api`, and `langharmess_cli`.
 - Install hooks with `make install-hooks`.
 
 ## File ownership
