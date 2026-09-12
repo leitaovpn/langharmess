@@ -15,9 +15,11 @@ dependencies = [
     "langchain>=1.4.0",
     "langchain-community>=0.4.2",
     "langchain-core>=1.6.2",
+    "langchain-experimental>=0.4.2",
     "langchain-openai>=1.6.0",
     "langgraph-checkpoint-sqlite>=3.1.1",
-    "pelix>=3.2.2",
+    "iPOPO>=3.2.2",
+    "pydantic>=2.13.5",
     "uvicorn>=0.52.4",
 ]
 
