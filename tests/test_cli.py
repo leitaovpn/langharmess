@@ -148,3 +148,45 @@ def test_main_runs_plugin_commands(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(main_module, "CLIRunner", lambda commands: CLIRunner(commands))
 
     assert main_module.main() == 9
+
+
+def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["langharmess", "interactive"])
+
+    provider = SimpleNamespace(
+        get_commands=lambda: [],
+        get_interactive_commands=lambda: [],
+    )
+    manager = SimpleNamespace(
+        start=lambda: None,
+        stop=lambda: None,
+        install_plugin=lambda descriptor: None,
+        get_services=lambda spec: [provider],
+    )
+
+    class FakeGuard:
+        def __init__(self, base_url):
+            self.base_url = base_url
+
+        def ensure_api_server(self):
+            return None
+
+    class FakeInteractive:
+        def __init__(self, *, base_url, token, commands):
+            self.base_url = base_url
+            self.token = token
+            self.commands = commands
+
+        def cmdloop(self):
+            self.called = True
+
+    monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
+    monkeypatch.setattr(
+        main_module,
+        "PluginRegistry",
+        lambda descriptors: SimpleNamespace(list=lambda: descriptors),
+    )
+    monkeypatch.setattr(main_module, "APIGuard", FakeGuard)
+    monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
+
+    assert main_module.main() == 0

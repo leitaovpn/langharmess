@@ -89,3 +89,26 @@ def test_cli_reuses_running_api_server() -> None:
     finally:
         server.terminate()
         server.wait(timeout=10)
+
+
+def test_cli_interactive_mode() -> None:
+    port = free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "langharmess_cli",
+            "interactive",
+            "--base-url",
+            base_url,
+        ],
+        env=ENV,
+        input="health\ncall /health\nexit\n",
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "{'status': 'ok', 'db': True}" in result.stdout
