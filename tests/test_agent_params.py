@@ -1,8 +1,10 @@
 """Tests for the remaining create_agent parameter plugins."""
 # mypy: ignore-errors
+# pyright: reportArgumentType=false
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -10,6 +12,7 @@ import pytest
 import langharmess_core.agent_loop as agent_loop_module
 from langharmess_core.agent_loop import PluginAgentLoop
 from langharmess_core.plugins.loop.cache.template_cache import TemplateCachePlugin
+from langharmess_core.plugins.loop.checkpointer.sqlite import SQLiteCheckpointerPlugin
 from langharmess_core.plugins.loop.checkpointer.template_checkpointer import (
     TemplateCheckpointerPlugin,
 )
@@ -87,6 +90,26 @@ def test_agent_parameter_plugins_expose_values() -> None:
     transformers = TemplateTransformersPlugin()
     transformers._items = ["t1", "t2"]
     assert transformers.get_transformers() == ["t1", "t2"]
+
+
+def test_sqlite_checkpointer_is_lazy_and_reused(tmp_path) -> None:
+    plugin = SQLiteCheckpointerPlugin()
+    plugin._path = str(tmp_path / "nested" / "checkpoints.sqlite3")
+
+    async def exercise() -> None:
+        checkpointer = plugin.get_checkpointer()
+        assert plugin.get_checkpointer() is checkpointer
+        await checkpointer.setup()
+        assert plugin.get_plugin_info() == {
+            "name": "sqlite-checkpointer",
+            "version": "1.0.0",
+        }
+        plugin._invalidate(object())
+        await asyncio.sleep(0)
+        plugin._invalidate(object())
+
+    asyncio.run(exercise())
+    assert (tmp_path / "nested" / "checkpoints.sqlite3").exists()
 
 
 def test_agent_loop_collects_list_parameters() -> None:

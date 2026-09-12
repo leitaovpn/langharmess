@@ -90,12 +90,8 @@ def test_interactive_runner_stream_request(
         "model": "deepseek-v4-flash",
         "api_key": "model-secret",
         "base_url": "https://models.example/v1",
-        "messages": [{"role": "user", "content": "hello"}],
+        "session_id": runner.session_id,
     }
-    assert runner.messages == [
-        {"role": "user", "content": "hello"},
-        {"role": "assistant", "content": "chunk1chunk2"},
-    ]
 
 
 def test_template_health_provides_interactive_command() -> None:

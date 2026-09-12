@@ -13,7 +13,7 @@ from langharmess_api.contracts import (
     SPEC_RATE_LIMIT,
     SPEC_ROUTE,
 )
-from langharmess_core.contracts import SPEC_AGENT_LOOP
+from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_CHECKPOINTER
 from langharmess_plugin.plugin_manager import PluginManager
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 
@@ -69,10 +69,21 @@ def create_app() -> FastAPI:
                     specification=SPEC_ROUTE,
                 ),
                 PluginDescriptor(
+                    name="sqlite-checkpointer",
+                    version="1.0.0",
+                    module="langharmess_core.plugins.loop.checkpointer.sqlite",
+                    factory="sqlite-checkpointer-plugin-factory",
+                    instance="sqlite-checkpointer",
+                    specification=SPEC_CHECKPOINTER,
+                    properties={
+                        "plugin.checkpoint.path": "langharmess_checkpoints.sqlite3"
+                    },
+                ),
+                PluginDescriptor(
                     name="api-stream",
                     version="1.0.0",
-                    module="langharmess_api.plugins.routes.template_stream",
-                    factory="api-stream-route-template-factory",
+                    module="langharmess_api.plugins.routes.stream",
+                    factory="api-stream-route-factory",
                     instance="api-stream",
                     specification=SPEC_ROUTE,
                 ),

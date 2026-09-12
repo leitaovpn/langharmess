@@ -12,8 +12,8 @@ from langharmess_api.plugins.db.template_db import TemplateDBPlugin
 from langharmess_api.plugins.rate_limit.template_rate_limit import (
     TemplateRateLimitPlugin,
 )
+from langharmess_api.plugins.routes.stream import StreamRoutePlugin
 from langharmess_api.plugins.routes.template_health import TemplateHealthRoutePlugin
-from langharmess_api.plugins.routes.template_stream import TemplateStreamRoutePlugin
 from langharmess_core.agent_loop import PluginAgentLoop
 
 
@@ -70,7 +70,7 @@ def test_health_route_has_router_and_dependency() -> None:
 
 def test_agent_loop_astream_yields_message_contents() -> None:
     class FakeGraph:
-        async def astream(self, input_data, stream_mode=None):
+        async def astream(self, input_data, config=None, stream_mode=None):
             yield (type("M", (), {"content": "hello"})(), "metadata")
             yield (type("M", (), {"content": "world"})(), "metadata")
 
@@ -87,11 +87,12 @@ def test_agent_loop_astream_yields_message_contents() -> None:
 
 def test_stream_route_plugin_streams_agent_output() -> None:
     class FakeAgentLoop:
-        async def astream(self, message):
+        async def astream(self, message, *, thread_id=None):
+            assert thread_id == "session-1"
             yield "hello"
             yield "world"
 
-    plugin = TemplateStreamRoutePlugin()
+    plugin = StreamRoutePlugin()
     plugin._agent_loop = FakeAgentLoop()
     descriptors = []
     plugin._plugin_registrar = type(
@@ -108,6 +109,7 @@ def test_stream_route_plugin_streams_agent_output() -> None:
             "model": "test-model",
             "api_key": "test-key",
             "base_url": "https://models.example/v1",
+            "session_id": "session-1",
         },
     )
     assert response.status_code == 200

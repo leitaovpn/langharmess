@@ -1,6 +1,7 @@
 """Concrete plugin implementations."""
 
 from langharmess_core.plugins.loop.cache.template_cache import TemplateCachePlugin
+from langharmess_core.plugins.loop.checkpointer.sqlite import SQLiteCheckpointerPlugin
 from langharmess_core.plugins.loop.checkpointer.template_checkpointer import (
     TemplateCheckpointerPlugin,
 )
@@ -36,6 +37,7 @@ from langharmess_core.plugins.loop.transformers.template_transformers import (
 
 __all__ = [
     "LLMPlugin",
+    "SQLiteCheckpointerPlugin",
     "TemplateAgentNamePlugin",
     "TemplateCachePlugin",
     "TemplateCheckpointerPlugin",

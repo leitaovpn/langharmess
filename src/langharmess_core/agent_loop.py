@@ -315,28 +315,23 @@ class PluginAgentLoop:
             transformers=self._collect_transformers() or None,
         )
 
-    def invoke(self, message: str | list[dict[str, str]]) -> Any:
+    def invoke(self, message: str, *, thread_id: str | None = None) -> Any:
         if self._graph is None:
             raise RuntimeError("Agent graph is not built; no LLM plugin is available")
-        messages = (
-            [{"role": "user", "content": message}]
-            if isinstance(message, str)
-            else message
+        config = {"configurable": {"thread_id": thread_id}} if thread_id else None
+        return self._graph.invoke(
+            {"messages": [{"role": "user", "content": message}]}, config=config
         )
-        return self._graph.invoke({"messages": messages})
 
     async def astream(
-        self, message: str | list[dict[str, str]]
+        self, message: str, *, thread_id: str | None = None
     ) -> AsyncIterator[Any]:
         if self._graph is None:
             raise RuntimeError("Agent graph is not built; no LLM plugin is available")
-        messages = (
-            [{"role": "user", "content": message}]
-            if isinstance(message, str)
-            else message
-        )
+        config = {"configurable": {"thread_id": thread_id}} if thread_id else None
         async for chunk in self._graph.astream(
-            {"messages": messages},
+            {"messages": [{"role": "user", "content": message}]},
+            config=config,
             stream_mode="messages",
         ):
             if isinstance(chunk, tuple):

@@ -9,11 +9,13 @@ description = "Plugin-driven LangChain agent on Pelix/iPOPO"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aiosqlite>=0.22.1",
     "fastapi>=0.141.1",
     "httpx>=0.28.1",
     "langchain>=1.4.0",
     "langchain-core>=1.6.2",
     "langchain-openai>=1.6.0",
+    "langgraph-checkpoint-sqlite>=3.1.1",
     "pelix>=3.2.2",
     "uvicorn>=0.52.4",
 ]

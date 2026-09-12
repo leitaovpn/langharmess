@@ -24,6 +24,7 @@ PUBLIC_MODULES = [
     "langharmess_core.plugins.loop.state_schema.template_state_schema",
     "langharmess_core.plugins.loop.context_schema.template_context_schema",
     "langharmess_core.plugins.loop.checkpointer.template_checkpointer",
+    "langharmess_core.plugins.loop.checkpointer.sqlite",
     "langharmess_core.plugins.loop.store.template_store",
     "langharmess_core.plugins.loop.interrupt_before.template_interrupt_before",
     "langharmess_core.plugins.loop.interrupt_after.template_interrupt_after",

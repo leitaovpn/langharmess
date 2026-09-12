@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -176,6 +177,48 @@ def test_plugin_lifecycle_and_agent_invocation(
             "system-prompt-a",
             "system-prompt-b",
         }
+
+        async def verify_sqlite_memory() -> None:
+            sqlite_path = tmp_path / "checkpoints.sqlite3"
+            sqlite_descriptor = PluginDescriptor(
+                name="sqlite-checkpointer",
+                version="1.0.0",
+                module="langharmess_core.plugins.loop.checkpointer.sqlite",
+                factory="sqlite-checkpointer-plugin-factory",
+                instance="sqlite-checkpointer",
+                specification=SPEC_CHECKPOINTER,
+                properties={"plugin.checkpoint.path": str(sqlite_path)},
+            )
+            manager.install_plugin(sqlite_descriptor)
+            try:
+                first_start = len(CAPTURED_MESSAGES)
+                _ = [
+                    chunk
+                    async for chunk in loop.astream(
+                        "Remember sqlite-memory", thread_id="memory-thread"
+                    )
+                ]
+                second_start = len(CAPTURED_MESSAGES)
+                _ = [
+                    chunk
+                    async for chunk in loop.astream(
+                        "What should you remember?", thread_id="memory-thread"
+                    )
+                ]
+
+                first_messages = CAPTURED_MESSAGES[first_start]
+                second_messages = CAPTURED_MESSAGES[second_start]
+                assert len(second_messages) > len(first_messages)
+                assert any(
+                    getattr(message, "content", "") == "Remember sqlite-memory"
+                    for message in second_messages
+                )
+                assert sqlite_path.exists()
+            finally:
+                manager.uninstall_plugin("sqlite-checkpointer")
+                await asyncio.sleep(0)
+
+        asyncio.run(verify_sqlite_memory())
 
         captured_kwargs: dict[str, object] = {}
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import cmd
 from collections.abc import Iterable, Mapping
+from uuid import uuid4
 
 import httpx
 
@@ -29,14 +30,12 @@ class InteractiveCLIRunner(cmd.Cmd):
         self.model = model
         self.api_key = api_key
         self.model_base_url = model_base_url.rstrip("/")
-        self.messages: list[dict[str, str]] = []
+        self.session_id = uuid4().hex
         self.commands: Mapping[str, InteractiveCommandSpec] = {
             command.name: command for command in commands
         }
 
     def do_stream(self, line: str) -> None:
-        self.messages.append({"role": "user", "content": line})
-        response_parts: list[str] = []
         with httpx.stream(
             "POST",
             f"{self.base_url}/stream",
@@ -45,19 +44,15 @@ class InteractiveCLIRunner(cmd.Cmd):
                 "model": self.model,
                 "api_key": self.api_key,
                 "base_url": self.model_base_url,
-                "messages": list(self.messages),
+                "session_id": self.session_id,
             },
             headers={"Authorization": f"Bearer {self.token}"},
             timeout=None,
         ) as response:
             response.raise_for_status()
             for chunk in response.iter_text():
-                response_parts.append(chunk)
                 print(chunk, end="", flush=True)
         print()
-        self.messages.append(
-            {"role": "assistant", "content": "".join(response_parts)}
-        )
 
     def do_exit(self, line: str) -> bool:
         return True
