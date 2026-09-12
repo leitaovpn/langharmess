@@ -13,7 +13,25 @@ from langharmess_plugin.plugin_manager import PluginManager
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 
 
+def _serve(argv: list[str]) -> int:
+    import argparse
+
+    import uvicorn
+
+    from langharmess_api.server import create_app
+
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000)
+    args = parser.parse_args(argv)
+    uvicorn.run(create_app(), host=args.host, port=args.port)
+    return 0
+
+
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] == "__serve__":
+        return _serve(sys.argv[2:])
+
     registry = PluginRegistry(
         [
             PluginDescriptor(

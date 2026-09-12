@@ -1,0 +1,57 @@
+name: packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install -e ".[packaging]"
+      - run: PYTHON_BIN=python scripts/build_packages.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: langharmess-macos
+          path: |
+            dist/*.pkg
+            dist/*.tar.gz
+
+  ubuntu:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install -e ".[packaging]"
+      - run: PYTHON_BIN=python scripts/build_packages.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: langharmess-ubuntu
+          path: |
+            dist/*.deb
+            dist/*.tar.gz
+
+  centos:
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - run: dnf install -y rpm-build
+      - run: /opt/python/cp313-cp313/bin/python -m pip install -e ".[packaging]"
+      - run: PYTHON_BIN=/opt/python/cp313-cp313/bin/python scripts/build_packages.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: langharmess-centos-rpm
+          path: |
+            dist/*.rpm
+            dist/*.tar.gz

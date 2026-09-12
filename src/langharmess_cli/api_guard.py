@@ -16,7 +16,7 @@ class APIGuard:
         self,
         base_url: str = "http://127.0.0.1:8000",
         *,
-        startup_timeout: float = 10.0,
+        startup_timeout: float = 30.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.startup_timeout = startup_timeout
@@ -37,8 +37,10 @@ class APIGuard:
         host = parsed.hostname or "127.0.0.1"
         port = parsed.port or 8000
 
-        self._process = subprocess.Popen(
-            [
+        command = (
+            [sys.executable, "__serve__", "--host", host, "--port", str(port)]
+            if getattr(sys, "frozen", False)
+            else [
                 sys.executable,
                 "-m",
                 "uvicorn",
@@ -50,6 +52,7 @@ class APIGuard:
                 str(port),
             ]
         )
+        self._process = subprocess.Popen(command)
         atexit.register(self._terminate)
 
         deadline = time.monotonic() + self.startup_timeout

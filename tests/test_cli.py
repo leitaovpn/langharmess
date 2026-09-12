@@ -96,6 +96,54 @@ def test_api_guard_starts_server(monkeypatch: pytest.MonkeyPatch) -> None:
     assert guard._process is process
 
 
+def test_api_guard_uses_frozen_executable_to_start_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands = []
+    process = SimpleNamespace(poll=lambda: None, terminate=lambda: None)
+    monkeypatch.setattr(api_guard_module.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(
+        api_guard_module.subprocess,
+        "Popen",
+        lambda command: commands.append(command) or process,
+    )
+    guard = APIGuard("http://127.0.0.1:9123")
+    states = [False, True]
+    guard.is_running = lambda: states.pop(0)  # type: ignore[method-assign]
+
+    guard.ensure_api_server()
+
+    assert commands == [
+        [sys.executable, "__serve__", "--host", "127.0.0.1", "--port", "9123"]
+    ]
+
+
+def test_main_dispatches_internal_frozen_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["langharmess", "__serve__", "--port", "9123"])
+    monkeypatch.setattr(main_module, "_serve", lambda argv: 7 if argv == ["--port", "9123"] else 1)
+    assert main_module.main() == 7
+
+
+def test_internal_server_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
+    import uvicorn
+
+    import langharmess_api.server as server_module
+
+    app = object()
+    captured = {}
+    monkeypatch.setattr(server_module, "create_app", lambda: app)
+    monkeypatch.setattr(
+        uvicorn,
+        "run",
+        lambda target, **kwargs: captured.update(target=target, **kwargs),
+    )
+
+    assert main_module._serve(["--host", "0.0.0.0", "--port", "9123"]) == 0
+    assert captured == {"target": app, "host": "0.0.0.0", "port": 9123}
+
+
 def test_health_command_handler(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
