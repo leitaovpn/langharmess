@@ -12,6 +12,13 @@ from pelix.ipopo.decorators import ComponentFactory, Property, Provides, Validat
 from langharmess_config.contracts import SPEC_CONFIG_PROVIDER
 
 
+def _strip_quotes(value: str) -> str:
+    """Remove a matching pair of surrounding quotes from an INI value."""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        return value[1:-1]
+    return value
+
+
 @ComponentFactory("ini-config-plugin-factory")
 @Provides(SPEC_CONFIG_PROVIDER)
 @Property(
@@ -35,7 +42,10 @@ class INIConfigPlugin:
         parser.read(path, encoding="utf-8")
         config = {"DEFAULT": dict(parser.defaults())}
         for section in parser.sections():
-            config[section] = dict(parser.items(section, raw=True))
+            config[section] = {
+                key: _strip_quotes(value)
+                for key, value in parser.items(section, raw=True)
+            }
         return config
 
     def _ensure_config(self) -> Path:

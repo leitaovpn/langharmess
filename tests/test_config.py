@@ -29,6 +29,27 @@ def test_ini_config_plugin_creates_and_reads_user_config(tmp_path: Path) -> None
     }
 
 
+def test_ini_config_plugin_strips_surrounding_quotes(tmp_path: Path) -> None:
+    path = tmp_path / "langharmess.ini"
+    path.write_text(
+        "[providers.demo]\n"
+        'base_url="https://example.test/v1"\n'
+        "model='demo'\n"
+        'key="value" extra\n',
+        encoding="utf-8",
+    )
+    plugin = INIConfigPlugin()
+    plugin._config_path = str(path)
+
+    config = plugin.get_config()
+
+    assert config["providers.demo"] == {
+        "base_url": "https://example.test/v1",
+        "model": "demo",
+        "key": '"value" extra',
+    }
+
+
 def test_configs_plugin_merges_registered_config_plugins() -> None:
     configs = ConfigsPlugin()
     configs._providers = [
