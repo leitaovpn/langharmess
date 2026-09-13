@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, Provides, Requires
 
 from langharmess_config.contracts import SPEC_CONFIG_PROVIDER, SPEC_CONFIGS
+
+LOGGER = logging.getLogger("langharmess.config")
 
 SUPPORTED_PROTOCOLS = {"anthropic", "chat", "responses"}
 
@@ -88,6 +91,12 @@ class ConfigsPlugin:
         names = sorted(
             str(name) for name, value in providers.items() if isinstance(value, Mapping)
         )
+        valid: list[str] = []
         for name in names:
-            self.get_provider(name)
-        return names
+            try:
+                self.get_provider(name)
+            except ValueError as exc:
+                LOGGER.warning("Skipping invalid provider %s: %s", name, exc)
+                continue
+            valid.append(name)
+        return valid

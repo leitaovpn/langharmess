@@ -62,14 +62,19 @@ def test_model_command_reports_unknown_provider(
 def test_model_command_survives_broken_provider_config(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    import pytest
+    from langharmess_config.plugins.configs import ConfigsPlugin
 
-    pytest.xfail(reason="known bug: config validation error crashes the shell")
-
-    def raise_bad(name: str) -> dict[str, str]:
-        raise ValueError(f"Unsupported protocol for provider {name}: ftp")
-
-    configs = SimpleNamespace(list_providers=lambda: [], get_provider=raise_bad)
+    configs = ConfigsPlugin()
+    configs._providers = [
+        SimpleNamespace(
+            get_config=lambda: {
+                "providers": {
+                    "good": {"model": "demo", "api_key": "k"},
+                    "broken": {"model": "demo", "api_key": "k", "protocol": "ftp"},
+                }
+            }
+        )
+    ]
     plugin = ModelCommandPlugin()
     runner = InteractiveCLIRunner(
         base_url="http://api",
@@ -80,3 +85,5 @@ def test_model_command_survives_broken_provider_config(
 
     assert runner.onecmd("/model broken") is False
     assert "Error" in capsys.readouterr().out
+    assert runner.onecmd("/model") is False
+    assert "good" in capsys.readouterr().out

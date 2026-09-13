@@ -195,7 +195,11 @@ class InteractiveCLIRunner:
         if self.configs is None:
             self.renderer.show_error(tr(self.locale, "model_unknown", name=name))
             return False
-        provider = self.configs.get_provider(name)
+        try:
+            provider = self.configs.get_provider(name)
+        except ValueError as exc:
+            self.renderer.show_error(str(exc))
+            return False
         if not provider:
             self.renderer.show_error(tr(self.locale, "model_unknown", name=name))
             return False

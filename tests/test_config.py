@@ -121,7 +121,8 @@ def test_configs_validates_provider_protocol() -> None:
         )
     ]
     with pytest.raises(ValueError, match="Unsupported protocol"):
-        configs.list_providers()
+        configs.get_provider("bad")
+    assert configs.list_providers() == []
 
 
 def test_configs_requires_a_non_empty_provider_model() -> None:
@@ -131,7 +132,8 @@ def test_configs_requires_a_non_empty_provider_model() -> None:
     ]
 
     with pytest.raises(ValueError, match="requires a non-empty model"):
-        configs.list_providers()
+        configs.get_provider("bad")
+    assert configs.list_providers() == []
 
 
 def test_configs_service_aggregates_toml_plugin_in_ipopo(tmp_path: Path) -> None:
@@ -148,9 +150,6 @@ def test_configs_service_aggregates_toml_plugin_in_ipopo(tmp_path: Path) -> None
 
 
 def test_configs_list_providers_skips_invalid_entries() -> None:
-    import pytest
-
-    pytest.xfail(reason="known bug: list_providers raises when any provider config is invalid")
     configs = ConfigsPlugin()
     configs._providers = [
         SimpleNamespace(

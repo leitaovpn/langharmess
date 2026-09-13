@@ -482,17 +482,21 @@ def test_main_randomly_selects_configured_provider_when_not_specified(
 def test_main_survives_broken_provider_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import pytest
+    from langharmess_config.plugins.configs import ConfigsPlugin
 
-    pytest.xfail(reason="known bug: main() crashes at startup when any provider config is invalid")
     monkeypatch.setattr(sys, "argv", ["langharmess"])
 
-    def raise_bad() -> list[str]:
-        raise ValueError("Unsupported protocol for provider broken: ftp")
-
-    configs = SimpleNamespace(
-        list_providers=raise_bad, get_provider=lambda name: {}
-    )
+    configs = ConfigsPlugin()
+    configs._providers = [
+        SimpleNamespace(
+            get_config=lambda: {
+                "providers": {
+                    "good": {"model": "demo", "api_key": "k"},
+                    "broken": {"model": "demo", "api_key": "k", "protocol": "ftp"},
+                }
+            }
+        )
+    ]
     provider = SimpleNamespace(
         get_commands=lambda: [], get_interactive_commands=lambda: []
     )
