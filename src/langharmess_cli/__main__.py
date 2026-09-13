@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import random
 import sys
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
@@ -134,9 +135,14 @@ def main() -> int:
                 for provider in providers
                 for command in provider.get_interactive_commands()
             ]
+            selected_provider = options.provider
+            if configs is not None and selected_provider is None:
+                provider_names = configs.list_providers()
+                if provider_names:
+                    selected_provider = random.choice(provider_names)
             provider_config = (
-                configs.get_provider(options.provider)
-                if configs is not None and options.provider
+                configs.get_provider(selected_provider)
+                if configs is not None and selected_provider
                 else {}
             )
             if options.provider and not provider_config:

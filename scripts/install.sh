@@ -29,7 +29,7 @@ case "$ARTIFACT" in
 esac
 
 CONFIG_DIR=${LANG_HARMESS_HOME:-"$HOME/.langharmess"}
-CONFIG_FILE="$CONFIG_DIR/langharmess.ini"
+CONFIG_FILE="$CONFIG_DIR/langharmess.toml"
 mkdir -p "$CONFIG_DIR"
 if [[ ! -f "$CONFIG_FILE" ]]; then
   cat >"$CONFIG_FILE" <<'EOF'
@@ -37,11 +37,11 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
 
 [providers.deepseek-v4-flash]
 
-base_url=xxxxx
+base_url="xxxxx"
 
-model=xxxxx
+model="xxxxx"
 
-api_key=xxxx
+api_key="xxxx"
 EOF
 fi
 

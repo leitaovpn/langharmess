@@ -116,7 +116,7 @@ def test_cli_interactive_mode(tmp_path: Path) -> None:
     assert "{'status': 'ok', 'db': True}" in result.stdout
     assert "Started server process" not in result.stdout
     assert "Started server process" not in result.stderr
-    assert (tmp_path / "langharmess.ini").is_file()
+    assert (tmp_path / "langharmess.toml").is_file()
     assert "CLI started" in (tmp_path / "langharmess_cli.log").read_text()
     server_log = (tmp_path / "langharmess_server.log").read_text()
     assert "API server app built" in server_log

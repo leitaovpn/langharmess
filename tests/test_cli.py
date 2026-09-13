@@ -349,7 +349,7 @@ def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> 
         "cli-log",
         "cli-rich-renderer",
         "cli-shell",
-        "config-ini",
+        "config-toml",
         "configs",
     }
 
@@ -419,3 +419,48 @@ def test_main_uses_selected_provider_and_directory(
     assert captured["commands"] == []
     assert log_messages == ["CLI started"]
     assert "LANG_HARMESS_DIR" not in os.environ
+
+
+def test_main_randomly_selects_configured_provider_when_not_specified(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    monkeypatch.setattr(
+        sys, "argv", ["langharmess", "--dir", str(tmp_path), "interactive"]
+    )
+    configs = SimpleNamespace(
+        list_providers=lambda: ["first", "chosen"],
+        get_provider=lambda name: {
+            "model": f"{name}-model",
+            "api_key": f"{name}-key",
+            "base_url": f"https://{name}.example/v1",
+        },
+    )
+    manager = SimpleNamespace(
+        start=lambda: None,
+        stop=lambda: None,
+        install_plugin=lambda descriptor: None,
+        get_services=lambda spec: [],
+        get_service=lambda spec: configs if spec == "configs" else None,
+    )
+    captured = {}
+
+    class FakeInteractive:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def cmdloop(self):
+            return None
+
+    monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
+    monkeypatch.setattr(
+        main_module,
+        "APIGuard",
+        lambda base_url: SimpleNamespace(ensure_api_server=lambda: None),
+    )
+    monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
+    monkeypatch.setattr(main_module.random, "choice", lambda names: names[-1])
+
+    assert main_module.main() == 0
+    assert captured["model"] == "chosen-model"
+    assert captured["api_key"] == "chosen-key"
+    assert captured["model_base_url"] == "https://chosen.example/v1"

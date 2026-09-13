@@ -17,7 +17,7 @@ class CLIRunner:
 
     def build_parser(self) -> argparse.ArgumentParser:
         parser = argparse.ArgumentParser(prog="langharmess")
-        parser.add_argument("--provider", help="LLM provider configured in langharmess.ini")
+        parser.add_argument("--provider", help="LLM provider configured in langharmess.toml")
         parser.add_argument(
             "--dir", help="configuration and log directory (default: ~/.langharmess)"
         )

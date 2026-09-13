@@ -40,32 +40,34 @@ The default configuration and separate CLI/server logs are created under
 
 ```text
 ~/.langharmess/
-├── langharmess.ini
+├── langharmess.toml
 ├── langharmess_cli.log
 └── langharmess_server.log
 ```
 
 The configuration template is:
 
-```ini
+```toml
 [DEFAULT]
 
 [providers.deepseek-v4-flash]
-base_url = xxxxx
-model = xxxxx
-api_key = xxxx
+base_url = "xxxxx"
+model = "xxxxx"
+api_key = "xxxx"
 ```
 
-Select a configured model provider and optionally override the common data
+Optionally select a configured model provider and override the common data
 directory:
 
 ```bash
 langharmess --provider deepseek-v4-flash --dir /data/langharmess
 ```
 
-`--dir` controls the location of the INI file and both log files. Existing
+`--dir` controls the location of the TOML file and both log files. Existing
 `LANG_HARMESS_MODEL`, `LANG_HARMESS_API_KEY`, and `LANG_HARMESS_BASE_URL` values
-remain the fallback when `--provider` is omitted.
+remain the fallback when no provider is configured. When `--provider` is
+omitted and the TOML file contains providers, the CLI randomly selects one for
+the session.
 
 Interactive mode uses `prompt_toolkit` for persistent history, slash-command
 completion, keyboard handling, and the model status toolbar. Rich renders the

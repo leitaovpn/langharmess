@@ -46,7 +46,7 @@ packaging = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-langharmess_config = ["config/langharmess.ini"]
+langharmess_config = ["config/langharmess.toml"]
 
 [tool.ruff]
 target-version = "py313"

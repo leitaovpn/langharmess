@@ -10,17 +10,17 @@ from langharmess_plugin.registry import PluginDescriptor
 
 def config_descriptors(directory: str | None = None) -> list[PluginDescriptor]:
     properties = (
-        {"plugin.config.path": str(Path(directory).expanduser() / "langharmess.ini")}
+        {"plugin.config.path": str(Path(directory).expanduser() / "langharmess.toml")}
         if directory
         else {}
     )
     return [
         PluginDescriptor(
-            name="config-ini",
+            name="config-toml",
             version="1.0.0",
-            module="langharmess_config.plugins.ini",
-            factory="ini-config-plugin-factory",
-            instance="config-ini",
+            module="langharmess_config.plugins.toml",
+            factory="toml-config-plugin-factory",
+            instance="config-toml",
             specification=SPEC_CONFIG_PROVIDER,
             properties=properties,
         ),

@@ -1,0 +1,6 @@
+[DEFAULT]
+
+[providers.deepseek-v4-flash]
+base_url = "xxxxx"
+model = "xxxxx"
+api_key = "xxxx"
