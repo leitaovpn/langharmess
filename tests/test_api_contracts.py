@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from langharmess_api.app import APIServerService
 from langharmess_api.contracts import (
     SPEC_API_SERVER,
@@ -40,7 +42,13 @@ def test_template_plugins_conform_to_protocols() -> None:
 def test_api_server_service_builds_app() -> None:
     service = APIServerService()
     configs = object()
+    messages: list[str] = []
     service._configs = configs
+    service._log_provider = SimpleNamespace(
+        get_logger=lambda: SimpleNamespace(info=messages.append)
+    )
     app = service.build_app()
     assert app.title == "langharmess_api"
     assert app.state.configs is configs
+    assert app.state.log is service._log_provider
+    assert messages == ["API server app built"]

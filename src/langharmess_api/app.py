@@ -23,6 +23,7 @@ from langharmess_api.contracts import (
 )
 from langharmess_api.dependencies import get_db_session
 from langharmess_config.contracts import SPEC_CONFIGS
+from langharmess_logging.contracts import SPEC_LOG
 
 
 @ComponentFactory("api-server-factory")
@@ -32,6 +33,7 @@ from langharmess_config.contracts import SPEC_CONFIGS
 @RequiresBest("_rate_limit_provider", SPEC_RATE_LIMIT, optional=True, immediate_rebind=True)
 @RequiresBest("_db_provider", SPEC_DB, optional=True, immediate_rebind=True)
 @RequiresBest("_configs", SPEC_CONFIGS, optional=True, immediate_rebind=True)
+@RequiresBest("_log_provider", SPEC_LOG, optional=True, immediate_rebind=True)
 class APIServerService:
     """Builds a FastAPI app from the currently injected plugins."""
 
@@ -41,6 +43,7 @@ class APIServerService:
         self._rate_limit_provider: Any = None
         self._db_provider: Any = None
         self._configs: Any = None
+        self._log_provider: Any = None
 
     @BindField("_route_providers", if_valid=True)
     def _on_route_bind(self, field: str, service: Any, reference: Any) -> None:
@@ -82,9 +85,20 @@ class APIServerService:
     def _on_configs_unbind(self, field: str, service: Any, reference: Any) -> None:
         self._current_app = self.build_app()
 
+    @BindField("_log_provider", if_valid=True)
+    def _on_log_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._current_app = self.build_app()
+
+    @UnbindField("_log_provider")
+    def _on_log_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._current_app = self.build_app()
+
     def build_app(self) -> FastAPI:
         app = FastAPI(title="langharmess_api", version="0.1.0")
         app.state.configs = self._configs
+        app.state.log = self._log_provider
+        if self._log_provider is not None:
+            self._log_provider.get_logger().info("API server app built")
 
         if self._db_provider is not None:
             app.dependency_overrides[get_db_session] = (

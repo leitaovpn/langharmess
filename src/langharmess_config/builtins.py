@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from langharmess_config.contracts import SPEC_CONFIG_PROVIDER, SPEC_CONFIGS
 from langharmess_plugin.registry import PluginDescriptor
 
 
-def config_descriptors(config_path: str | None = None) -> list[PluginDescriptor]:
-    properties = {"plugin.config.path": config_path} if config_path else {}
+def config_descriptors(directory: str | None = None) -> list[PluginDescriptor]:
+    properties = (
+        {"plugin.config.path": str(Path(directory).expanduser() / "langharmess.ini")}
+        if directory
+        else {}
+    )
     return [
         PluginDescriptor(
             name="config-ini",

@@ -13,11 +13,14 @@ class CLIRunner:
     def __init__(self, providers: Iterable[CommandSpec], *, configs: Any = None) -> None:
         self._commands = list(providers)
         self.configs = configs
+        self.log: Any = None
 
     def build_parser(self) -> argparse.ArgumentParser:
         parser = argparse.ArgumentParser(prog="langharmess")
         parser.add_argument("--provider", help="LLM provider configured in langharmess.ini")
-        parser.add_argument("--log", help="override the configured log file")
+        parser.add_argument(
+            "--dir", help="configuration and log directory (default: ~/.langharmess)"
+        )
         subparsers = parser.add_subparsers(dest="command", required=True)
 
         for command in self._commands:

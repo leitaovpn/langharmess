@@ -5,8 +5,9 @@ from __future__ import annotations
 import configparser
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 
-from pelix.ipopo.decorators import ComponentFactory, Property, Provides
+from pelix.ipopo.decorators import ComponentFactory, Property, Provides, Validate
 
 from langharmess_config.contracts import SPEC_CONFIG_PROVIDER
 
@@ -23,6 +24,10 @@ class INIConfigPlugin:
 
     def __init__(self) -> None:
         self._config_path = "~/.langharmess/langharmess.ini"
+
+    @Validate
+    def _validate(self, bundle_context: Any) -> None:
+        self._ensure_config()
 
     def get_config(self) -> dict[str, dict[str, str]]:
         path = self._ensure_config()

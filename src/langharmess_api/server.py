@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import cast
 
 from fastapi import FastAPI
@@ -15,9 +16,8 @@ from langharmess_api.contracts import (
     SPEC_ROUTE,
 )
 from langharmess_config.builtins import config_descriptors
-from langharmess_config.contracts import SPEC_CONFIGS
-from langharmess_config.runtime import configure_logging
 from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_CHECKPOINTER, SPEC_TOOL
+from langharmess_logging.builtins import log_descriptor
 from langharmess_plugin.plugin_manager import PluginManager
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 
@@ -28,8 +28,12 @@ def create_app() -> FastAPI:
     global _MANAGER
 
     if _MANAGER is None:
+        directory = os.environ.get(
+            "LANG_HARMESS_DIR", str(Path.home() / ".langharmess")
+        )
         registry = PluginRegistry(
-            config_descriptors(os.environ.get("LANG_HARMESS_CONFIG"))
+            config_descriptors(directory)
+            + [log_descriptor("server", directory)]
             + [
                 PluginDescriptor(
                     name="agent-loop",
@@ -118,13 +122,6 @@ def create_app() -> FastAPI:
         _MANAGER = manager
 
     assert _MANAGER is not None
-    configs = _MANAGER.get_service(SPEC_CONFIGS)
-    if configs is not None:
-        log_file = os.environ.get("LANG_HARMESS_LOG_FILE") or configs.get(
-            "DEFAULT", "log_file"
-        )
-        if log_file:
-            configure_logging(log_file)
     api_server = _MANAGER.get_service(SPEC_API_SERVER)
     assert api_server is not None
     return cast(FastAPI, api_server.build_app())

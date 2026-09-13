@@ -35,8 +35,6 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   cat >"$CONFIG_FILE" <<'EOF'
 [DEFAULT]
 
-log_file = ~/.langharmess/langharmess.log
-
 [providers.deepseek-v4-flash]
 
 base_url=xxxxx

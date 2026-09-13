@@ -30,6 +30,12 @@ def test_packaging_scripts_are_executable_and_valid_bash() -> None:
     installer = (ROOT / "scripts/install.sh").read_text()
     assert 'CONFIG_DIR=${LANG_HARMESS_HOME:-"$HOME/.langharmess"}' in installer
     assert "[providers.deepseek-v4-flash]" in installer
+    template = (
+        ROOT / "src/langharmess_config/config/langharmess.ini"
+    ).read_text()
+    assert "log_file" not in template
+    builder = (ROOT / "scripts/build_packages.sh").read_text()
+    assert "--collect-submodules langharmess_logging" in builder
 
 
 def test_package_workflow_builds_all_supported_platforms() -> None:

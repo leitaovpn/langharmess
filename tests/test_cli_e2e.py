@@ -91,7 +91,7 @@ def test_cli_reuses_running_api_server() -> None:
         server.wait(timeout=10)
 
 
-def test_cli_interactive_mode() -> None:
+def test_cli_interactive_mode(tmp_path: Path) -> None:
     port = free_port()
     base_url = f"http://127.0.0.1:{port}"
     result = subprocess.run(
@@ -100,6 +100,8 @@ def test_cli_interactive_mode() -> None:
             "-m",
             "langharmess_cli",
             "interactive",
+            "--dir",
+            str(tmp_path),
             "--base-url",
             base_url,
         ],
@@ -112,3 +114,11 @@ def test_cli_interactive_mode() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "{'status': 'ok', 'db': True}" in result.stdout
+    assert "Started server process" not in result.stdout
+    assert "Started server process" not in result.stderr
+    assert (tmp_path / "langharmess.ini").is_file()
+    assert "CLI started" in (tmp_path / "langharmess_cli.log").read_text()
+    server_log = (tmp_path / "langharmess_server.log").read_text()
+    assert "API server app built" in server_log
+    assert "Started server process" in server_log
+    assert "GET /health" in server_log

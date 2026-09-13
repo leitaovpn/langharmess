@@ -14,6 +14,14 @@ from langharmess_cli.contracts import InteractiveCommandSpec
 
 
 class InteractiveCLIRunner(cmd.Cmd):
+    intro = """
+┌──────────────────────────────────────────────┐
+│                 langharmess                  │
+│                                              │
+│  Type a message to start a conversation.     │
+│  /help shows commands · /exit leaves safely  │
+└──────────────────────────────────────────────┘
+""".strip()
     prompt = "langharmess> "
 
     def __init__(
@@ -34,6 +42,7 @@ class InteractiveCLIRunner(cmd.Cmd):
         self.api_key = api_key
         self.model_base_url = model_base_url.rstrip("/")
         self.configs = configs
+        self.log: Any = None
         self.session_id = uuid4().hex
         self.commands: Mapping[str, InteractiveCommandSpec] = {
             command.name: command for command in commands

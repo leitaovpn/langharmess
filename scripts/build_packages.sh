@@ -38,6 +38,7 @@ cd "$PROJECT_ROOT"
   --collect-all langchain_experimental \
   --collect-data langharmess_config \
   --collect-submodules langharmess_config \
+  --collect-submodules langharmess_logging \
   --collect-submodules langharmess_api \
   --collect-submodules langharmess_cli \
   --collect-submodules langharmess_core \

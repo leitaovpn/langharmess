@@ -43,9 +43,8 @@ class APIGuard:
             else [
                 sys.executable,
                 "-m",
-                "uvicorn",
-                "langharmess_api.server:create_app",
-                "--factory",
+                "langharmess_cli",
+                "__serve__",
                 "--host",
                 host,
                 "--port",

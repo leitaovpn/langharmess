@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from argparse import ArgumentParser, Namespace
+from pathlib import Path
 
 from langharmess_cli.api_guard import APIGuard
 from langharmess_cli.contracts import SPEC_CLI_COMMAND
@@ -12,7 +13,8 @@ from langharmess_cli.interactive import InteractiveCLIRunner
 from langharmess_cli.runner import CLIRunner
 from langharmess_config.builtins import config_descriptors
 from langharmess_config.contracts import SPEC_CONFIGS
-from langharmess_config.runtime import configure_logging
+from langharmess_logging.builtins import log_descriptor
+from langharmess_logging.contracts import SPEC_LOG
 from langharmess_plugin.plugin_manager import PluginManager
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 
@@ -35,7 +37,7 @@ def _serve(argv: list[str]) -> int:
 def _global_options(argv: list[str]) -> tuple[Namespace, list[str]]:
     parser = ArgumentParser(add_help=False)
     parser.add_argument("--provider")
-    parser.add_argument("--log")
+    parser.add_argument("--dir", default=str(Path.home() / ".langharmess"))
     return parser.parse_known_args(argv)
 
 
@@ -44,8 +46,12 @@ def main() -> int:
         return _serve(sys.argv[2:])
 
     options, argv = _global_options(sys.argv[1:])
+    directory = str(Path(options.dir).expanduser().resolve())
+    inherited_directory = os.environ.get("LANG_HARMESS_DIR")
+    os.environ["LANG_HARMESS_DIR"] = directory
     registry = PluginRegistry(
-        config_descriptors(os.environ.get("LANG_HARMESS_CONFIG"))
+        config_descriptors(directory)
+        + [log_descriptor("cli", directory)]
         + [
             PluginDescriptor(
                 name="cli-health",
@@ -66,7 +72,6 @@ def main() -> int:
         ]
     )
     manager = PluginManager(registry)
-    inherited_log_file = os.environ.get("LANG_HARMESS_LOG_FILE")
     manager.start()
     try:
         for descriptor in registry.list():
@@ -75,13 +80,9 @@ def main() -> int:
         providers = manager.get_services(SPEC_CLI_COMMAND)
         get_service = getattr(manager, "get_service", lambda specification: None)
         configs = get_service(SPEC_CONFIGS)
-        configured_log = (
-            configs.get("DEFAULT", "log_file") if configs is not None else None
-        )
-        log_file = options.log or configured_log
-        if log_file:
-            resolved_log = configure_logging(log_file)
-            os.environ["LANG_HARMESS_LOG_FILE"] = str(resolved_log)
+        log_provider = get_service(SPEC_LOG)
+        if log_provider is not None and hasattr(log_provider, "get_logger"):
+            log_provider.get_logger().info("CLI started")
 
         commands = [
             command
@@ -133,18 +134,20 @@ def main() -> int:
                 commands=interactive_commands,
             )
             interactive_runner.configs = configs
+            interactive_runner.log = log_provider
             interactive_runner.cmdloop()
             return 0
 
         cli_runner = CLIRunner(commands)
         cli_runner.configs = configs
+        cli_runner.log = log_provider
         return cli_runner.run(argv)
     finally:
         manager.stop()
-        if inherited_log_file is None:
-            os.environ.pop("LANG_HARMESS_LOG_FILE", None)
+        if inherited_directory is None:
+            os.environ.pop("LANG_HARMESS_DIR", None)
         else:
-            os.environ["LANG_HARMESS_LOG_FILE"] = inherited_log_file
+            os.environ["LANG_HARMESS_DIR"] = inherited_directory
 
 
 if __name__ == "__main__":

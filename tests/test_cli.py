@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from types import SimpleNamespace
 
@@ -43,6 +44,9 @@ def test_runner_registers_and_executes_plugin_command() -> None:
     )
     runner = CLIRunner([spec])
     assert runner.run(["greet"]) == 7
+    help_text = runner.build_parser().format_help()
+    assert "--dir" in help_text
+    assert "--log" not in help_text
 
 
 def test_template_health_command_provider_conforms() -> None:
@@ -81,7 +85,12 @@ def test_api_guard_starts_server(monkeypatch: pytest.MonkeyPatch) -> None:
             return None
 
     process = FakeProcess()
-    monkeypatch.setattr(api_guard_module.subprocess, "Popen", lambda *a, **k: process)
+    commands = []
+    monkeypatch.setattr(
+        api_guard_module.subprocess,
+        "Popen",
+        lambda command: commands.append(command) or process,
+    )
     monkeypatch.setattr(api_guard_module.time, "sleep", lambda _: None)
     monkeypatch.setattr(
         api_guard_module.time,
@@ -94,6 +103,18 @@ def test_api_guard_starts_server(monkeypatch: pytest.MonkeyPatch) -> None:
     guard.is_running = lambda: states.pop(0)  # type: ignore[method-assign]
     guard.ensure_api_server()
     assert guard._process is process
+    assert commands == [
+        [
+            sys.executable,
+            "-m",
+            "langharmess_cli",
+            "__serve__",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "8000",
+        ]
+    ]
 
 
 def test_api_guard_uses_frozen_executable_to_start_server(
@@ -279,16 +300,16 @@ def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> 
     assert main_module.main() == 0
     assert {descriptor.name for descriptor in installed} == {
         "cli-health",
+        "cli-log",
         "cli-shell",
         "config-ini",
         "configs",
     }
 
 
-def test_main_uses_selected_provider_and_log_override(
+def test_main_uses_selected_provider_and_directory(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    log_path = tmp_path / "custom.log"
     monkeypatch.setattr(
         sys,
         "argv",
@@ -296,8 +317,8 @@ def test_main_uses_selected_provider_and_log_override(
             "langharmess",
             "--provider",
             "demo",
-            "--log",
-            str(log_path),
+            "--dir",
+            str(tmp_path),
             "interactive",
         ],
     )
@@ -312,12 +333,16 @@ def test_main_uses_selected_provider_and_log_override(
     command_provider = SimpleNamespace(
         get_commands=lambda: [], get_interactive_commands=lambda: []
     )
+    log_messages = []
+    log_provider = SimpleNamespace(
+        get_logger=lambda: SimpleNamespace(info=log_messages.append)
+    )
     manager = SimpleNamespace(
         start=lambda: None,
         stop=lambda: None,
         install_plugin=lambda descriptor: None,
         get_services=lambda spec: [command_provider],
-        get_service=lambda spec: configs,
+        get_service=lambda spec: log_provider if spec == "log.plugin" else configs,
     )
     captured = {}
 
@@ -340,14 +365,10 @@ def test_main_uses_selected_provider_and_log_override(
         lambda base_url: SimpleNamespace(ensure_api_server=lambda: None),
     )
     monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
-    monkeypatch.setattr(
-        main_module,
-        "configure_logging",
-        lambda path: log_path.write_text("") or log_path,
-    )
-
     assert main_module.main() == 0
     assert captured["model"] == "provider-model"
     assert captured["api_key"] == "provider-key"
     assert captured["model_base_url"] == "https://provider.example/v1"
-    assert log_path.is_file()
+    assert captured["commands"] == []
+    assert log_messages == ["CLI started"]
+    assert "LANG_HARMESS_DIR" not in os.environ

@@ -203,3 +203,11 @@ def test_template_health_interactive_handler(
     )
     assert plugin._interactive_handler(runner, "") is False
     assert "{'status': 'ok'}" in capsys.readouterr().out
+
+
+def test_interactive_runner_has_welcome_screen() -> None:
+    welcome = InteractiveCLIRunner.intro
+    assert welcome is not None
+    assert "langharmess" in welcome
+    assert "/help" in welcome
+    assert "/exit" in welcome
