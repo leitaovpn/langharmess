@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+from io import StringIO
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from fastapi.testclient import TestClient
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
+from rich.console import Console
 
 import langharmess_core.agent_loop as agent_loop_module
 from langharmess_api.contracts import (
@@ -21,6 +23,7 @@ from langharmess_api.contracts import (
     SPEC_RATE_LIMIT,
     SPEC_ROUTE,
 )
+from langharmess_cli.plugins.rich_renderer import RichInteractiveRenderer
 from langharmess_core.contracts import (
     SPEC_AGENT_LOOP,
     SPEC_CACHE,
@@ -519,5 +522,32 @@ def test_plugin_lifecycle_and_agent_invocation(
         assert after_remove_client.get(
             "/echo", headers={"Authorization": "Bearer secret"}
         ).status_code == 404
+    finally:
+        manager.stop()
+
+
+def test_real_plugin_agent_stream_renders_response_once(tmp_path: Path) -> None:
+    registry = descriptors(tmp_path)
+    manager = PluginManager(registry)
+    manager.start()
+    try:
+        for item in registry.list():
+            manager.install_plugin(item)
+
+        loop = manager.get_service(SPEC_AGENT_LOOP)
+
+        async def collect():
+            return [event async for event in loop.astream("What is 2 + 3?")]
+
+        events = asyncio.run(collect())
+        output = StringIO()
+        renderer = RichInteractiveRenderer()
+        renderer.console = Console(file=output, force_terminal=False, width=100)
+        renderer.start_response()
+        for event in events:
+            renderer.render_event(event)
+        renderer.finish_response()
+
+        assert output.getvalue().count("The answer is 5.") == 1
     finally:
         manager.stop()

@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from langharmess_api.dependencies import get_db_session
 from langharmess_api.plugins.auth.template_auth import TemplateAuthPlugin
@@ -130,6 +131,37 @@ def test_agent_loop_astream_yields_message_contents() -> None:
             "tool_call_id": "call-1",
             "output": "/workspace",
         },
+    ]
+
+
+@pytest.mark.parametrize(
+    ("contents", "expected"),
+    [
+        (["A", "AB", "ABC"], ["A", "B", "C"]),
+        (["A", "B", "C"], ["A", "B", "C"]),
+    ],
+)
+def test_agent_loop_astream_normalizes_assistant_content_to_deltas(
+    contents: list[str], expected: list[str]
+) -> None:
+    class FakeGraph:
+        async def astream(self, input_data, config=None, stream_mode=None):
+            for content in contents:
+                yield (
+                    "messages",
+                    (AIMessageChunk(content=content, id="response-1"), "metadata"),
+                )
+
+    loop = PluginAgentLoop()
+    loop._graph = FakeGraph()
+
+    async def collect():
+        return [chunk async for chunk in loop.astream("hi")]
+
+    import asyncio
+
+    assert asyncio.run(collect()) == [
+        {"type": "assistant", "content": content} for content in expected
     ]
 
 

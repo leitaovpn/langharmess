@@ -330,6 +330,7 @@ class PluginAgentLoop:
         if self._graph is None:
             raise RuntimeError("Agent graph is not built; no LLM plugin is available")
         config = {"configurable": {"thread_id": thread_id}} if thread_id else None
+        previous_content: dict[str, str] = {}
         async for stream_type, chunk in self._graph.astream(
             {"messages": [{"role": "user", "content": message}]},
             config=config,
@@ -344,11 +345,17 @@ class PluginAgentLoop:
                 ):
                     continue
                 content = str(getattr(streamed_message, "content", ""))
-                if content:
-                    yield {"type": "assistant", "content": content}
+                message_id = str(getattr(streamed_message, "id", None) or "default")
+                previous = previous_content.get(message_id, "")
+                delta = content[len(previous) :] if content.startswith(previous) else content
+                previous_content[message_id] = content
+                if delta:
+                    yield {"type": "assistant", "content": delta}
                 continue
 
             for update in chunk.values():
+                if update is None:
+                    continue
                 for updated_message in update.get("messages", []):
                     if isinstance(updated_message, ToolMessage):
                         yield {
