@@ -75,6 +75,15 @@ def main() -> int:
                 specification=SPEC_CLI_COMMAND,
             ),
             PluginDescriptor(
+                name="cli-model",
+                version="1.0.0",
+                module="langharmess_cli.plugins.commands.model",
+                factory="cli-model-command-factory",
+                instance="cli-model",
+                specification=SPEC_CLI_COMMAND,
+                properties={"plugin.ui.locale": locale},
+            ),
+            PluginDescriptor(
                 name="cli-rich-renderer",
                 version="1.0.0",
                 module="langharmess_cli.plugins.rich_renderer",
@@ -109,17 +118,13 @@ def main() -> int:
             log_provider.get_logger().info("CLI started")
 
         commands = [
-            command
-            for provider in providers
-            for command in provider.get_commands()
+            command for provider in providers for command in provider.get_commands()
         ]
 
         if not argv or argv[0] == "interactive":
             base_url = "http://127.0.0.1:8000"
             token = "secret"
-            interactive_args = (
-                argv[1:] if argv and argv[0] == "interactive" else argv
-            )
+            interactive_args = argv[1:] if argv and argv[0] == "interactive" else argv
             for index, arg in enumerate(interactive_args):
                 if arg == "--base-url" and index + 1 < len(interactive_args):
                     base_url = interactive_args[index + 1]
@@ -154,6 +159,8 @@ def main() -> int:
                 model=provider_config.get(
                     "model", os.environ.get("LANG_HARMESS_MODEL", "gpt-4o-mini")
                 ),
+                provider_name=selected_provider or "environment",
+                model_protocol=provider_config.get("protocol", "chat"),
                 api_key=provider_config.get(
                     "api_key", os.environ.get("LANG_HARMESS_API_KEY", "")
                 ),

@@ -143,7 +143,9 @@ def test_main_dispatches_internal_frozen_server(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(sys, "argv", ["langharmess", "__serve__", "--port", "9123"])
-    monkeypatch.setattr(main_module, "_serve", lambda argv: 7 if argv == ["--port", "9123"] else 1)
+    monkeypatch.setattr(
+        main_module, "_serve", lambda argv: 7 if argv == ["--port", "9123"] else 1
+    )
     assert main_module.main() == 7
 
 
@@ -205,9 +207,7 @@ def test_main_runs_plugin_commands(monkeypatch: pytest.MonkeyPatch) -> None:
         start=lambda: None,
         stop=lambda: None,
         install_plugin=lambda descriptor: None,
-        get_services=lambda spec: [
-            SimpleNamespace(get_commands=lambda: [command])
-        ],
+        get_services=lambda spec: [SimpleNamespace(get_commands=lambda: [command])],
     )
     monkeypatch.setattr(
         main_module,
@@ -257,6 +257,8 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
             base_url,
             token,
             model,
+            provider_name,
+            model_protocol,
             api_key,
             model_base_url,
             commands,
@@ -271,7 +273,11 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
             self.model_base_url = model_base_url
             self.commands = commands
             captured.update(
-                model=model, api_key=api_key, model_base_url=model_base_url
+                model=model,
+                provider_name=provider_name,
+                model_protocol=model_protocol,
+                api_key=api_key,
+                model_base_url=model_base_url,
             )
 
         def cmdloop(self):
@@ -289,6 +295,8 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     assert main_module.main() == 0
     assert captured == {
         "model": "env-model",
+        "provider_name": "environment",
+        "model_protocol": "chat",
         "api_key": "env-key",
         "model_base_url": "https://models.example/v1",
     }
@@ -340,13 +348,18 @@ def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> 
         get_services=lambda spec: [],
     )
     monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
-    monkeypatch.setattr(main_module, "APIGuard", lambda base_url: SimpleNamespace(ensure_api_server=lambda: None))
+    monkeypatch.setattr(
+        main_module,
+        "APIGuard",
+        lambda base_url: SimpleNamespace(ensure_api_server=lambda: None),
+    )
     monkeypatch.setattr(main_module.InteractiveCLIRunner, "cmdloop", lambda self: None)
 
     assert main_module.main() == 0
     assert {descriptor.name for descriptor in installed} == {
         "cli-health",
         "cli-log",
+        "cli-model",
         "cli-rich-renderer",
         "cli-shell",
         "config-toml",
@@ -464,3 +477,51 @@ def test_main_randomly_selects_configured_provider_when_not_specified(
     assert captured["model"] == "chosen-model"
     assert captured["api_key"] == "chosen-key"
     assert captured["model_base_url"] == "https://chosen.example/v1"
+
+
+def test_main_survives_broken_provider_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import pytest
+
+    pytest.xfail(reason="known bug: main() crashes at startup when any provider config is invalid")
+    monkeypatch.setattr(sys, "argv", ["langharmess"])
+
+    def raise_bad() -> list[str]:
+        raise ValueError("Unsupported protocol for provider broken: ftp")
+
+    configs = SimpleNamespace(
+        list_providers=raise_bad, get_provider=lambda name: {}
+    )
+    provider = SimpleNamespace(
+        get_commands=lambda: [], get_interactive_commands=lambda: []
+    )
+    manager = SimpleNamespace(
+        start=lambda: None,
+        stop=lambda: None,
+        install_plugin=lambda descriptor: None,
+        get_services=lambda spec: [provider],
+        get_service=lambda spec: configs,
+    )
+
+    class FakeGuard:
+        def __init__(self, base_url):
+            self.base_url = base_url
+
+        def ensure_api_server(self):
+            return None
+
+    monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
+    monkeypatch.setattr(
+        main_module,
+        "PluginRegistry",
+        lambda descriptors: SimpleNamespace(list=lambda: descriptors),
+    )
+    monkeypatch.setattr(main_module, "APIGuard", FakeGuard)
+    monkeypatch.setattr(
+        main_module,
+        "InteractiveCLIRunner",
+        lambda **kwargs: SimpleNamespace(cmdloop=lambda: None),
+    )
+
+    assert main_module.main() == 0

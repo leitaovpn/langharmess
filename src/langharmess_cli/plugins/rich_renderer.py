@@ -99,6 +99,8 @@ class RichInteractiveRenderer:
             self._on_tool_output(event)
         elif event_type == "usage":
             self._on_usage(event)
+        elif event_type == "error":
+            self.show_error(str(event.get("message", "Unknown stream error")))
         # Unknown event types are ignored.
 
     def finish_response(self) -> None:
@@ -109,7 +111,7 @@ class RichInteractiveRenderer:
         self._flush_live()
         self._status = "error"
         prefix = tr(self._locale, "error_prefix")
-        self.console.print(f"[bold red]{prefix}:[/bold red] {message}")
+        self.console.print(Text.assemble((f"{prefix}: ", "bold red"), message))
 
     def _on_assistant(self, content: str) -> None:
         if not content:

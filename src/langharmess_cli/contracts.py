@@ -34,6 +34,10 @@ class InteractiveCommandContext(Protocol):
     token: str
     commands: Mapping[str, InteractiveCommandSpec]
 
+    def list_providers(self) -> list[str]: ...
+
+    def switch_provider(self, name: str) -> bool: ...
+
 
 @runtime_checkable
 class CLICommandProvider(Protocol):

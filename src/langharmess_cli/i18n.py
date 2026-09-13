@@ -23,6 +23,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "help_exit": "Exit the interactive shell",
         "help_help": "Show available interactive commands",
         "help_unknown": "Unknown command: /{name}",
+        "help_model": "Show or switch the active model provider",
+        "model_current": "Current provider: {name}",
+        "model_available": "Available providers: {names}",
+        "model_unknown": "Unknown provider: {name}",
+        "model_switched": "Switched to {name} ({model}, {protocol}) · new session",
+        "model_none": "No model providers are configured",
     },
     "zh": {
         "intro": "输入消息开始对话。\n/help 查看命令 · /exit 安全退出",
@@ -37,6 +43,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "help_exit": "退出交互式 shell",
         "help_help": "显示可用的交互命令",
         "help_unknown": "未知命令: /{name}",
+        "help_model": "显示或切换当前模型 provider",
+        "model_current": "当前 provider：{name}",
+        "model_available": "可用 providers：{names}",
+        "model_unknown": "未知 provider：{name}",
+        "model_switched": "已切换到 {name}（{model}，{protocol}）· 新会话",
+        "model_none": "没有配置模型 provider",
     },
 }
 

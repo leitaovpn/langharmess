@@ -34,6 +34,8 @@ class InteractiveCLIRunner:
         token: str,
         commands: Iterable[InteractiveCommandSpec],
         model: str = "gpt-4o-mini",
+        provider_name: str = "environment",
+        model_protocol: str = "chat",
         api_key: str = "",
         model_base_url: str = "",
         configs: Any = None,
@@ -45,6 +47,8 @@ class InteractiveCLIRunner:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.model = model
+        self.provider_name = provider_name
+        self.model_protocol = model_protocol
         self.api_key = api_key
         self.model_base_url = model_base_url.rstrip("/")
         self.configs = configs
@@ -52,7 +56,7 @@ class InteractiveCLIRunner:
         self.renderer = renderer or RichInteractiveRenderer()
         self.locale = locale
         if hasattr(self.renderer, "set_model"):
-            self.renderer.set_model(self.model)
+            self._update_model_status()
         self.session_id = uuid4().hex
         self.commands: Mapping[str, InteractiveCommandSpec] = {
             command.name: command for command in commands
@@ -107,8 +111,7 @@ class InteractiveCLIRunner:
         return WordCompleter(
             [f"/{name}" for name in sorted(self.commands)],
             meta_dict={
-                f"/{name}": command.help
-                for name, command in self.commands.items()
+                f"/{name}": command.help for name, command in self.commands.items()
             },
             sentence=True,
         )
@@ -118,6 +121,7 @@ class InteractiveCLIRunner:
         payload: dict[str, Any] = {
             "input": line,
             "model": self.model,
+            "protocol": self.model_protocol,
             "api_key": self.api_key,
             "base_url": self.model_base_url,
             "session_id": self.session_id,
@@ -171,9 +175,7 @@ class InteractiveCLIRunner:
             name, _, arguments = command_line.partition(" ")
             command = self.commands.get(name)
             if command is None:
-                self.renderer.show_error(
-                    tr(self.locale, "unknown_command", name=name)
-                )
+                self.renderer.show_error(tr(self.locale, "unknown_command", name=name))
                 return False
             return bool(command.handler(self, arguments.strip()))
         self.default(line)
@@ -183,3 +185,41 @@ class InteractiveCLIRunner:
         if not line.strip():
             return
         self.do_stream(line)
+
+    def list_providers(self) -> list[str]:
+        if self.configs is None:
+            return []
+        return [str(name) for name in self.configs.list_providers()]
+
+    def switch_provider(self, name: str) -> bool:
+        if self.configs is None:
+            self.renderer.show_error(tr(self.locale, "model_unknown", name=name))
+            return False
+        provider = self.configs.get_provider(name)
+        if not provider:
+            self.renderer.show_error(tr(self.locale, "model_unknown", name=name))
+            return False
+        provider_changed = name != self.provider_name
+        self.provider_name = name
+        self.model = str(provider["model"])
+        self.model_protocol = str(provider.get("protocol", "chat"))
+        self.api_key = str(provider.get("api_key", ""))
+        self.model_base_url = str(provider.get("base_url", "")).rstrip("/")
+        if provider_changed:
+            self.session_id = uuid4().hex
+        self._update_model_status()
+        print(
+            tr(
+                self.locale,
+                "model_switched",
+                name=name,
+                model=self.model,
+                protocol=self.model_protocol,
+            )
+        )
+        return True
+
+    def _update_model_status(self) -> None:
+        self.renderer.set_model(
+            f"{self.provider_name} · {self.model} · {self.model_protocol}"
+        )

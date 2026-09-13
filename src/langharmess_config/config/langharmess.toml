@@ -1,6 +1,7 @@
 [DEFAULT]
 
 [providers.deepseek-v4-flash]
+protocol = "chat"
 base_url = "xxxxx"
 model = "xxxxx"
 api_key = "xxxx"

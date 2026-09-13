@@ -22,6 +22,7 @@ def test_llm_plugin_uses_injected_model_instance() -> None:
     plugin = LLMPlugin()
     plugin._model_instance = model
     assert plugin.get_model() is model
+    assert plugin.get_protocol() == "chat"
     assert plugin.get_plugin_info() == {"name": "llm-plugin", "version": "1.0.0"}
 
 
@@ -54,6 +55,47 @@ def test_llm_plugin_uses_openai_compatible_configuration() -> None:
     assert captured["api_key"].get_secret_value() == "secret"
     assert captured["base_url"] == "https://models.example/v1"
     assert captured["stream_usage"] is True
+    assert captured["use_responses_api"] is False
+
+
+def test_llm_plugin_uses_responses_protocol() -> None:
+    plugin = LLMPlugin()
+    plugin._protocol = "responses"
+    plugin._model_name = "gpt-test"
+    captured = {}
+    original = llm_module.ChatOpenAI
+    llm_module.ChatOpenAI = lambda **kwargs: captured.update(kwargs) or object()
+    try:
+        plugin.get_model()
+    finally:
+        llm_module.ChatOpenAI = original
+    assert captured["use_responses_api"] is True
+    assert captured["model"] == "gpt-test"
+
+
+def test_llm_plugin_uses_anthropic_protocol() -> None:
+    plugin = LLMPlugin()
+    plugin._protocol = "anthropic"
+    plugin._model_name = "claude-test"
+    plugin._api_key = "secret"
+    plugin._base_url = "https://anthropic.example"
+    captured = {}
+    original = llm_module.ChatAnthropic
+    llm_module.ChatAnthropic = lambda **kwargs: captured.update(kwargs) or object()
+    try:
+        plugin.get_model()
+    finally:
+        llm_module.ChatAnthropic = original
+    assert captured["model_name"] == "claude-test"
+    assert captured["api_key"].get_secret_value() == "secret"
+    assert captured["base_url"] == "https://anthropic.example"
+
+
+def test_llm_plugin_rejects_unknown_protocol() -> None:
+    plugin = LLMPlugin()
+    plugin._protocol = "invalid"
+    with pytest.raises(ValueError, match="Unsupported LLM protocol"):
+        plugin.get_model()
 
 
 def test_llm_plugin_stream_usage_can_be_disabled() -> None:

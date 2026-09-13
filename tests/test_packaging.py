@@ -16,9 +16,8 @@ def test_console_script_and_packaging_dependencies_are_declared() -> None:
     assert {"build>=1.3.0", "pyinstaller>=6.16.0"} <= set(
         project["optional-dependencies"]["packaging"]
     )
-    assert {"prompt-toolkit>=3.0.52", "rich>=14.2.0"} <= set(
-        project["dependencies"]
-    )
+    assert {"prompt-toolkit>=3.0.52", "rich>=14.2.0"} <= set(project["dependencies"])
+    assert "langchain-anthropic>=1.7.2" in project["dependencies"]
     package_data = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"][
         "setuptools"
     ]["package-data"]
@@ -34,9 +33,7 @@ def test_packaging_scripts_are_executable_and_valid_bash() -> None:
     assert 'CONFIG_DIR=${LANG_HARMESS_HOME:-"$HOME/.langharmess"}' in installer
     assert 'CONFIG_FILE="$CONFIG_DIR/langharmess.toml"' in installer
     assert "[providers.deepseek-v4-flash]" in installer
-    template = (
-        ROOT / "src/langharmess_config/config/langharmess.toml"
-    ).read_text()
+    template = (ROOT / "src/langharmess_config/config/langharmess.toml").read_text()
     assert "log_file" not in template
     builder = (ROOT / "scripts/build_packages.sh").read_text()
     assert "--collect-submodules langharmess_logging" in builder

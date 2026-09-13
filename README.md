@@ -51,6 +51,7 @@ The configuration template is:
 [DEFAULT]
 
 [providers.deepseek-v4-flash]
+protocol = "chat"
 base_url = "xxxxx"
 model = "xxxxx"
 api_key = "xxxx"
@@ -68,6 +69,13 @@ langharmess --provider deepseek-v4-flash --dir /data/langharmess
 remain the fallback when no provider is configured. When `--provider` is
 omitted and the TOML file contains providers, the CLI randomly selects one for
 the session.
+
+Each provider selects one LangChain client protocol: `chat` for the
+OpenAI-compatible Chat Completions API, `responses` for the OpenAI Responses
+API, or `anthropic` for the Anthropic Messages API. In interactive mode,
+`/model` lists providers and `/model <provider_name>` switches the active
+provider for subsequent requests. Switching to a different provider starts a
+new conversation session so checkpointed messages cannot leak across models.
 
 Interactive mode uses `prompt_toolkit` for persistent history, slash-command
 completion, keyboard handling, and the model status toolbar. Rich renders the

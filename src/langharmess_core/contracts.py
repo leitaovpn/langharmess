@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
@@ -22,6 +22,7 @@ SPEC_NAME = "agent.plugin.name"
 SPEC_CACHE = "agent.plugin.cache"
 SPEC_TRANSFORMERS = "agent.plugin.transformers"
 SPEC_AGENT_LOOP = "agent.loop"
+ModelProtocol = Literal["anthropic", "chat", "responses"]
 
 ALL_PLUGIN_SPECS = (
     SPEC_LLM,
@@ -48,6 +49,8 @@ class LLMProvider(Protocol):
     """Contract implemented by every ``agent.plugin.llm`` service."""
 
     def get_model(self) -> BaseChatModel: ...
+
+    def get_protocol(self) -> ModelProtocol: ...
 
     def get_plugin_info(self) -> dict[str, str]: ...
 

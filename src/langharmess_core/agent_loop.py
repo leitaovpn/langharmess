@@ -53,6 +53,20 @@ def _extract_usage(message: Any) -> dict[str, int] | None:
     return extracted if sum(extracted.values()) else None
 
 
+def _extract_content(message: Any) -> str:
+    """Normalize plain and structured LangChain message content to text."""
+    content = getattr(message, "content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            str(block.get("text", ""))
+            for block in content
+            if isinstance(block, dict) and block.get("type") in {"text", "output_text"}
+        )
+    return str(content) if content else ""
+
+
 @ComponentFactory("agent-loop-factory")
 @Provides(SPEC_AGENT_LOOP)
 @RequiresBest("_llm_provider", SPEC_LLM, optional=False, immediate_rebind=True)
@@ -364,7 +378,7 @@ class PluginAgentLoop:
                     streamed_message, "tool_call_chunks", None
                 ):
                     continue
-                content = str(getattr(streamed_message, "content", ""))
+                content = _extract_content(streamed_message)
                 message_id = str(getattr(streamed_message, "id", None) or "default")
                 previous = previous_content.get(message_id, "")
                 delta = content[len(previous) :] if content.startswith(previous) else content

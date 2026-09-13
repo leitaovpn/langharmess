@@ -37,6 +37,8 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
 
 [providers.deepseek-v4-flash]
 
+protocol="chat"
+
 base_url="xxxxx"
 
 model="xxxxx"

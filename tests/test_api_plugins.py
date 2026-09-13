@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import asyncio
+
+import httpx
 import pytest
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
@@ -165,6 +168,32 @@ def test_agent_loop_astream_normalizes_assistant_content_to_deltas(
     ]
 
 
+def test_agent_loop_astream_extracts_responses_api_text_blocks() -> None:
+    class FakeGraph:
+        async def astream(self, input_data, config=None, stream_mode=None):
+            yield (
+                "messages",
+                (
+                    AIMessageChunk(
+                        content=[{"type": "text", "text": "responses-ok", "index": 0}],
+                        id="response-1",
+                    ),
+                    "metadata",
+                ),
+            )
+            yield ("messages", (AIMessageChunk(content=[], id="response-1"), "metadata"))
+
+    loop = PluginAgentLoop()
+    loop._graph = FakeGraph()
+
+    async def collect():
+        return [chunk async for chunk in loop.astream("hi")]
+
+    assert asyncio.run(collect()) == [
+        {"type": "assistant", "content": "responses-ok"}
+    ]
+
+
 def test_stream_route_plugin_streams_agent_output() -> None:
     class FakeAgentLoop:
         async def astream(self, message, *, thread_id=None):
@@ -202,7 +231,41 @@ def test_stream_route_plugin_streams_agent_output() -> None:
         "plugin.model.name": "test-model",
         "plugin.model.api_key": "test-key",
         "plugin.model.base_url": "https://models.example/v1",
+        "plugin.model.protocol": "chat",
     }
+
+
+def test_stream_route_serializes_agent_errors_as_complete_ndjson() -> None:
+    class FailingAgentLoop:
+        async def astream(self, message, *, thread_id=None):
+            yield {"type": "assistant", "content": "partial"}
+            raise RuntimeError("upstream failed with test-key")
+
+    plugin = StreamRoutePlugin()
+    plugin._agent_loop = FailingAgentLoop()
+    plugin._plugin_registrar = type(
+        "Registrar", (), {"ensure_plugin": lambda self, item: None}
+    )()
+    app = FastAPI()
+    app.include_router(plugin.get_router())
+
+    response = TestClient(app).post(
+        "/stream",
+        json={
+            "input": "hi",
+            "model": "test-model",
+            "api_key": "test-key",
+            "base_url": "https://models.example/v1",
+            "session_id": "session-1",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.text == (
+        '{"type": "assistant", "content": "partial"}\n'
+        '{"type": "error", "error_type": "RuntimeError", '
+        '"message": "upstream failed with ***"}\n'
+    )
 
 
 def test_stream_route_passes_optional_stream_usage_to_runtime_llm() -> None:
@@ -234,3 +297,42 @@ def test_stream_route_passes_optional_stream_usage_to_runtime_llm() -> None:
     )
     assert response.status_code == 200
     assert descriptors[0].properties["plugin.model.stream_usage"] is False
+
+
+def test_stream_route_serializes_runtime_model_replacement() -> None:
+    state = {"active": 0, "maximum": 0}
+
+    class FakeAgentLoop:
+        async def astream(self, message, *, thread_id=None):
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+            await asyncio.sleep(0.01)
+            yield {"type": "assistant", "content": message}
+            state["active"] -= 1
+
+    plugin = StreamRoutePlugin()
+    plugin._agent_loop = FakeAgentLoop()
+    plugin._plugin_registrar = type(
+        "Registrar", (), {"ensure_plugin": lambda self, item: None}
+    )()
+    app = FastAPI()
+    app.include_router(plugin.get_router())
+
+    async def invoke_both() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            payload = {
+                "model": "test",
+                "api_key": "key",
+                "base_url": "http://model",
+                "session_id": "session",
+            }
+            await asyncio.gather(
+                client.post("/stream", json={**payload, "input": "one"}),
+                client.post("/stream", json={**payload, "input": "two"}),
+            )
+
+    asyncio.run(invoke_both())
+    assert state["maximum"] == 1

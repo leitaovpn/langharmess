@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -12,9 +14,18 @@ from pelix.ipopo.decorators import ComponentFactory, Property, Provides, Require
 from pydantic import BaseModel
 
 from langharmess_api.contracts import SPEC_ROUTE
-from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_LLM
+from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_LLM, ModelProtocol
 from langharmess_plugin.contracts import SPEC_PLUGIN_REGISTRAR
 from langharmess_plugin.registry import PluginDescriptor
+
+LOGGER = logging.getLogger("langharmess.server")
+
+
+def _safe_error_message(exc: Exception, api_key: str) -> str:
+    message = str(exc)
+    if api_key:
+        message = message.replace(api_key, "***")
+    return message[:2000]
 
 
 class StreamRequest(BaseModel):
@@ -24,6 +35,7 @@ class StreamRequest(BaseModel):
     base_url: str
     session_id: str
     stream_usage: bool | None = None
+    protocol: ModelProtocol = "chat"
 
 
 @ComponentFactory("api-stream-route-factory")
@@ -40,6 +52,7 @@ class StreamRoutePlugin:
         self._plugin_version = "1.0.0"
         self._agent_loop: Any = None
         self._plugin_registrar: Any = None
+        self._runtime_lock = asyncio.Lock()
 
     def get_router(self) -> APIRouter:
         router = APIRouter()
@@ -47,39 +60,56 @@ class StreamRoutePlugin:
         @router.post("/stream")
         async def stream(payload: StreamRequest = Body(...)) -> StreamingResponse:
             if self._plugin_registrar is None:
-                raise HTTPException(status_code=503, detail="Plugin registrar unavailable")
-
-            properties: dict[str, Any] = {
-                "plugin.model.name": payload.model,
-                "plugin.model.api_key": payload.api_key,
-                "plugin.model.base_url": payload.base_url,
-            }
-            if payload.stream_usage is not None:
-                properties["plugin.model.stream_usage"] = payload.stream_usage
-            self._plugin_registrar.ensure_plugin(
-                PluginDescriptor(
-                    name="runtime-llm",
-                    version="1.0.0",
-                    module="langharmess_core.plugins.loop.llm.llm",
-                    factory="llm-plugin-factory",
-                    instance="runtime-llm",
-                    specification=SPEC_LLM,
-                    ranking=1000,
-                    properties=properties,
+                raise HTTPException(
+                    status_code=503, detail="Plugin registrar unavailable"
                 )
-            )
-            if self._agent_loop is None:
-                raise HTTPException(status_code=503, detail="Agent loop unavailable")
+
+            await self._runtime_lock.acquire()
+            try:
+                properties: dict[str, Any] = {
+                    "plugin.model.name": payload.model,
+                    "plugin.model.api_key": payload.api_key,
+                    "plugin.model.base_url": payload.base_url,
+                    "plugin.model.protocol": payload.protocol,
+                }
+                if payload.stream_usage is not None:
+                    properties["plugin.model.stream_usage"] = payload.stream_usage
+                self._plugin_registrar.ensure_plugin(
+                    PluginDescriptor(
+                        name="runtime-llm",
+                        version="1.0.0",
+                        module="langharmess_core.plugins.loop.llm.llm",
+                        factory="llm-plugin-factory",
+                        instance="runtime-llm",
+                        specification=SPEC_LLM,
+                        ranking=1000,
+                        properties=properties,
+                    )
+                )
+                if self._agent_loop is None:
+                    raise HTTPException(status_code=503, detail="Agent loop unavailable")
+            except BaseException:
+                self._runtime_lock.release()
+                raise
 
             async def generate() -> AsyncIterator[str]:
-                async for event in self._agent_loop.astream(
-                    payload.input, thread_id=payload.session_id
-                ):
-                    yield f"{json.dumps(event, ensure_ascii=False)}\n"
+                try:
+                    async for event in self._agent_loop.astream(
+                        payload.input, thread_id=payload.session_id
+                    ):
+                        yield f"{json.dumps(event, ensure_ascii=False)}\n"
+                except Exception as exc:
+                    LOGGER.exception("Agent stream failed")
+                    error = {
+                        "type": "error",
+                        "error_type": type(exc).__name__,
+                        "message": _safe_error_message(exc, payload.api_key),
+                    }
+                    yield f"{json.dumps(error, ensure_ascii=False)}\n"
+                finally:
+                    self._runtime_lock.release()
 
-            return StreamingResponse(
-                generate(), media_type="application/x-ndjson"
-            )
+            return StreamingResponse(generate(), media_type="application/x-ndjson")
 
         return router
 

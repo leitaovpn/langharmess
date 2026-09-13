@@ -61,6 +61,7 @@ def test_interactive_runner_stream_request(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.delenv("LANG_HARMESS_STREAM_USAGE", raising=False)
+
     class FakeStreamResponse:
         def __enter__(self):
             return self
@@ -106,6 +107,7 @@ def test_interactive_runner_stream_request(
     assert captured["json"] == {
         "input": "hello",
         "model": "deepseek-v4-flash",
+        "protocol": "chat",
         "api_key": "model-secret",
         "base_url": "https://models.example/v1",
         "session_id": runner.session_id,
@@ -353,7 +355,7 @@ def test_cmdloop_uses_dynamic_status_toolbar_with_real_renderer() -> None:
     runner.cmdloop()
     toolbar = prompts[0][1]["bottom_toolbar"]
     assert callable(toolbar)
-    assert toolbar().startswith(" gpt-4o-mini")
+    assert toolbar().startswith(" environment · gpt-4o-mini · chat")
 
 
 def test_runner_localizes_welcome_and_unknown_command_in_zh() -> None:
@@ -409,7 +411,12 @@ def test_runner_localizes_cancelled_in_zh(monkeypatch: pytest.MonkeyPatch) -> No
 def test_runner_forwards_usage_events_to_renderer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    usage = {"type": "usage", "input_tokens": 10, "output_tokens": 2, "total_tokens": 12}
+    usage = {
+        "type": "usage",
+        "input_tokens": 10,
+        "output_tokens": 2,
+        "total_tokens": 12,
+    }
 
     class FakeStreamResponse:
         def __enter__(self):

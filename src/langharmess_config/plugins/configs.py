@@ -9,6 +9,8 @@ from pelix.ipopo.decorators import ComponentFactory, Provides, Requires
 
 from langharmess_config.contracts import SPEC_CONFIG_PROVIDER, SPEC_CONFIGS
 
+SUPPORTED_PROTOCOLS = {"anthropic", "chat", "responses"}
+
 
 @ComponentFactory("configs-plugin-factory")
 @Provides(SPEC_CONFIGS)
@@ -19,8 +21,17 @@ class ConfigsPlugin:
 
     def _merged(self) -> dict[str, Any]:
         merged: dict[str, Any] = {}
+        provider_names: set[str] = set()
         for provider in self._providers or []:
-            self._merge_into(merged, provider.get_config())
+            config = provider.get_config()
+            configured_providers = config.get("providers", {})
+            if isinstance(configured_providers, Mapping):
+                duplicates = provider_names.intersection(configured_providers)
+                if duplicates:
+                    name = sorted(duplicates)[0]
+                    raise ValueError(f"Duplicate provider name: {name}")
+                provider_names.update(str(name) for name in configured_providers)
+            self._merge_into(merged, config)
         return merged
 
     def _merge_into(self, target: dict[str, Any], source: Mapping[str, Any]) -> None:
@@ -33,9 +44,7 @@ class ConfigsPlugin:
             else:
                 target[key] = value
 
-    def get(
-        self, section: str, key: str, fallback: str | None = None
-    ) -> str | None:
+    def get(self, section: str, key: str, fallback: str | None = None) -> str | None:
         value = self.get_section(section).get(key)
         return value if isinstance(value, str) else fallback
 
@@ -57,12 +66,28 @@ class ConfigsPlugin:
         }
 
     def get_provider(self, name: str) -> dict[str, Any]:
-        return self.get_section(f"providers.{name}")
+        provider = self.get_section(f"providers.{name}")
+        if not provider:
+            return {}
+        protocol = provider.get("protocol", "chat")
+        if protocol not in SUPPORTED_PROTOCOLS:
+            raise ValueError(f"Unsupported protocol for provider {name}: {protocol}")
+        model = provider.get("model")
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError(f"Provider {name} requires a non-empty model")
+        for field in ("api_key", "base_url"):
+            value = provider.get(field, "")
+            if not isinstance(value, str):
+                raise ValueError(f"Provider {name} field {field} must be a string")
+        return {**provider, "protocol": protocol}
 
     def list_providers(self) -> list[str]:
         providers = self._merged().get("providers", {})
         if not isinstance(providers, Mapping):
             return []
-        return sorted(
+        names = sorted(
             str(name) for name, value in providers.items() if isinstance(value, Mapping)
         )
+        for name in names:
+            self.get_provider(name)
+        return names

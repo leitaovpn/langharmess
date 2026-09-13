@@ -54,6 +54,17 @@ def test_renderer_renders_welcome_and_localized_errors() -> None:
     assert "错误: 坏了" in zh_output.getvalue()
 
 
+def test_renderer_renders_stream_error_events() -> None:
+    renderer, output = make_renderer()
+    renderer.start_response()
+    renderer.render_event(
+        {"type": "error", "error_type": "RuntimeError", "message": "upstream failed"}
+    )
+    renderer.finish_response()
+
+    assert "Error: upstream failed" in output.getvalue()
+
+
 def test_plain_path_appends_assistant_text_without_reprinting() -> None:
     renderer, output = make_renderer()
     renderer.start_response()
