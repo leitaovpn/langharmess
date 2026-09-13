@@ -7,6 +7,9 @@ from __future__ import annotations
 import json
 
 import pytest
+from prompt_toolkit.completion import CompleteEvent
+from prompt_toolkit.document import Document
+from prompt_toolkit.formatted_text import fragment_list_to_text
 
 import langharmess_cli.plugins.commands.template_health as health_module
 from langharmess_cli.contracts import InteractiveCommandSpec
@@ -143,6 +146,9 @@ def test_interactive_runner_exit_commands() -> None:
     assert runner.do_exit("") is True
     assert runner.do_quit("") is True
     assert runner.do_EOF("") is True
+    assert runner.onecmd("exit") is True
+    assert runner.onecmd("quit") is True
+    assert runner.onecmd("EOF") is True
 
 
 def test_shell_plugin_provides_exit_and_dynamic_help(
@@ -165,6 +171,8 @@ def test_shell_plugin_provides_exit_and_dynamic_help(
     assert "/exit" in output
     assert "/help" in output
     assert "/health" in output
+    assert runner.onecmd("help") is False
+    assert "/health" in capsys.readouterr().out
     assert runner.onecmd("/exit") is True
 
     assert runner.onecmd("/help health") is False
@@ -208,6 +216,68 @@ def test_template_health_interactive_handler(
 def test_interactive_runner_has_welcome_screen() -> None:
     welcome = InteractiveCLIRunner.intro
     assert welcome is not None
-    assert "langharmess" in welcome
+    assert "conversation" in welcome
     assert "/help" in welcome
     assert "/exit" in welcome
+
+
+def test_prompt_completion_is_built_from_command_plugins() -> None:
+    runner = InteractiveCLIRunner(
+        base_url="http://api",
+        token="secret",
+        commands=[
+            InteractiveCommandSpec(
+                name="health", help="check", handler=lambda context, line: False
+            )
+        ],
+    )
+    completions = list(
+        runner._command_completer().get_completions(
+            Document("/he", cursor_position=3), CompleteEvent()
+        )
+    )
+    assert [completion.text for completion in completions] == ["/health"]
+    assert fragment_list_to_text(completions[0].display_meta) == "check"
+
+
+def test_cmdloop_uses_prompt_session_and_injected_renderer() -> None:
+    prompts = []
+
+    class FakeSession:
+        def prompt(self, *args, **kwargs):
+            prompts.append((args, kwargs))
+            return "/exit"
+
+    class FakeRenderer:
+        def __init__(self):
+            self.welcome = ""
+
+        def show_welcome(self, text):
+            self.welcome = text
+
+        def start_response(self):
+            return None
+
+        def render_event(self, event):
+            return None
+
+        def finish_response(self):
+            return None
+
+        def show_error(self, message):
+            return None
+
+    renderer = FakeRenderer()
+    runner = InteractiveCLIRunner(
+        base_url="http://api",
+        token="secret",
+        commands=ShellCommandPlugin().get_interactive_commands(),
+        renderer=renderer,
+        session=FakeSession(),
+    )
+    runner._interactive_input = True
+    runner.cmdloop()
+
+    assert "conversation" in renderer.welcome
+    assert len(prompts) == 1
+    assert prompts[0][1]["bottom_toolbar"].startswith(" gpt-4o-mini")

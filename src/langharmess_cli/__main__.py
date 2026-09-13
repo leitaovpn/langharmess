@@ -8,7 +8,7 @@ from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
 from langharmess_cli.api_guard import APIGuard
-from langharmess_cli.contracts import SPEC_CLI_COMMAND
+from langharmess_cli.contracts import SPEC_CLI_COMMAND, SPEC_CLI_RENDERER
 from langharmess_cli.interactive import InteractiveCLIRunner
 from langharmess_cli.runner import CLIRunner
 from langharmess_config.builtins import config_descriptors
@@ -62,6 +62,14 @@ def main() -> int:
                 specification=SPEC_CLI_COMMAND,
             ),
             PluginDescriptor(
+                name="cli-rich-renderer",
+                version="1.0.0",
+                module="langharmess_cli.plugins.rich_renderer",
+                factory="rich-cli-renderer-factory",
+                instance="cli-rich-renderer",
+                specification=SPEC_CLI_RENDERER,
+            ),
+            PluginDescriptor(
                 name="cli-shell",
                 version="1.0.0",
                 module="langharmess_cli.plugins.commands.shell",
@@ -81,6 +89,7 @@ def main() -> int:
         get_service = getattr(manager, "get_service", lambda specification: None)
         configs = get_service(SPEC_CONFIGS)
         log_provider = get_service(SPEC_LOG)
+        renderer = get_service(SPEC_CLI_RENDERER)
         if log_provider is not None and hasattr(log_provider, "get_logger"):
             log_provider.get_logger().info("CLI started")
 
@@ -132,6 +141,8 @@ def main() -> int:
                     "base_url", os.environ.get("LANG_HARMESS_BASE_URL", "")
                 ),
                 commands=interactive_commands,
+                renderer=renderer,
+                history_file=str(Path(directory) / "history"),
             )
             interactive_runner.configs = configs
             interactive_runner.log = log_provider

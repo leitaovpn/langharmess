@@ -8,6 +8,7 @@ from typing import Any, Protocol, runtime_checkable
 
 SPEC_CLI_COMMAND = "cli.plugin.command"
 SPEC_CLI_RUNNER = "cli.runner"
+SPEC_CLI_RENDERER = "cli.plugin.renderer"
 
 
 @dataclass(frozen=True)
@@ -41,3 +42,16 @@ class CLICommandProvider(Protocol):
     def get_interactive_commands(self) -> list[InteractiveCommandSpec]: ...
 
     def get_plugin_info(self) -> dict[str, str]: ...
+
+
+@runtime_checkable
+class InteractiveRenderer(Protocol):
+    def show_welcome(self, text: str) -> None: ...
+
+    def start_response(self) -> None: ...
+
+    def render_event(self, event: Mapping[str, Any]) -> None: ...
+
+    def finish_response(self) -> None: ...
+
+    def show_error(self, message: str) -> None: ...

@@ -66,3 +66,11 @@ langharmess --provider deepseek-v4-flash --dir /data/langharmess
 `--dir` controls the location of the INI file and both log files. Existing
 `LANG_HARMESS_MODEL`, `LANG_HARMESS_API_KEY`, and `LANG_HARMESS_BASE_URL` values
 remain the fallback when `--provider` is omitted.
+
+Interactive mode uses `prompt_toolkit` for persistent history, slash-command
+completion, keyboard handling, and the model status toolbar. Rich renders the
+welcome panel, streaming Markdown responses, tool calls, tool output, and
+errors. Slash commands remain plugin-provided through `InteractiveCommandSpec`;
+the completer discovers every registered command without UI-specific plugin
+code. The Rich renderer is also an iPOPO service and can be replaced by another
+`cli.plugin.renderer` implementation.

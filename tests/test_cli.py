@@ -252,7 +252,16 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
 
     class FakeInteractive:
         def __init__(
-            self, *, base_url, token, model, api_key, model_base_url, commands
+            self,
+            *,
+            base_url,
+            token,
+            model,
+            api_key,
+            model_base_url,
+            commands,
+            renderer,
+            history_file,
         ):
             self.base_url = base_url
             self.token = token
@@ -301,6 +310,7 @@ def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> 
     assert {descriptor.name for descriptor in installed} == {
         "cli-health",
         "cli-log",
+        "cli-rich-renderer",
         "cli-shell",
         "config-ini",
         "configs",

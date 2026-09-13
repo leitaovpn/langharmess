@@ -16,6 +16,9 @@ def test_console_script_and_packaging_dependencies_are_declared() -> None:
     assert {"build>=1.3.0", "pyinstaller>=6.16.0"} <= set(
         project["optional-dependencies"]["packaging"]
     )
+    assert {"prompt-toolkit>=3.0.52", "rich>=14.2.0"} <= set(
+        project["dependencies"]
+    )
     package_data = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"][
         "setuptools"
     ]["package-data"]
