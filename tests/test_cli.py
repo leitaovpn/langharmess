@@ -262,6 +262,7 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
             commands,
             renderer,
             history_file,
+            locale,
         ):
             self.base_url = base_url
             self.token = token
@@ -291,6 +292,42 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         "api_key": "env-key",
         "model_base_url": "https://models.example/v1",
     }
+
+
+def test_main_passes_locale_flag_to_plugins_and_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("LANG_HARMESS_LOCALE", raising=False)
+    monkeypatch.setattr(sys, "argv", ["langharmess", "interactive", "--locale", "zh"])
+    installed = []
+    manager = SimpleNamespace(
+        start=lambda: None,
+        stop=lambda: None,
+        install_plugin=installed.append,
+        get_services=lambda spec: [],
+    )
+    monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
+    monkeypatch.setattr(
+        main_module,
+        "APIGuard",
+        lambda base_url: SimpleNamespace(ensure_api_server=lambda: None),
+    )
+    captured = {}
+
+    class FakeInteractive:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def cmdloop(self):
+            return None
+
+    monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
+    assert main_module.main() == 0
+    renderer = next(d for d in installed if d.name == "cli-rich-renderer")
+    shell = next(d for d in installed if d.name == "cli-shell")
+    assert renderer.properties == {"plugin.ui.locale": "zh"}
+    assert shell.properties == {"plugin.ui.locale": "zh"}
+    assert captured["locale"] == "zh"
 
 
 def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> None:

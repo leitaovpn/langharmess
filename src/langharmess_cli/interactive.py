@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -18,6 +19,7 @@ from prompt_toolkit.shortcuts import CompleteStyle
 from prompt_toolkit.styles import Style
 
 from langharmess_cli.contracts import InteractiveCommandSpec, InteractiveRenderer
+from langharmess_cli.i18n import tr
 from langharmess_cli.plugins.rich_renderer import RichInteractiveRenderer
 
 
@@ -38,6 +40,7 @@ class InteractiveCLIRunner:
         renderer: InteractiveRenderer | None = None,
         history_file: str | None = None,
         session: Any = None,
+        locale: str = "en",
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
@@ -47,6 +50,9 @@ class InteractiveCLIRunner:
         self.configs = configs
         self.log: Any = None
         self.renderer = renderer or RichInteractiveRenderer()
+        self.locale = locale
+        if hasattr(self.renderer, "set_model"):
+            self.renderer.set_model(self.model)
         self.session_id = uuid4().hex
         self.commands: Mapping[str, InteractiveCommandSpec] = {
             command.name: command for command in commands
@@ -71,7 +77,11 @@ class InteractiveCLIRunner:
             )
 
     def cmdloop(self, intro: str | None = None) -> None:
-        self.renderer.show_welcome(intro or self.intro)
+        self.renderer.show_welcome(intro or tr(self.locale, "intro"))
+        if hasattr(self.renderer, "get_status_text"):
+            toolbar: Any = self.renderer.get_status_text
+        else:
+            toolbar = f" {self.model} · {tr(self.locale, 'toolbar_hint')} "
         while True:
             try:
                 line = (
@@ -79,7 +89,7 @@ class InteractiveCLIRunner:
                         [("class:prompt", self.prompt)],
                         completer=self._command_completer(),
                         complete_style=CompleteStyle.MULTI_COLUMN,
-                        bottom_toolbar=f" {self.model} · /help for commands ",
+                        bottom_toolbar=toolbar,
                     )
                     if self._interactive_input and self._session is not None
                     else input(self.prompt)
@@ -88,7 +98,7 @@ class InteractiveCLIRunner:
                 self.do_EOF("")
                 return
             except KeyboardInterrupt:
-                self.renderer.show_error("Cancelled")
+                self.renderer.show_error(tr(self.locale, "cancelled"))
                 continue
             if self.onecmd(line):
                 return
@@ -105,17 +115,20 @@ class InteractiveCLIRunner:
 
     def do_stream(self, line: str) -> None:
         self.renderer.start_response()
+        payload: dict[str, Any] = {
+            "input": line,
+            "model": self.model,
+            "api_key": self.api_key,
+            "base_url": self.model_base_url,
+            "session_id": self.session_id,
+        }
+        if self._stream_usage_disabled():
+            payload["stream_usage"] = False
         try:
             with httpx.stream(
                 "POST",
                 f"{self.base_url}/stream",
-                json={
-                    "input": line,
-                    "model": self.model,
-                    "api_key": self.api_key,
-                    "base_url": self.model_base_url,
-                    "session_id": self.session_id,
-                },
+                json=payload,
                 headers={"Authorization": f"Bearer {self.token}"},
                 timeout=None,
             ) as response:
@@ -125,9 +138,13 @@ class InteractiveCLIRunner:
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
             self.renderer.show_error(str(exc))
         except KeyboardInterrupt:
-            self.renderer.show_error("Cancelled")
+            self.renderer.show_error(tr(self.locale, "cancelled"))
         finally:
             self.renderer.finish_response()
+
+    @staticmethod
+    def _stream_usage_disabled() -> bool:
+        return os.environ.get("LANG_HARMESS_STREAM_USAGE", "").lower() in ("false", "0")
 
     def do_exit(self, line: str) -> bool:
         return True
@@ -155,7 +172,7 @@ class InteractiveCLIRunner:
             command = self.commands.get(name)
             if command is None:
                 self.renderer.show_error(
-                    f"Unknown command: /{name}. Type /help for available commands."
+                    tr(self.locale, "unknown_command", name=name)
                 )
                 return False
             return bool(command.handler(self, arguments.strip()))

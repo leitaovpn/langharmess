@@ -23,6 +23,7 @@ class StreamRequest(BaseModel):
     api_key: str
     base_url: str
     session_id: str
+    stream_usage: bool | None = None
 
 
 @ComponentFactory("api-stream-route-factory")
@@ -48,6 +49,13 @@ class StreamRoutePlugin:
             if self._plugin_registrar is None:
                 raise HTTPException(status_code=503, detail="Plugin registrar unavailable")
 
+            properties: dict[str, Any] = {
+                "plugin.model.name": payload.model,
+                "plugin.model.api_key": payload.api_key,
+                "plugin.model.base_url": payload.base_url,
+            }
+            if payload.stream_usage is not None:
+                properties["plugin.model.stream_usage"] = payload.stream_usage
             self._plugin_registrar.ensure_plugin(
                 PluginDescriptor(
                     name="runtime-llm",
@@ -57,11 +65,7 @@ class StreamRoutePlugin:
                     instance="runtime-llm",
                     specification=SPEC_LLM,
                     ranking=1000,
-                    properties={
-                        "plugin.model.name": payload.model,
-                        "plugin.model.api_key": payload.api_key,
-                        "plugin.model.base_url": payload.base_url,
-                    },
+                    properties=properties,
                 )
             )
             if self._agent_loop is None:

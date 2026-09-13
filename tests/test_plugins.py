@@ -53,6 +53,39 @@ def test_llm_plugin_uses_openai_compatible_configuration() -> None:
     assert captured["model"] == "custom-model"
     assert captured["api_key"].get_secret_value() == "secret"
     assert captured["base_url"] == "https://models.example/v1"
+    assert captured["stream_usage"] is True
+
+
+def test_llm_plugin_stream_usage_can_be_disabled() -> None:
+    plugin = LLMPlugin()
+    plugin._model_name = "custom-model"
+    plugin._api_key = "secret"
+    plugin._base_url = "https://models.example/v1"
+    plugin._stream_usage = False
+    captured = {}
+    original = llm_module.ChatOpenAI
+    llm_module.ChatOpenAI = lambda **kwargs: captured.update(kwargs) or object()
+    try:
+        plugin.get_model()
+    finally:
+        llm_module.ChatOpenAI = original
+    assert captured["stream_usage"] is False
+
+
+def test_llm_plugin_passes_stream_usage_to_init_chat_model_models() -> None:
+    from types import SimpleNamespace
+
+    plugin = LLMPlugin()
+    plugin._model_instance = None
+    plugin._model_name = "fake"
+    model = SimpleNamespace(stream_usage=False)
+    original = llm_module.init_chat_model
+    llm_module.init_chat_model = lambda name: model
+    try:
+        assert plugin.get_model() is model
+    finally:
+        llm_module.init_chat_model = original
+    assert model.stream_usage is True
 
 
 def test_llm_plugin_defaults_to_openai_model() -> None:
@@ -60,12 +93,14 @@ def test_llm_plugin_defaults_to_openai_model() -> None:
     plugin._model_instance = None
     plugin._model_name = ""
     sentinel = object()
+    captured = {}
     original = llm_module.ChatOpenAI
-    llm_module.ChatOpenAI = lambda **kwargs: sentinel
+    llm_module.ChatOpenAI = lambda **kwargs: captured.update(kwargs) or sentinel
     try:
         assert plugin.get_model() is sentinel
     finally:
         llm_module.ChatOpenAI = original
+    assert captured["stream_usage"] is True
 
 
 def test_tool_plugin_wraps_callables() -> None:

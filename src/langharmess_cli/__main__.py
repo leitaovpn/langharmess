@@ -9,6 +9,7 @@ from pathlib import Path
 
 from langharmess_cli.api_guard import APIGuard
 from langharmess_cli.contracts import SPEC_CLI_COMMAND, SPEC_CLI_RENDERER
+from langharmess_cli.i18n import get_locale
 from langharmess_cli.interactive import InteractiveCLIRunner
 from langharmess_cli.runner import CLIRunner
 from langharmess_config.builtins import config_descriptors
@@ -41,11 +42,22 @@ def _global_options(argv: list[str]) -> tuple[Namespace, list[str]]:
     return parser.parse_known_args(argv)
 
 
+def _locale_option(argv: list[str], *, default: str) -> str:
+    """Extract the --locale flag from argv, falling back to `default`."""
+    for index, arg in enumerate(argv):
+        if arg == "--locale" and index + 1 < len(argv):
+            return argv[index + 1].lower()
+        if arg.startswith("--locale="):
+            return arg.split("=", 1)[1].lower()
+    return default
+
+
 def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "__serve__":
         return _serve(sys.argv[2:])
 
     options, argv = _global_options(sys.argv[1:])
+    locale = _locale_option(argv, default=get_locale())
     directory = str(Path(options.dir).expanduser().resolve())
     inherited_directory = os.environ.get("LANG_HARMESS_DIR")
     os.environ["LANG_HARMESS_DIR"] = directory
@@ -68,6 +80,7 @@ def main() -> int:
                 factory="rich-cli-renderer-factory",
                 instance="cli-rich-renderer",
                 specification=SPEC_CLI_RENDERER,
+                properties={"plugin.ui.locale": locale},
             ),
             PluginDescriptor(
                 name="cli-shell",
@@ -76,6 +89,7 @@ def main() -> int:
                 factory="cli-shell-command-factory",
                 instance="cli-shell",
                 specification=SPEC_CLI_COMMAND,
+                properties={"plugin.ui.locale": locale},
             ),
         ]
     )
@@ -143,6 +157,7 @@ def main() -> int:
                 commands=interactive_commands,
                 renderer=renderer,
                 history_file=str(Path(directory) / "history"),
+                locale=locale,
             )
             interactive_runner.configs = configs
             interactive_runner.log = log_provider

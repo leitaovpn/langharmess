@@ -38,6 +38,21 @@ from langharmess_core.contracts import (
 )
 
 
+def _extract_usage(message: Any) -> dict[str, int] | None:
+    """Return token usage carried by a streamed message chunk, if any."""
+    usage = getattr(message, "usage_metadata", None)
+    if not usage:
+        usage = (getattr(message, "response_metadata", None) or {}).get("token_usage")
+    if not usage:
+        return None
+    extracted = {
+        "input_tokens": int(usage.get("input_tokens", 0)),
+        "output_tokens": int(usage.get("output_tokens", 0)),
+        "total_tokens": int(usage.get("total_tokens", 0)),
+    }
+    return extracted if sum(extracted.values()) else None
+
+
 @ComponentFactory("agent-loop-factory")
 @Provides(SPEC_AGENT_LOOP)
 @RequiresBest("_llm_provider", SPEC_LLM, optional=False, immediate_rebind=True)
@@ -331,6 +346,7 @@ class PluginAgentLoop:
             raise RuntimeError("Agent graph is not built; no LLM plugin is available")
         config = {"configurable": {"thread_id": thread_id}} if thread_id else None
         previous_content: dict[str, str] = {}
+        usage_totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
         async for stream_type, chunk in self._graph.astream(
             {"messages": [{"role": "user", "content": message}]},
             config=config,
@@ -338,6 +354,10 @@ class PluginAgentLoop:
         ):
             if stream_type == "messages":
                 streamed_message = chunk[0]
+                usage = _extract_usage(streamed_message)
+                if usage is not None:
+                    for key in usage_totals:
+                        usage_totals[key] += usage[key]
                 if isinstance(streamed_message, ToolMessage):
                     continue
                 if getattr(streamed_message, "tool_calls", None) or getattr(
@@ -371,6 +391,8 @@ class PluginAgentLoop:
                             "tool_call_id": tool_call["id"],
                             "args": tool_call["args"],
                         }
+        if usage_totals["total_tokens"]:
+            yield {"type": "usage", **usage_totals}
 
     def describe(self) -> dict[str, Any]:
         llm_info = self._llm_provider.get_plugin_info() if self._llm_provider else None

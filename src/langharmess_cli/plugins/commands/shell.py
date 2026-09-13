@@ -10,18 +10,21 @@ from langharmess_cli.contracts import (
     InteractiveCommandContext,
     InteractiveCommandSpec,
 )
+from langharmess_cli.i18n import tr
 
 
 @ComponentFactory("cli-shell-command-factory")
 @Provides(SPEC_CLI_COMMAND)
 @Property("_plugin_name", "plugin.name", "shell-command")
 @Property("_plugin_version", "plugin.version", "1.0.0")
+@Property("_locale", "plugin.ui.locale", "en")
 class ShellCommandPlugin:
     """Provides shell-local commands without coupling the runner to them."""
 
     def __init__(self) -> None:
         self._plugin_name = "shell-command"
         self._plugin_version = "1.0.0"
+        self._locale = "en"
 
     def get_commands(self) -> list[CommandSpec]:
         return []
@@ -30,12 +33,12 @@ class ShellCommandPlugin:
         return [
             InteractiveCommandSpec(
                 name="exit",
-                help="Exit the interactive shell",
+                help=tr(self._locale, "help_exit"),
                 handler=self._exit,
             ),
             InteractiveCommandSpec(
                 name="help",
-                help="Show available interactive commands",
+                help=tr(self._locale, "help_help"),
                 handler=self._help,
             ),
         ]
@@ -47,7 +50,7 @@ class ShellCommandPlugin:
         if line:
             command = context.commands.get(line)
             if command is None:
-                print(f"Unknown command: /{line}")
+                print(tr(self._locale, "help_unknown", name=line))
             else:
                 print(f"/{command.name}: {command.help}")
             return False

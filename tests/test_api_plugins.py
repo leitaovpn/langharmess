@@ -203,3 +203,34 @@ def test_stream_route_plugin_streams_agent_output() -> None:
         "plugin.model.api_key": "test-key",
         "plugin.model.base_url": "https://models.example/v1",
     }
+
+
+def test_stream_route_passes_optional_stream_usage_to_runtime_llm() -> None:
+    class FakeAgentLoop:
+        async def astream(self, message, *, thread_id=None):
+            if False:
+                yield None
+
+    plugin = StreamRoutePlugin()
+    plugin._agent_loop = FakeAgentLoop()
+    descriptors = []
+    plugin._plugin_registrar = type(
+        "Registrar", (), {"ensure_plugin": lambda self, item: descriptors.append(item)}
+    )()
+    app = FastAPI()
+    app.include_router(plugin.get_router())
+
+    client = TestClient(app)
+    response = client.post(
+        "/stream",
+        json={
+            "input": "hi",
+            "model": "test-model",
+            "api_key": "test-key",
+            "base_url": "https://models.example/v1",
+            "session_id": "session-1",
+            "stream_usage": False,
+        },
+    )
+    assert response.status_code == 200
+    assert descriptors[0].properties["plugin.model.stream_usage"] is False

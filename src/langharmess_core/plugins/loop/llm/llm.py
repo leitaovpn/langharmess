@@ -20,6 +20,7 @@ from langharmess_core.contracts import SPEC_LLM
 @Property("_model_name", "plugin.model.name", "")
 @HiddenProperty("_api_key", "plugin.model.api_key", "")
 @Property("_base_url", "plugin.model.base_url", "")
+@Property("_stream_usage", "plugin.model.stream_usage", True)
 @HiddenProperty("_model_instance", "plugin.model.instance", None)
 class LLMPlugin:
     """Provides a LangChain chat model to the agent loop."""
@@ -31,6 +32,7 @@ class LLMPlugin:
         self._model_name = ""
         self._api_key = ""
         self._base_url = ""
+        self._stream_usage = True
         self._model_instance: Any = None
 
     def get_model(self) -> Any:
@@ -42,9 +44,13 @@ class LLMPlugin:
                     model=self._model_name,
                     api_key=SecretStr(self._api_key) if self._api_key else None,
                     base_url=self._base_url or None,
+                    stream_usage=self._stream_usage,
                 )
-            return init_chat_model(self._model_name)
-        return ChatOpenAI(model="gpt-4o-mini")
+            model = init_chat_model(self._model_name)
+            if hasattr(model, "stream_usage"):
+                setattr(model, "stream_usage", self._stream_usage)
+            return model
+        return ChatOpenAI(model="gpt-4o-mini", stream_usage=self._stream_usage)
 
     def get_plugin_info(self) -> dict[str, str]:
         return {"name": self._plugin_name, "version": self._plugin_version}

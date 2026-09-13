@@ -1,6 +1,7 @@
 """Tests for interactive CLI mode."""
 # mypy: ignore-errors
 # pyright: reportAttributeAccessIssue=false
+# pyright: reportArgumentType=false
 
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from langharmess_cli.contracts import InteractiveCommandSpec
 from langharmess_cli.interactive import InteractiveCLIRunner
 from langharmess_cli.plugins.commands.shell import ShellCommandPlugin
 from langharmess_cli.plugins.commands.template_health import TemplateHealthCommandPlugin
+from langharmess_cli.plugins.rich_renderer import RichInteractiveRenderer
 
 
 def test_interactive_command_spec() -> None:
@@ -58,6 +60,7 @@ def test_interactive_runner_stream_request(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    monkeypatch.delenv("LANG_HARMESS_STREAM_USAGE", raising=False)
     class FakeStreamResponse:
         def __enter__(self):
             return self
@@ -96,8 +99,9 @@ def test_interactive_runner_stream_request(
     )
     runner.do_stream("hello")
     output = capsys.readouterr().out
-    assert "[tool call] bash {'commands': 'pwd'}" in output
-    assert "[tool output] bash: /workspace" in output
+    assert "+ bash {'commands': 'pwd'}" in output
+    assert "✓ bash (" in output
+    assert "10B" in output
     assert "done" in output
     assert captured["json"] == {
         "input": "hello",
@@ -183,6 +187,30 @@ def test_shell_plugin_provides_exit_and_dynamic_help(
     plugin = ShellCommandPlugin()
     assert plugin.get_commands() == []
     assert plugin.get_plugin_info() == {"name": "shell-command", "version": "1.0.0"}
+
+
+def test_shell_plugin_localizes_help_in_zh(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plugin = ShellCommandPlugin()
+    plugin._locale = "zh"
+    commands = plugin.get_interactive_commands()
+    help_texts = {command.name: command.help for command in commands}
+    assert help_texts["exit"] == "退出交互式 shell"
+    assert help_texts["help"] == "显示可用的交互命令"
+
+    runner = InteractiveCLIRunner(
+        base_url="http://api",
+        token="secret",
+        commands=[
+            *commands,
+            InteractiveCommandSpec(
+                name="health", help="Check health", handler=lambda context, line: False
+            ),
+        ],
+    )
+    assert runner.onecmd("/help missing") is False
+    assert "未知命令: /missing" in capsys.readouterr().out
 
 
 def test_template_health_interactive_handler(
@@ -281,3 +309,156 @@ def test_cmdloop_uses_prompt_session_and_injected_renderer() -> None:
     assert "conversation" in renderer.welcome
     assert len(prompts) == 1
     assert prompts[0][1]["bottom_toolbar"].startswith(" gpt-4o-mini")
+
+
+class RecordingRenderer:
+    def __init__(self):
+        self.welcome = ""
+        self.errors = []
+        self.events = []
+
+    def show_welcome(self, text):
+        self.welcome = text
+
+    def start_response(self):
+        return None
+
+    def render_event(self, event):
+        self.events.append(event)
+
+    def finish_response(self):
+        return None
+
+    def show_error(self, message):
+        self.errors.append(message)
+
+
+def test_cmdloop_uses_dynamic_status_toolbar_with_real_renderer() -> None:
+    prompts = []
+
+    class FakeSession:
+        def prompt(self, *args, **kwargs):
+            prompts.append((args, kwargs))
+            return "/exit"
+
+    renderer = RichInteractiveRenderer()
+    runner = InteractiveCLIRunner(
+        base_url="http://api",
+        token="secret",
+        commands=ShellCommandPlugin().get_interactive_commands(),
+        renderer=renderer,
+        session=FakeSession(),
+    )
+    runner._interactive_input = True
+    runner.cmdloop()
+    toolbar = prompts[0][1]["bottom_toolbar"]
+    assert callable(toolbar)
+    assert toolbar().startswith(" gpt-4o-mini")
+
+
+def test_runner_localizes_welcome_and_unknown_command_in_zh() -> None:
+    class FakeSession:
+        def prompt(self, *args, **kwargs):
+            return "/exit"
+
+    renderer = RecordingRenderer()
+    runner = InteractiveCLIRunner(
+        base_url="http://api",
+        token="secret",
+        commands=ShellCommandPlugin().get_interactive_commands(),
+        renderer=renderer,
+        locale="zh",
+        session=FakeSession(),
+    )
+    runner._interactive_input = True
+    runner.cmdloop()
+    assert renderer.welcome == "输入消息开始对话。\n/help 查看命令 · /exit 安全退出"
+    runner.onecmd("/missing")
+    assert renderer.errors == ["未知命令: /missing。输入 /help 查看可用命令。"]
+
+
+def test_runner_localizes_cancelled_in_zh(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def raise_for_status(self):
+            return None
+
+        def iter_lines(self):
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(
+        "langharmess_cli.interactive.httpx.stream", lambda *a, **k: Response()
+    )
+    renderer = RecordingRenderer()
+    runner = InteractiveCLIRunner(
+        base_url="http://api",
+        token="secret",
+        commands=[],
+        renderer=renderer,
+        locale="zh",
+    )
+    runner.do_stream("hi")
+    assert renderer.errors == ["已取消"]
+
+
+def test_runner_forwards_usage_events_to_renderer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    usage = {"type": "usage", "input_tokens": 10, "output_tokens": 2, "total_tokens": 12}
+
+    class FakeStreamResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def raise_for_status(self):
+            return None
+
+        def iter_lines(self):
+            return [json.dumps(usage)]
+
+    monkeypatch.setattr(
+        "langharmess_cli.interactive.httpx.stream", lambda *a, **k: FakeStreamResponse()
+    )
+    renderer = RecordingRenderer()
+    runner = InteractiveCLIRunner(
+        base_url="http://api", token="secret", commands=[], renderer=renderer
+    )
+    runner.do_stream("hi")
+    assert usage in renderer.events
+
+
+def test_runner_sends_stream_usage_escape_hatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeStreamResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def raise_for_status(self):
+            return None
+
+        def iter_lines(self):
+            return []
+
+    captured = {}
+
+    def fake_stream(*args, **kwargs):
+        captured.update(kwargs)
+        return FakeStreamResponse()
+
+    monkeypatch.setattr("langharmess_cli.interactive.httpx.stream", fake_stream)
+    monkeypatch.setenv("LANG_HARMESS_STREAM_USAGE", "false")
+    runner = InteractiveCLIRunner(base_url="http://api", token="secret", commands=[])
+    runner.do_stream("hi")
+    assert captured["json"]["stream_usage"] is False

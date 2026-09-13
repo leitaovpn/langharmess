@@ -1,90 +1,289 @@
-"""Rich renderer for the interactive CLI."""
+"""Claude Code-style rich renderer for the interactive CLI."""
 
 from __future__ import annotations
 
+import time as time
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
 
 from langharmess_cli.contracts import SPEC_CLI_RENDERER
+from langharmess_cli.i18n import tr
+
+SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+THROTTLE_SECONDS = 0.125
+ARG_SUMMARY_MAX = 60
+
+
+@dataclass
+class _ToolRun:
+    """One tool invocation as tracked by the renderer."""
+
+    name: str
+    args_summary: str
+    started: float
+    status: str = "running"
+    duration_ms: int = 0
+    output_bytes: int = 0
 
 
 @ComponentFactory("rich-cli-renderer-factory")
 @Provides(SPEC_CLI_RENDERER)
 @Property("_plugin_name", "plugin.name", "rich-renderer")
 @Property("_plugin_version", "plugin.version", "1.0.0")
+@Property("_locale", "plugin.ui.locale", "en")
 class RichInteractiveRenderer:
     """Renders conversation events while keeping transport details out of the UI."""
 
     def __init__(self) -> None:
         self._plugin_name = "rich-renderer"
         self._plugin_version = "1.0.0"
+        self._locale = "en"
         self.console = Console()
-        self._assistant_text = ""
+        self._model = ""
+        self._segments: list[str | _ToolRun] = []
+        self._tool_runs: dict[str, _ToolRun] = {}
+        self._session_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        self._response_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        self._status = "idle"
         self._live: Live | None = None
+        self._last_frame = float("-inf")
+        self._spinner_idx = 0
 
     def show_welcome(self, text: str) -> None:
         self.console.print(
             Panel.fit(text, title="[bold cyan]langharmess[/bold cyan]", border_style="cyan")
         )
 
+    def set_model(self, name: str) -> None:
+        self._model = name
+
+    def get_status_text(self) -> str:
+        parts = []
+        if self._model:
+            parts.append(self._model)
+        if self._session_usage["total_tokens"]:
+            parts.append(
+                tr(
+                    self._locale,
+                    "tokens",
+                    count=self._format_tokens(self._session_usage["total_tokens"]),
+                )
+            )
+        parts.append(tr(self._locale, "toolbar_hint"))
+        return " " + " · ".join(parts) + " "
+
     def start_response(self) -> None:
-        self._assistant_text = ""
+        self._segments = []
+        self._tool_runs = {}
+        self._response_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        self._status = "thinking"
         self._live = None
+        self._last_frame = float("-inf")
+        self._spinner_idx = 0
 
     def render_event(self, event: Mapping[str, Any]) -> None:
         event_type = event.get("type")
         if event_type == "assistant":
-            self._assistant_text += str(event.get("content", ""))
-            markdown = Markdown(self._assistant_text)
-            if self._live is None:
-                self._live = Live(
-                    markdown,
-                    console=self.console,
-                    refresh_per_second=12,
-                    vertical_overflow="visible",
-                )
-                self._live.start(refresh=True)
-            else:
-                self._live.update(markdown, refresh=True)
-            return
-        if event_type == "tool_call":
-            self._flush_assistant()
-            self.console.print(
-                Panel(
-                    Text(f"[tool call] {event.get('name')} {event.get('args')}"),
-                    border_style="yellow",
-                )
-            )
-            return
-        if event_type == "tool_output":
-            self._flush_assistant()
-            self.console.print(
-                Panel(
-                    Text(
-                        f"[tool output] {event.get('name')}: {event.get('output')}"
-                    ),
-                    border_style="green",
-                )
-            )
+            self._on_assistant(str(event.get("content", "")))
+        elif event_type == "tool_call":
+            self._on_tool_call(event)
+        elif event_type == "tool_output":
+            self._on_tool_output(event)
+        elif event_type == "usage":
+            self._on_usage(event)
+        # Unknown event types are ignored.
 
     def finish_response(self) -> None:
-        self._flush_assistant()
+        self._flush_live()
+        self._status = "idle"
 
     def show_error(self, message: str) -> None:
-        self.console.print(f"[bold red]Error:[/bold red] {message}")
+        self._flush_live()
+        self._status = "error"
+        prefix = tr(self._locale, "error_prefix")
+        self.console.print(f"[bold red]{prefix}:[/bold red] {message}")
 
-    def _flush_assistant(self) -> None:
+    def _on_assistant(self, content: str) -> None:
+        if not content:
+            return
+        if not self.console.is_terminal:
+            self.console.print(content, end="", highlight=False, markup=False)
+            return
+        if self._segments and isinstance(self._segments[-1], str):
+            self._segments[-1] += content
+        else:
+            self._segments.append(content)
+        self._refresh()
+
+    def _on_tool_call(self, event: Mapping[str, Any]) -> None:
+        name = str(event.get("name", "tool"))
+        tool_call_id = str(event.get("tool_call_id") or f"run-{len(self._tool_runs)}")
+        args_summary = self._summarize_args(event.get("args"))
+        run = _ToolRun(name=name, args_summary=args_summary, started=time.monotonic())
+        self._tool_runs[tool_call_id] = run
+        self._segments.append(run)
+        self._status = "tool"
+        if not self.console.is_terminal:
+            self.console.print(f"+ {name} {args_summary}".rstrip())
+            return
+        self._refresh(force=True)
+
+    def _on_tool_output(self, event: Mapping[str, Any]) -> None:
+        name = str(event.get("name", "tool"))
+        tool_call_id = str(event.get("tool_call_id", ""))
+        output = str(event.get("output", ""))
+        run = self._tool_runs.get(tool_call_id) or self._find_running_run(name)
+        if run is None:
+            run = _ToolRun(name=name, args_summary="", started=time.monotonic())
+            self._segments.append(run)
+        run.status = "error" if self._is_error(output) else "done"
+        run.duration_ms = max(0, int((time.monotonic() - run.started) * 1000))
+        run.output_bytes = len(output.encode("utf-8"))
+        if not self.console.is_terminal:
+            self.console.print(self._tool_result_line(run))
+            return
+        self._refresh(force=True)
+
+    def _on_usage(self, event: Mapping[str, Any]) -> None:
+        for key in ("input_tokens", "output_tokens", "total_tokens"):
+            value = int(event.get(key, 0))
+            self._response_usage[key] += value
+            self._session_usage[key] += value
+        if self.console.is_terminal and self._live is not None:
+            self._refresh(force=True)
+
+    def _find_running_run(self, name: str) -> _ToolRun | None:
+        for run in self._tool_runs.values():
+            if run.status == "running" and run.name == name:
+                return run
+        return None
+
+    def _refresh(self, force: bool = False) -> None:
+        now = time.monotonic()
+        if not force and now - self._last_frame < THROTTLE_SECONDS:
+            return
+        self._last_frame = now
+        self._render_frame()
+
+    def _render_frame(self) -> None:
+        self._spinner_idx += 1
+        if self._live is None:
+            self._live = Live(
+                self._build_frame(),
+                console=self.console,
+                refresh_per_second=8,
+                vertical_overflow="visible",
+            )
+            self._live.start(refresh=True)
+        else:
+            self._live.update(self._build_frame(), refresh=True)
+
+    def _flush_live(self) -> None:
         if self._live is not None:
+            self._refresh(force=True)
             self._live.stop()
         self._live = None
-        self._assistant_text = ""
+
+    def _build_frame(self) -> Group:
+        items: list[Any] = []
+        for segment in self._segments:
+            if isinstance(segment, str):
+                items.append(Markdown(segment))
+            else:
+                items.append(self._tool_line(segment))
+        items.append(Text(self._status_line(), style="dim"))
+        return Group(*items)
+
+    def _tool_line(self, run: _ToolRun) -> Text:
+        if run.status == "running":
+            return Text.assemble(
+                (self._spinner(), "cyan"),
+                (" ", ""),
+                (run.name, "bold cyan"),
+                (f" {run.args_summary}" if run.args_summary else "", "dim"),
+            )
+        if run.status == "error":
+            return Text.assemble(
+                ("✗ ", "red"),
+                (run.name, "bold"),
+                (f" ({tr(self._locale, 'tool_error')})", "red"),
+            )
+        meta = self._result_meta(run)
+        return Text.assemble(
+            ("✓ ", "green"),
+            (run.name, "bold"),
+            (f" ({meta})" if meta else "", "dim"),
+        )
+
+    def _tool_result_line(self, run: _ToolRun) -> str:
+        if run.status == "error":
+            return f"✗ {run.name} ({tr(self._locale, 'tool_error')})"
+        meta = self._result_meta(run)
+        return f"✓ {run.name} ({meta})" if meta else f"✓ {run.name}"
+
+    def _result_meta(self, run: _ToolRun) -> str:
+        parts = []
+        if run.duration_ms > 0:
+            parts.append(f"{run.duration_ms}ms")
+        if run.output_bytes > 0:
+            parts.append(self._format_size(run.output_bytes))
+        return " · ".join(parts)
+
+    def _status_line(self) -> str:
+        if self._status == "tool":
+            run = next(
+                (run for run in self._tool_runs.values() if run.status == "running"),
+                None,
+            )
+            label = f"{run.name} {run.args_summary}".rstrip() if run else tr(
+                self._locale, "thinking"
+            )
+        else:
+            label = tr(self._locale, "thinking")
+        parts = [f"{self._spinner()} {label}"]
+        if self._model:
+            parts.append(self._model)
+        usage = self._response_usage
+        if usage["total_tokens"]:
+            parts.append(
+                tr(
+                    self._locale,
+                    "usage_io",
+                    in_tokens=self._format_tokens(usage["input_tokens"]),
+                    out_tokens=self._format_tokens(usage["output_tokens"]),
+                )
+            )
+        return " · ".join(parts)
+
+    def _spinner(self) -> str:
+        return SPINNER_FRAMES[self._spinner_idx % len(SPINNER_FRAMES)]
+
+    def _summarize_args(self, args: Any) -> str:
+        summary = " ".join(str(args).split())
+        return summary[:ARG_SUMMARY_MAX] + "…" if len(summary) > ARG_SUMMARY_MAX else summary
+
+    def _is_error(self, output: str) -> bool:
+        return output.lstrip().lower().startswith("error")
+
+    def _format_tokens(self, count: int) -> str:
+        if count < 1000:
+            return str(count)
+        return f"{count / 1000:.1f}k"
+
+    def _format_size(self, size: int) -> str:
+        if size < 1024:
+            return f"{size}B"
+        if size < 1024 * 1024:
+            return f"{size / 1024:.1f}KB"
+        return f"{size / (1024 * 1024):.1f}MB"
 
     def get_plugin_info(self) -> dict[str, str]:
         return {"name": self._plugin_name, "version": self._plugin_version}
