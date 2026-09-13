@@ -141,7 +141,12 @@ def test_internal_server_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     assert main_module._serve(["--host", "0.0.0.0", "--port", "9123"]) == 0
-    assert captured == {"target": app, "host": "0.0.0.0", "port": 9123}
+    assert captured == {
+        "target": app,
+        "host": "0.0.0.0",
+        "port": 9123,
+        "log_config": None,
+    }
 
 
 def test_health_command_handler(
@@ -272,4 +277,77 @@ def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(main_module.InteractiveCLIRunner, "cmdloop", lambda self: None)
 
     assert main_module.main() == 0
-    assert {descriptor.name for descriptor in installed} == {"cli-health", "cli-shell"}
+    assert {descriptor.name for descriptor in installed} == {
+        "cli-health",
+        "cli-shell",
+        "config-ini",
+        "configs",
+    }
+
+
+def test_main_uses_selected_provider_and_log_override(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    log_path = tmp_path / "custom.log"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "langharmess",
+            "--provider",
+            "demo",
+            "--log",
+            str(log_path),
+            "interactive",
+        ],
+    )
+    configs = SimpleNamespace(
+        get=lambda section, key: "configured.log",
+        get_provider=lambda name: {
+            "model": "provider-model",
+            "api_key": "provider-key",
+            "base_url": "https://provider.example/v1",
+        },
+    )
+    command_provider = SimpleNamespace(
+        get_commands=lambda: [], get_interactive_commands=lambda: []
+    )
+    manager = SimpleNamespace(
+        start=lambda: None,
+        stop=lambda: None,
+        install_plugin=lambda descriptor: None,
+        get_services=lambda spec: [command_provider],
+        get_service=lambda spec: configs,
+    )
+    captured = {}
+
+    class FakeInteractive:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def cmdloop(self):
+            return None
+
+    monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
+    monkeypatch.setattr(
+        main_module,
+        "PluginRegistry",
+        lambda descriptors: SimpleNamespace(list=lambda: descriptors),
+    )
+    monkeypatch.setattr(
+        main_module,
+        "APIGuard",
+        lambda base_url: SimpleNamespace(ensure_api_server=lambda: None),
+    )
+    monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
+    monkeypatch.setattr(
+        main_module,
+        "configure_logging",
+        lambda path: log_path.write_text("") or log_path,
+    )
+
+    assert main_module.main() == 0
+    assert captured["model"] == "provider-model"
+    assert captured["api_key"] == "provider-key"
+    assert captured["model_base_url"] == "https://provider.example/v1"
+    assert log_path.is_file()

@@ -22,6 +22,7 @@ from langharmess_api.contracts import (
     SPEC_ROUTE,
 )
 from langharmess_api.dependencies import get_db_session
+from langharmess_config.contracts import SPEC_CONFIGS
 
 
 @ComponentFactory("api-server-factory")
@@ -30,6 +31,7 @@ from langharmess_api.dependencies import get_db_session
 @RequiresBest("_auth_provider", SPEC_AUTH, optional=True, immediate_rebind=True)
 @RequiresBest("_rate_limit_provider", SPEC_RATE_LIMIT, optional=True, immediate_rebind=True)
 @RequiresBest("_db_provider", SPEC_DB, optional=True, immediate_rebind=True)
+@RequiresBest("_configs", SPEC_CONFIGS, optional=True, immediate_rebind=True)
 class APIServerService:
     """Builds a FastAPI app from the currently injected plugins."""
 
@@ -38,6 +40,7 @@ class APIServerService:
         self._auth_provider: Any = None
         self._rate_limit_provider: Any = None
         self._db_provider: Any = None
+        self._configs: Any = None
 
     @BindField("_route_providers", if_valid=True)
     def _on_route_bind(self, field: str, service: Any, reference: Any) -> None:
@@ -71,8 +74,17 @@ class APIServerService:
     def _on_db_unbind(self, field: str, service: Any, reference: Any) -> None:
         self._current_app = self.build_app()
 
+    @BindField("_configs", if_valid=True)
+    def _on_configs_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._current_app = self.build_app()
+
+    @UnbindField("_configs")
+    def _on_configs_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._current_app = self.build_app()
+
     def build_app(self) -> FastAPI:
         app = FastAPI(title="langharmess_api", version="0.1.0")
+        app.state.configs = self._configs
 
         if self._db_provider is not None:
             app.dependency_overrides[get_db_session] = (

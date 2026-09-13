@@ -28,5 +28,25 @@ case "$ARTIFACT" in
     ;;
 esac
 
+CONFIG_DIR=${LANG_HARMESS_HOME:-"$HOME/.langharmess"}
+CONFIG_FILE="$CONFIG_DIR/langharmess.ini"
+mkdir -p "$CONFIG_DIR"
+if [[ ! -f "$CONFIG_FILE" ]]; then
+  cat >"$CONFIG_FILE" <<'EOF'
+[DEFAULT]
+
+log_file = ~/.langharmess/langharmess.log
+
+[providers.deepseek-v4-flash]
+
+base_url=xxxxx
+
+model=xxxxx
+
+api_key=xxxx
+EOF
+fi
+
 echo "Installed: $(command -v langharmess)"
+echo "Config: $CONFIG_FILE"
 langharmess --help

@@ -39,5 +39,8 @@ def test_template_plugins_conform_to_protocols() -> None:
 
 def test_api_server_service_builds_app() -> None:
     service = APIServerService()
+    configs = object()
+    service._configs = configs
     app = service.build_app()
     assert app.title == "langharmess_api"
+    assert app.state.configs is configs

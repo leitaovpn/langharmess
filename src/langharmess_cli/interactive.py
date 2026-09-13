@@ -5,6 +5,7 @@ from __future__ import annotations
 import cmd
 import json
 from collections.abc import Iterable, Mapping
+from typing import Any
 from uuid import uuid4
 
 import httpx
@@ -24,6 +25,7 @@ class InteractiveCLIRunner(cmd.Cmd):
         model: str = "gpt-4o-mini",
         api_key: str = "",
         model_base_url: str = "",
+        configs: Any = None,
     ) -> None:
         super().__init__()
         self.base_url = base_url.rstrip("/")
@@ -31,6 +33,7 @@ class InteractiveCLIRunner(cmd.Cmd):
         self.model = model
         self.api_key = api_key
         self.model_base_url = model_base_url.rstrip("/")
+        self.configs = configs
         self.session_id = uuid4().hex
         self.commands: Mapping[str, InteractiveCommandSpec] = {
             command.name: command for command in commands

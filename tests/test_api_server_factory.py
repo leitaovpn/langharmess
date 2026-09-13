@@ -15,10 +15,10 @@ def test_create_app_uses_plugin_manager_once(
 ) -> None:
     monkeypatch.setattr(server_module, "_MANAGER", None)
 
+    configs = SimpleNamespace(get=lambda section, key: None)
+    api_server = SimpleNamespace(build_app=lambda: SimpleNamespace(title="ok"))
     manager = SimpleNamespace(
-        get_service=lambda spec: SimpleNamespace(
-            build_app=lambda: SimpleNamespace(title="ok")
-        )
+        get_service=lambda spec: configs if spec == "configs" else api_server
     )
 
     def fake_manager(registry):

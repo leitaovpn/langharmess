@@ -14,3 +14,4 @@ plugin_registry.json
 .env
 *.sqlite3
 *.sqlite3-*
+*.log

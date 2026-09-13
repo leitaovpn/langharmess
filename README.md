@@ -34,3 +34,25 @@ scripts/install.sh dist/<artifact>
 
 Set `LANG_HARMESS_MODEL`, `LANG_HARMESS_API_KEY`, and
 `LANG_HARMESS_BASE_URL` before starting `langharmess`.
+
+The default configuration is created at `~/.langharmess/langharmess.ini`:
+
+```ini
+[DEFAULT]
+log_file = ~/.langharmess/langharmess.log
+
+[providers.deepseek-v4-flash]
+base_url = xxxxx
+model = xxxxx
+api_key = xxxx
+```
+
+Select a configured model provider and optionally override the log destination:
+
+```bash
+langharmess --provider deepseek-v4-flash --log ~/.langharmess/debug.log
+```
+
+`LANG_HARMESS_CONFIG` can override the INI file location. Existing
+`LANG_HARMESS_MODEL`, `LANG_HARMESS_API_KEY`, and `LANG_HARMESS_BASE_URL`
+values remain the fallback when `--provider` is omitted.

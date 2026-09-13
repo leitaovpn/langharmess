@@ -36,6 +36,8 @@ cd "$PROJECT_ROOT"
   --collect-all pelix \
   --collect-all langchain_community \
   --collect-all langchain_experimental \
+  --collect-data langharmess_config \
+  --collect-submodules langharmess_config \
   --collect-submodules langharmess_api \
   --collect-submodules langharmess_cli \
   --collect-submodules langharmess_core \

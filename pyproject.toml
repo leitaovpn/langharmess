@@ -43,6 +43,9 @@ packaging = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+langharmess_config = ["config/langharmess.ini"]
+
 [tool.ruff]
 target-version = "py313"
 src = ["src", "tests", "examples"]
@@ -73,6 +76,7 @@ pythonpath = ["src"]
 
 [tool.coverage.run]
 source = [
+    "langharmess_config",
     "langharmess_core",
     "langharmess_plugin",
     "langharmess_api",
