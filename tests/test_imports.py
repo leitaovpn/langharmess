@@ -16,6 +16,7 @@ PUBLIC_MODULES = [
     "langharmess_plugin",
     "langharmess_plugin.registry",
     "langharmess_plugin.plugin_manager",
+    "langharmess_plugin.validation",
     "langharmess_core.plugins",
     "langharmess_core.plugins.loop",
     "langharmess_core.plugins.loop.agent_loop",
