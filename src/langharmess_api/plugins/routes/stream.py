@@ -10,13 +10,21 @@ from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import StreamingResponse
-from pelix.ipopo.decorators import ComponentFactory, Property, Provides, RequiresBest
+from pelix.ipopo.decorators import (
+    BindField,
+    ComponentFactory,
+    Property,
+    Provides,
+    RequiresBest,
+    UnbindField,
+)
 from pydantic import BaseModel
 
 from langharmess_api.contracts import RouteProvider
 from langharmess_core.contracts import AgentLoopProvider, ModelProtocol
 from langharmess_core.plugin import runtime_llm_descriptor
 from langharmess_plugin.contracts import PluginRegistrar
+from langharmess_plugin.validation import ContractGuard, ContractViolationError
 
 LOGGER = logging.getLogger("langharmess.server")
 
@@ -52,7 +60,33 @@ class StreamRoutePlugin:
         self._plugin_version = "1.0.0"
         self._agent_loop: Any = None
         self._plugin_registrar: Any = None
+        self._guards: dict[str, ContractGuard] = {
+            "_agent_loop": ContractGuard(self, "_agent_loop", AgentLoopProvider),
+            "_plugin_registrar": ContractGuard(
+                self, "_plugin_registrar", PluginRegistrar
+            ),
+        }
         self._runtime_lock = asyncio.Lock()
+
+    @BindField("_agent_loop", if_valid=True)
+    def _on_agent_loop_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._guards[field].admit(service)
+
+    @UnbindField("_agent_loop", if_valid=True)
+    def _on_agent_loop_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._guards[field].release(service)
+
+    @BindField("_plugin_registrar", if_valid=True)
+    def _on_plugin_registrar_bind(
+        self, field: str, service: Any, reference: Any
+    ) -> None:
+        self._guards[field].admit(service)
+
+    @UnbindField("_plugin_registrar", if_valid=True)
+    def _on_plugin_registrar_unbind(
+        self, field: str, service: Any, reference: Any
+    ) -> None:
+        self._guards[field].release(service)
 
     def get_router(self) -> APIRouter:
         router = APIRouter()
@@ -74,9 +108,12 @@ class StreamRoutePlugin:
                 }
                 if payload.stream_usage is not None:
                     properties["plugin.model.stream_usage"] = payload.stream_usage
-                self._plugin_registrar.ensure_plugin(
-                    runtime_llm_descriptor(properties)
-                )
+                try:
+                    self._plugin_registrar.ensure_plugin(
+                        runtime_llm_descriptor(properties)
+                    )
+                except ContractViolationError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
                 if self._agent_loop is None:
                     raise HTTPException(status_code=503, detail="Agent loop unavailable")
             except BaseException:

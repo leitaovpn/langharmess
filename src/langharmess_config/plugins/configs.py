@@ -6,9 +6,16 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-from pelix.ipopo.decorators import ComponentFactory, Provides, Requires
+from pelix.ipopo.decorators import (
+    BindField,
+    ComponentFactory,
+    Provides,
+    Requires,
+    UnbindField,
+)
 
 from langharmess_config.contracts import ConfigProvider, Configs
+from langharmess_plugin.validation import ContractGuard
 
 LOGGER = logging.getLogger("langharmess.config")
 
@@ -21,6 +28,15 @@ SUPPORTED_PROTOCOLS = {"anthropic", "chat", "responses"}
 class ConfigsPlugin:
     def __init__(self) -> None:
         self._providers: list[Any] = []
+        self._guard = ContractGuard(self, "_providers", ConfigProvider)
+
+    @BindField("_providers", if_valid=True)
+    def _on_provider_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._guard.admit(service)
+
+    @UnbindField("_providers", if_valid=True)
+    def _on_provider_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._guard.release(service)
 
     def _merged(self) -> dict[str, Any]:
         merged: dict[str, Any] = {}

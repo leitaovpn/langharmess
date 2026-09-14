@@ -6,10 +6,18 @@ from typing import Any, Protocol
 from unittest.mock import Mock
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from langharmess_api.plugins.routes.stream import StreamRoutePlugin
+from langharmess_api.plugins.server.app import APIServerService
 from langharmess_plugin.plugin_manager import PluginManager
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
-from langharmess_plugin.validation import ContractViolationError, service_contract
+from langharmess_plugin.validation import (
+    ContractViolationError,
+    Violation,
+    service_contract,
+)
 
 
 @service_contract("test.enforce.tool")
@@ -78,3 +86,61 @@ def test_install_skips_unpinned_specification() -> None:
 
     assert "probe" in manager._bound
     manager._ipopo.kill.assert_not_called()
+
+
+class _BadRoute:
+    def get_router(self, prefix: str) -> None:
+        return None
+
+    def get_plugin_info(self) -> dict[str, str]:
+        return {"name": "bad-route"}
+
+
+def test_api_server_quarantines_bad_route_provider() -> None:
+    component = APIServerService()
+    bad = _BadRoute()
+    component._route_providers.append(bad)
+
+    assert component._guards["_route_providers"].admit(bad) is False
+    assert component._route_providers == []
+    assert len(component._guards["_route_providers"].rejected()) == 1
+
+
+def test_stream_route_reports_contract_violation_as_400() -> None:
+    plugin = StreamRoutePlugin()
+    plugin._agent_loop = object()
+
+    class _BadRegistrar:
+        def ensure_plugin(self, descriptor: PluginDescriptor) -> None:
+            raise ContractViolationError(
+                plugin=descriptor.name,
+                specification=descriptor.specification,
+                protocol="LLMProvider",
+                violations=(
+                    Violation(
+                        "agent.plugin.llm",
+                        "LLMProvider",
+                        "get_model",
+                        "MISSING_METHOD",
+                        "LLMPlugin.get_model is not implemented",
+                    ),
+                ),
+            )
+
+    plugin._plugin_registrar = _BadRegistrar()
+    app = FastAPI()
+    app.include_router(plugin.get_router())
+
+    response = TestClient(app).post(
+        "/stream",
+        json={
+            "input": "hi",
+            "model": "m",
+            "api_key": "k",
+            "base_url": "http://localhost",
+            "session_id": "s",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "MISSING_METHOD" in response.json()["detail"]

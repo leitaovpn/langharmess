@@ -603,3 +603,88 @@ def test_all_agent_loop_guards_quarantine_raw_bad_services(tmp_path: Path) -> No
             assert id(bad_service) in guard.rejected(), field
     finally:
         manager.stop()
+
+
+def test_all_api_and_config_guards_quarantine_raw_bad_services(tmp_path: Path) -> None:
+    registry = descriptors(tmp_path)
+    manager = PluginManager(registry)
+    manager.start()
+    try:
+        for item in registry.list():
+            manager.install_plugin(item)
+
+        extra_descriptors = [
+            PluginDescriptor(
+                name="configs",
+                version="1.0.0",
+                module="langharmess_config.plugins.configs",
+                factory="configs-plugin-factory",
+                instance="configs",
+                specification="configs",
+            ),
+            PluginDescriptor(
+                name="api-stream",
+                version="1.0.0",
+                module="langharmess_api.plugins.routes.stream",
+                factory="api-stream-route-factory",
+                instance="api-stream",
+                specification=SPEC_ROUTE,
+            ),
+            PluginDescriptor(
+                name="api-server",
+                version="1.0.0",
+                module="langharmess_api.plugins.server.app",
+                factory="api-server-factory",
+                instance="api-server",
+                specification=SPEC_API_SERVER,
+            ),
+        ]
+        for item in extra_descriptors:
+            manager.install_plugin(item)
+
+        api_server = manager.get_service(SPEC_API_SERVER)
+        stream_route = next(
+            provider
+            for provider in manager.get_services(SPEC_ROUTE)
+            if hasattr(provider, "get_plugin_info")
+            and provider.get_plugin_info()["name"] == "stream"
+        )
+        configs = manager.get_service("configs")
+
+        for field, guard in api_server._guards.items():
+            bad_service = object()
+            registration = manager._context.register_service(
+                guard.protocol,
+                bad_service,
+                {"service.ranking": 10_000},
+            )
+            assert id(bad_service) in guard.rejected(), field
+            value = getattr(api_server, field)
+            assert bad_service is not value
+            assert not isinstance(value, list) or all(
+                item is not bad_service for item in value
+            )
+            registration.unregister()
+
+        for field, guard in stream_route._guards.items():
+            bad_service = object()
+            registration = manager._context.register_service(
+                guard.protocol,
+                bad_service,
+                {"service.ranking": 10_000},
+            )
+            assert id(bad_service) in guard.rejected(), field
+            assert getattr(stream_route, field) is not bad_service
+            registration.unregister()
+
+        bad_config_provider = object()
+        registration = manager._context.register_service(
+            configs._guard.protocol,
+            bad_config_provider,
+            {},
+        )
+        assert id(bad_config_provider) in configs._guard.rejected()
+        assert all(item is not bad_config_provider for item in configs._providers)
+        registration.unregister()
+    finally:
+        manager.stop()

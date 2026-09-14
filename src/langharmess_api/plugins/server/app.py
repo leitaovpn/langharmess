@@ -24,6 +24,7 @@ from langharmess_api.contracts import (
 from langharmess_config.contracts import Configs
 from langharmess_core.common.dependencies import get_db_session
 from langharmess_logging.contracts import LogProvider
+from langharmess_plugin.validation import ContractGuard
 
 
 @ComponentFactory("api-server-factory")
@@ -46,53 +47,81 @@ class APIServerService:
         self._db_provider: Any = None
         self._configs: Any = None
         self._log_provider: Any = None
+        self._guards: dict[str, ContractGuard] = {
+            "_route_providers": ContractGuard(self, "_route_providers", RouteProvider),
+            "_auth_provider": ContractGuard(self, "_auth_provider", AuthProvider),
+            "_rate_limit_provider": ContractGuard(
+                self, "_rate_limit_provider", RateLimitProvider
+            ),
+            "_db_provider": ContractGuard(self, "_db_provider", DBProvider),
+            "_configs": ContractGuard(self, "_configs", Configs),
+            "_log_provider": ContractGuard(self, "_log_provider", LogProvider),
+        }
 
     @BindField("_route_providers", if_valid=True)
     def _on_route_bind(self, field: str, service: Any, reference: Any) -> None:
+        if not self._guards[field].admit(service):
+            return
         self._current_app = self.build_app()
 
     @UnbindField("_route_providers", if_valid=True)
     def _on_route_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._guards[field].release(service)
         self._current_app = self.build_app()
 
     @BindField("_auth_provider", if_valid=True)
     def _on_auth_bind(self, field: str, service: Any, reference: Any) -> None:
+        if not self._guards[field].admit(service):
+            return
         self._current_app = self.build_app()
 
     @UnbindField("_auth_provider")
     def _on_auth_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._guards[field].release(service)
         self._current_app = self.build_app()
 
     @BindField("_rate_limit_provider", if_valid=True)
     def _on_rate_limit_bind(self, field: str, service: Any, reference: Any) -> None:
+        if not self._guards[field].admit(service):
+            return
         self._current_app = self.build_app()
 
     @UnbindField("_rate_limit_provider")
     def _on_rate_limit_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._guards[field].release(service)
         self._current_app = self.build_app()
 
     @BindField("_db_provider", if_valid=True)
     def _on_db_bind(self, field: str, service: Any, reference: Any) -> None:
+        if not self._guards[field].admit(service):
+            return
         self._current_app = self.build_app()
 
     @UnbindField("_db_provider")
     def _on_db_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._guards[field].release(service)
         self._current_app = self.build_app()
 
     @BindField("_configs", if_valid=True)
     def _on_configs_bind(self, field: str, service: Any, reference: Any) -> None:
+        if not self._guards[field].admit(service):
+            return
         self._current_app = self.build_app()
 
     @UnbindField("_configs")
     def _on_configs_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._guards[field].release(service)
         self._current_app = self.build_app()
 
     @BindField("_log_provider", if_valid=True)
     def _on_log_bind(self, field: str, service: Any, reference: Any) -> None:
+        if not self._guards[field].admit(service):
+            return
         self._current_app = self.build_app()
 
     @UnbindField("_log_provider")
     def _on_log_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._guards[field].release(service)
         self._current_app = self.build_app()
 
     def build_app(self) -> FastAPI:
