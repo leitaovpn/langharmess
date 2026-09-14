@@ -174,7 +174,7 @@ def _annotations_match(expected: Any, actual: Any, *, covariance: bool = False) 
        都被 expected 的某个分支覆盖（实现可以收窄返回值）；非 union 一侧视作单分支；
     5. origin 不一致只在返回位置经 ``issubclass`` 容忍（``dict`` 满足 ``Mapping``，
        普通类允许返回子类），Protocol 等不可 issubclass 的情形视为不匹配；
-    6. origin 一致时递归比对类型参数，任一侧未参数化（如裸 ``list``）视为通过。
+    6. origin 一致时递归比对类型参数，任一侧未参数化（如裸 ``typing.List``）视为通过。
     """
     if expected is Any or expected is None:
         return True
@@ -268,6 +268,65 @@ def describe(protocol: type[Any]) -> ProtocolContract:
     return contract
 
 
+def _parameter_problems(
+    expected: MethodContract, actual: MethodContract
+) -> list[tuple[ViolationCode, str]]:
+    """Check the parameters of one method pair for call compatibility.
+
+    契约参数在实现侧缺失时，只有 ``*args``（位置方向）或 ``**kwargs``（关键字方向）
+    能吸收；实现侧多出的必填参数按位置对齐判断：契约的位置参数会落在实现侧同序
+    位置，仅名字不同不重复报告，超出契约位置参数个数的才算冲突。
+    """
+    problems: list[tuple[ViolationCode, str]] = []
+    by_name = {parameter.name: parameter for parameter in actual.parameters}
+    for parameter in expected.parameters:
+        match = by_name.get(parameter.name)
+        if match is not None:
+            if (parameter.positional and not match.positional) or (
+                parameter.keyword and not match.keyword
+            ):
+                direction = (
+                    "positional"
+                    if parameter.positional and not match.positional
+                    else "keyword"
+                )
+                problems.append(
+                    (
+                        "PARAM_KIND_CONFLICT",
+                        f"parameter {parameter.name!r} cannot be passed as {direction}",
+                    )
+                )
+            continue
+        absorbed = (parameter.positional and actual.var_positional) or (
+            parameter.keyword and actual.var_keyword
+        )
+        if not absorbed:
+            problems.append(
+                (
+                    "PARAM_NOT_ACCEPTED",
+                    f"parameter {parameter.name!r} is not accepted",
+                )
+            )
+    expected_names = {parameter.name for parameter in expected.parameters}
+    positional_expected = sum(
+        1 for parameter in expected.parameters if parameter.positional
+    )
+    # 参数表中的位置参数恒为前缀，故 enumerate 序号即位置序号：契约按位置传入的
+    # 参数会填满实现侧同序参数，只有超出该范围的多余必填参数才强制调用方额外传参
+    for index, parameter in enumerate(actual.parameters):
+        if parameter.name in expected_names or parameter.has_default:
+            continue
+        if parameter.positional and index < positional_expected:
+            continue
+        problems.append(
+            (
+                "PARAM_EXTRA_REQUIRED",
+                f"parameter {parameter.name!r} has no default and is not part of the contract",
+            )
+        )
+    return problems
+
+
 def validate(instance: Any, protocol: type[Any]) -> tuple[Violation, ...]:
     """Check an instance against a pinned contract and return all violations."""
     contract = describe(protocol)
@@ -285,9 +344,45 @@ def validate(instance: Any, protocol: type[Any]) -> tuple[Violation, ...]:
                 )
             )
             continue
-        # 运行时属性可能缺失或不是可调用对象，交由 _method_contract 兜底
         member: Any = getattr(instance, expected.name, None)
+        if member is None:
+            violations.append(
+                Violation(
+                    specification,
+                    contract.name,
+                    expected.name,
+                    "MISSING_METHOD",
+                    f"{contract.name}.{expected.name} is not implemented",
+                )
+            )
+            continue
+        if not callable(member):
+            violations.append(
+                Violation(
+                    specification,
+                    contract.name,
+                    expected.name,
+                    "NOT_CALLABLE",
+                    f"{contract.name}.{expected.name} is not callable",
+                )
+            )
+            continue
         actual = _method_contract(expected.name, member)
+        if actual.error is not None:
+            violations.append(
+                Violation(
+                    specification,
+                    contract.name,
+                    expected.name,
+                    "UNRESOLVED_SIGNATURE",
+                    actual.error,
+                )
+            )
+            continue
+        for code, detail in _parameter_problems(expected, actual):
+            violations.append(
+                Violation(specification, contract.name, expected.name, code, detail)
+            )
         if (
             expected.return_annotation is not None
             and expected.return_annotation is not Any

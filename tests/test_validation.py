@@ -385,3 +385,144 @@ def test_unresolvable_contract_annotation_is_reported() -> None:
 
     codes = [violation.code for violation in validate(_Implementation(), protocol_class)]
     assert codes == ["UNRESOLVED_SIGNATURE"]
+
+
+class _Tool(Protocol):
+    # 契约侧有意保留字符串注解写法：get_type_hints 必须能解析
+    def get_tools(self) -> "list[Any]": ...  # noqa: UP037
+
+    def get_plugin_info(self) -> "dict[str, str]": ...  # noqa: UP037
+
+
+def _codes(instance: Any, protocol: type[Any] = _Tool) -> list[str]:
+    return [violation.code for violation in validate(instance, protocol)]
+
+
+def test_missing_method_is_reported() -> None:
+    class Partial:
+        def get_tools(self) -> list[Any]:
+            return []
+
+    assert _codes(Partial()) == ["MISSING_METHOD"]
+
+
+def test_not_callable_member_is_reported() -> None:
+    class NotCallable:
+        get_tools = "nope"
+
+        def get_plugin_info(self) -> dict[str, str]:
+            return {}
+
+    assert _codes(NotCallable()) == ["NOT_CALLABLE"]
+
+
+def test_keyword_only_parameter_is_accepted_by_var_keyword() -> None:
+    class Expected(Protocol):
+        def run(self, *, name: str) -> None: ...
+
+    class Concrete:
+        def run(self, **kwargs: str) -> None: ...
+
+    assert _codes(Concrete(), Expected) == []
+
+
+def test_positional_parameter_is_accepted_by_var_positional() -> None:
+    class Expected(Protocol):
+        def run(self, value: int) -> None: ...
+
+    class Concrete:
+        def run(self, *args: int) -> None: ...
+
+    assert _codes(Concrete(), Expected) == []
+
+
+def test_unaccepted_parameter_is_reported() -> None:
+    class Expected(Protocol):
+        def run(self, value: int) -> None: ...
+
+    class Concrete:
+        def run(self, other: int) -> None: ...
+
+    assert _codes(Concrete(), Expected) == ["PARAM_NOT_ACCEPTED"]
+
+
+def test_kind_conflict_is_reported() -> None:
+    class Expected(Protocol):
+        def run(self, value: int) -> None: ...
+
+    class Concrete:
+        def run(self, *, value: int) -> None: ...
+
+    assert _codes(Concrete(), Expected) == ["PARAM_KIND_CONFLICT"]
+
+
+def test_extra_required_parameter_is_reported() -> None:
+    class Concrete:
+        def get_tools(self) -> list[Any]:
+            return []
+
+        def get_plugin_info(self) -> dict[str, str]:
+            return {}
+
+        def reload(self, root: str) -> None: ...
+
+    class Expected(Protocol):
+        def reload(self) -> None: ...
+
+    assert _codes(Concrete(), Expected) == ["PARAM_EXTRA_REQUIRED"]
+
+
+def test_extra_parameter_with_default_is_tolerated() -> None:
+    class Concrete:
+        def get_tools(self) -> list[Any]:
+            return []
+
+        def get_plugin_info(self) -> dict[str, str]:
+            return {}
+
+        def reload(self, root: str = ".") -> None: ...
+
+    class Expected(Protocol):
+        def reload(self) -> None: ...
+
+    assert _codes(Concrete(), Expected) == []
+
+
+def test_parameter_union_may_widen_from_plain() -> None:
+    class Expected(Protocol):
+        def run(self, value: int) -> None: ...
+
+    class Concrete:
+        def run(self, value: "int | str | None") -> None: ...  # noqa: UP037
+
+    assert _codes(Concrete(), Expected) == []
+
+
+class _NotRuntimeProtocol(Protocol):
+    def run(self) -> None: ...
+
+
+def test_non_runtime_protocol_return_degrades_to_mismatch() -> None:
+    class Expected(Protocol):
+        def run(self) -> _NotRuntimeProtocol: ...
+
+    class Concrete:
+        def run(self) -> _ShapeChild:
+            return _ShapeChild()
+
+    assert _codes(Concrete(), Expected) == ["RETURN_ANNOTATION_MISMATCH"]
+
+
+def test_unresolvable_implementation_signature_is_reported() -> None:
+    class BadSignature:
+        __signature__ = "not a signature"
+
+        def __call__(self) -> None: ...
+
+    class Expected(Protocol):
+        def run(self) -> None: ...
+
+    class Concrete:
+        run = BadSignature()
+
+    assert _codes(Concrete(), Expected) == ["UNRESOLVED_SIGNATURE"]
