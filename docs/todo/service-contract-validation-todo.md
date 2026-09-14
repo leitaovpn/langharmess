@@ -34,11 +34,11 @@
   - 契约 `-> str | None` 接受实现 `-> str`（收窄），契约 `-> int | str` 拒绝实现 `-> int | str | None`（放宽）；
   - 返回位置普通类允许子类（`issubclass`），参数位置保持不变性。
 - 已知限制（记录在代码与计划中）：`_parameter_problems` 用位置前缀启发式判定 extra-required，契约 `run(value)` vs 实现 `run(force, value)` 会漏报；彻底解决需改用 `inspect.Signature.bind` 模拟调用。
-- 覆盖率余量偏薄（当前 95.51%，门禁 95%），后续任务的新增分支需自带测试。
+- 最终覆盖率 95.97%（门禁 95%）；新增守卫分支均有单元或真实框架 e2e 覆盖。
 
 ## 验收清单（全部任务完成后）
 
-- [x] `make check` 全绿（233 passed，覆盖率 95.97%）。
+- [x] `make check` 全绿（236 passed，覆盖率 95.97%）。
 - [x] `tests/test_contract_enforcement.py` 覆盖安装期拒绝、绑定期隔离、未 pin 规格跳过。
 - [x] `tests/test_e2e.py` 覆盖 chat/anthropic/responses 三协议路径，以及 agent loop 15 个、API 6 个、stream 2 个、configs 1 个守卫场景。
 - [x] 字符串规格名回归：`manager.get_service("agent.plugin.llm")` 仍命中。
