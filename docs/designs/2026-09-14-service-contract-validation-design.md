@@ -94,9 +94,10 @@ class LLMProvider(Protocol):
 不参与校验。校验失败聚合为 `ContractViolationError(RuntimeError)`，消息形如：
 
 ```text
-plugin 'runtime-llm' violates 'agent.plugin.llm' (LLMProvider):
-  get_model: RETURN_ANNOTATION_MISMATCH (BaseChatModel != object)
+plugin 'runtime-llm' violates 'agent.plugin.llm' (LLMProvider): get_model: RETURN_ANNOTATION_MISMATCH (BaseChatModel != object)
 ```
+
+（实现为单行分号连接：便于 JSON 400 detail 与日志聚合，多个违规用 `"; "` 分隔。）
 
 ## 组件三：安装侧硬拦（PluginManager）
 
