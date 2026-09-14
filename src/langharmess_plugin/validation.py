@@ -165,9 +165,16 @@ def _origin(annotation: Any) -> Any:
 def _annotations_match(expected: Any, actual: Any, *, covariance: bool = False) -> bool:
     """Check an actual annotation against the expected one.
 
-    ``Any`` matches anything at every depth; unions compare arm-wise and
-    ``X | None`` equals ``Optional[X]``; with ``covariance`` a more specific
-    origin is accepted (``dict`` satisfies ``Mapping``).
+    匹配规则按顺序执行：
+    1. ``Any``/``None``（注解缺失）在任意深度都是通配：出现在任一侧即视为匹配；
+    2. 注解相等（``X | None`` 与 ``Optional[X]`` 视为相等）直接通过；
+    3. ``Callable[[...], R]`` 的参数列表按元素逐项比对；
+    4. union 方向：参数位置要求 expected 的每个分支都被 actual 的某个分支覆盖
+       （实现可以加宽入参）；返回位置（``covariance=True``）要求 actual 的每个分支
+       都被 expected 的某个分支覆盖（实现可以收窄返回值）；非 union 一侧视作单分支；
+    5. origin 不一致只在返回位置经 ``issubclass`` 容忍（``dict`` 满足 ``Mapping``，
+       普通类允许返回子类），Protocol 等不可 issubclass 的情形视为不匹配；
+    6. origin 一致时递归比对类型参数，任一侧未参数化（如裸 ``list``）视为通过。
     """
     if expected is Any or expected is None:
         return True
@@ -190,16 +197,35 @@ def _annotations_match(expected: Any, actual: Any, *, covariance: bool = False) 
     actual_origin = _origin(actual)
     expected_args = get_args(expected)
     actual_args = get_args(actual)
-    if expected_origin is None or actual_origin is None:
-        return False
-    if expected_origin is typing.Union and actual_origin is typing.Union:
+    expected_is_union = expected_origin is typing.Union
+    actual_is_union = actual_origin is typing.Union
+    if expected_is_union or actual_is_union:
+        # 非 union 一侧视作单分支，覆盖 ``X | None`` 与 ``X`` 这类混合作比较
+        expected_arms = expected_args if expected_is_union else (expected,)
+        actual_arms = actual_args if actual_is_union else (actual,)
+        if covariance:
+            # 返回位置允许收窄：actual 的每个分支都要被 expected 覆盖
+            return all(
+                any(
+                    _annotations_match(expected_arm, actual_arm, covariance=True)
+                    for expected_arm in expected_arms
+                )
+                for actual_arm in actual_arms
+            )
         return all(
             any(
-                _annotations_match(arm, other, covariance=covariance)
-                for other in actual_args
+                _annotations_match(expected_arm, actual_arm, covariance=covariance)
+                for actual_arm in actual_arms
             )
-            for arm in expected_args
+            for expected_arm in expected_arms
         )
+    if expected_origin is None or actual_origin is None:
+        if covariance and isinstance(expected, type) and isinstance(actual, type):
+            try:
+                return issubclass(actual, expected)
+            except TypeError:
+                return False
+        return False
     if expected_origin is not actual_origin:
         if not (
             covariance

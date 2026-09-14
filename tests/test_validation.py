@@ -134,6 +134,19 @@ class _NestedAny(Protocol):
     def run(self, value: list[Any]) -> list[Any]: ...
 
 
+# 注解在 get_type_hints 中按模块全局解析，普通类必须定义在模块层
+class _ShapeBase:
+    pass
+
+
+class _ShapeChild(_ShapeBase):
+    pass
+
+
+class _OtherShape:
+    pass
+
+
 def test_any_is_a_wildcard_at_every_depth() -> None:
     class Concrete:
         def run(self, value: list[object]) -> list[str]:
@@ -213,14 +226,40 @@ def test_any_actual_annotation_is_accepted() -> None:
 
 
 def test_union_annotations_compare_arm_wise() -> None:
+    # 返回位置 union 按协变方向比对：实现侧每个分支被契约覆盖即可，允许收窄。
+    # 旧用例断言的 `int | str | None` 对 `int | str` 契约（加宽）通过，方向反了；
+    # 新语义下该加宽非法，由 test_return_union_may_not_widen 覆盖。
     class Expected(Protocol):
-        def run(self) -> int | str: ...
+        def run(self) -> int | str | None: ...
 
     class Concrete:
-        def run(self) -> int | str | None:
-            return None
+        def run(self) -> int | str:
+            return 0
 
     assert validate(Concrete(), Expected) == ()
+
+
+def test_return_union_may_narrow() -> None:
+    class Expected(Protocol):
+        def run(self) -> "str | None": ...  # noqa: UP037
+
+    class Concrete:
+        def run(self) -> str:
+            return ""
+
+    assert validate(Concrete(), Expected) == ()
+
+
+def test_return_union_may_not_widen() -> None:
+    class Expected(Protocol):
+        def run(self) -> "int | str": ...  # noqa: UP037
+
+    class Concrete:
+        def run(self) -> "int | str | None":  # noqa: UP037
+            return None
+
+    codes = [violation.code for violation in validate(Concrete(), Expected)]
+    assert codes == ["RETURN_ANNOTATION_MISMATCH"]
 
 
 def test_union_arm_absent_from_actual_is_reported() -> None:
@@ -244,6 +283,39 @@ def test_parameter_annotations_are_invariant() -> None:
 
     codes = [violation.code for violation in validate(Concrete(), Expected)]
     assert codes == ["PARAM_ANNOTATION_MISMATCH"]
+
+
+def test_parameter_union_may_widen() -> None:
+    class Expected(Protocol):
+        def run(self, value: "int | str") -> None: ...  # noqa: UP037
+
+    class Concrete:
+        def run(self, value: "int | str | None") -> None: ...  # noqa: UP037
+
+    assert validate(Concrete(), Expected) == ()
+
+
+def test_return_plain_class_allows_subclass() -> None:
+    class Expected(Protocol):
+        def run(self) -> _ShapeBase: ...
+
+    class Concrete:
+        def run(self) -> _ShapeChild:
+            return _ShapeChild()
+
+    assert validate(Concrete(), Expected) == ()
+
+
+def test_return_plain_class_rejects_unrelated() -> None:
+    class Expected(Protocol):
+        def run(self) -> _ShapeBase: ...
+
+    class Concrete:
+        def run(self) -> _OtherShape:
+            return _OtherShape()
+
+    codes = [violation.code for violation in validate(Concrete(), Expected)]
+    assert codes == ["RETURN_ANNOTATION_MISMATCH"]
 
 
 def test_covariance_rejects_unrelated_return_origin() -> None:
@@ -291,6 +363,19 @@ def test_unannotated_contract_parameter_is_skipped() -> None:
             return 0
 
     assert validate(Concrete(), Loose) == ()
+
+
+def test_unannotated_parameter_is_tolerated() -> None:
+    class Expected(Protocol):
+        def run(self, value: int) -> None: ...
+
+    class Concrete:
+        # 返回侧仍须标注：契约声明 -> None 时缺返回注解会触发 RETURN_ANNOTATION_MISSING，
+        # 本用例只验证参数侧未注解被容忍
+        def run(self, value) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+    assert validate(Concrete(), Expected) == ()
 
 
 def test_unresolvable_contract_annotation_is_reported() -> None:
