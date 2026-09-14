@@ -664,6 +664,13 @@ git commit -m "注解兼容判定：Any 全深度通配、union 归一、返回�
 
 ## Task 4: 方法存在性与参数形状校验
 
+> **执行期修正（2026-09-14 实现后回填）**：`_parameter_problems` 的 `PARAM_EXTRA_REQUIRED`
+> 判定改为位置感知——实现侧未与契约同名的必填参数，若落在契约位置参数的前缀内，视为被位置填充，
+> 不再报 extra-required。否则本节的 `test_unaccepted_parameter_is_reported`（改名参数只应得到
+> `PARAM_NOT_ACCEPTED`）与本节代码片段自相矛盾。已知窄边界：契约 `run(value)` vs 实现
+> `run(force, value)` 会漏报（实际上不存在合规调用）；彻底解决需改用
+> `inspect.Signature.bind` 模拟调用，列为后续可选优化。
+
 **Files:**
 - Modify: `src/langharmess_plugin/validation.py`
 - Modify: `tests/test_validation.py`
