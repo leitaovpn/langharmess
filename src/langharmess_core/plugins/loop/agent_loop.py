@@ -67,6 +67,31 @@ def _extract_content(message: Any) -> str:
     return str(content) if content else ""
 
 
+def _strip_orphan_tool_use(message: Any) -> None:
+    """Drop streamed tool_use fragments that never became completable tool calls.
+
+    Anthropic-style streaming keeps every partial ``tool_use`` block in
+    ``content`` while only completed calls are parsed into ``tool_calls``.
+    Replaying an orphan makes the provider reject the next request because
+    every ``tool_use`` id needs a matching ``tool_result``.
+    """
+    content = getattr(message, "content", None)
+    if not isinstance(content, list):
+        return
+    completed_ids = {
+        tool_call.get("id") for tool_call in getattr(message, "tool_calls", None) or []
+    }
+    message.content = [
+        block
+        for block in content
+        if not (
+            isinstance(block, dict)
+            and block.get("type") == "tool_use"
+            and block.get("id") not in completed_ids
+        )
+    ]
+
+
 @ComponentFactory("agent-loop-factory")
 @Provides(SPEC_AGENT_LOOP)
 @RequiresBest("_llm_provider", SPEC_LLM, optional=False, immediate_rebind=True)
@@ -391,6 +416,7 @@ class PluginAgentLoop:
                 if update is None:
                     continue
                 for updated_message in update.get("messages", []):
+                    _strip_orphan_tool_use(updated_message)
                     if isinstance(updated_message, ToolMessage):
                         yield {
                             "type": "tool_output",
