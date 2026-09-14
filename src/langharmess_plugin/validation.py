@@ -6,7 +6,7 @@ import inspect
 import logging
 import types
 import typing
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Literal, get_args, get_origin, get_type_hints
 
@@ -61,6 +61,34 @@ class Violation:
     method: str
     code: ViolationCode
     detail: str
+
+
+def format_violations(violations: Iterable[Violation]) -> str:
+    """Render violations as ``method: CODE (detail)`` entries."""
+    return "; ".join(
+        f"{violation.method}: {violation.code} ({violation.detail})"
+        for violation in violations
+    )
+
+
+class ContractViolationError(RuntimeError):
+    """Raised when a service does not conform to its contract."""
+
+    def __init__(
+        self,
+        plugin: str,
+        specification: str,
+        protocol: str,
+        violations: tuple[Violation, ...],
+    ) -> None:
+        self.plugin = plugin
+        self.specification = specification
+        self.protocol = protocol
+        self.violations = violations
+        super().__init__(
+            f"plugin {plugin!r} violates {specification!r} ({protocol}): "
+            f"{format_violations(violations)}"
+        )
 
 
 @dataclass(frozen=True)
@@ -276,6 +304,10 @@ def _parameter_problems(
     契约参数在实现侧缺失时，只有 ``*args``（位置方向）或 ``**kwargs``（关键字方向）
     能吸收；实现侧多出的必填参数按位置对齐判断：契约的位置参数会落在实现侧同序
     位置，仅名字不同不重复报告，超出契约位置参数个数的才算冲突。
+
+    已知边界：实现侧把额外必填参数排在契约同名位置参数之前时（如契约 run(value)
+    与实现 run(force, value)），位置前缀判定会漏报；彻底解决需改用
+    inspect.Signature.bind 模拟调用，见 docs/plans/2026-09-14-service-contract-validation-plan.md。
     """
     problems: list[tuple[ViolationCode, str]] = []
     by_name = {parameter.name: parameter for parameter in actual.parameters}

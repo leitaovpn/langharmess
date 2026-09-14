@@ -9,8 +9,10 @@ import pytest
 
 from langharmess_plugin.validation import (
     CONTRACTS,
+    ContractViolationError,
     contract_for,
     describe,
+    format_violations,
     service_contract,
     validate,
 )
@@ -526,3 +528,37 @@ def test_unresolvable_implementation_signature_is_reported() -> None:
         run = BadSignature()
 
     assert _codes(Concrete(), Expected) == ["UNRESOLVED_SIGNATURE"]
+
+
+def test_violation_error_message_is_attributable() -> None:
+    class Concrete:
+        def get_tools(self) -> list[Any]:
+            return []
+
+    violations = validate(Concrete(), _Tool)
+    error = ContractViolationError(
+        plugin="runtime-llm",
+        specification="agent.plugin.llm",
+        protocol="LLMProvider",
+        violations=violations,
+    )
+    assert error.plugin == "runtime-llm"
+    assert error.specification == "agent.plugin.llm"
+    assert error.protocol == "LLMProvider"
+    assert error.violations == violations
+    assert str(error).startswith(
+        "plugin 'runtime-llm' violates 'agent.plugin.llm' (LLMProvider): "
+    )
+    assert "get_plugin_info: MISSING_METHOD" in str(error)
+
+
+def test_format_violations_joins_entries() -> None:
+    class Concrete:
+        def get_tools(self) -> list[Any]:
+            return []
+
+    rendered = format_violations(validate(Concrete(), _Tool))
+    assert rendered == (
+        "get_plugin_info: MISSING_METHOD "
+        "(_Tool.get_plugin_info is not implemented)"
+    )
