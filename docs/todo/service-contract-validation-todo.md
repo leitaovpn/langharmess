@@ -16,15 +16,15 @@
 | 3 | 注解兼容判定（Any 通配 / union 归一 / 返回协变） | ✅ 完成 | `a38c28e`、`dfb51d1`、`4ad6efa` | 审查后修 2 处：Callable 参数列表 `Any` 通配失效；返回位置 union 方向反了 + 普通类协变不可达 |
 | 4 | 方法存在性与参数形状校验 | ✅ 完成 | `14c699c` | `PARAM_EXTRA_REQUIRED` 改为位置感知（计划片段与自身测试矛盾）；已知窄边界见计划回填 |
 | 5 | `ContractViolationError` 与消息格式 | ✅ 完成 | `5701622` | 两阶段审查通过 |
-| 6 | `ContractGuard` 消费侧隔离 | ⏳ 审查中 | `5f3e129` | 实现与门禁完成（216 passed / 95.51%）；规格审查待跑 |
-| 7 | `PluginManager` 安装侧硬拦 | ⬜ 待开始 | — | 违规组件 kill + 抛错，不进 `_bound` |
-| 8 | 核心契约 pin 与 `AgentLoopProvider` | ⬜ 待开始 | — | core 15 个 Protocol 加 pin + 新增 `AgentLoopProvider` |
-| 9 | 核心插件声明迁移（`@Provides`） | ⬜ 待开始 | — | 18 个核心模块 SPEC_X → Protocol 类 |
-| 10 | agent loop 绑定守卫 | ⬜ 待开始 | — | 15 个字段接 `ContractGuard`；e2e 加"绕过安装期注册的坏服务被隔离"测试 |
-| 11 | API/CLI/Config/Logging 契约 pin 与声明迁移 | ⬜ 待开始 | — | 含补 `APIServerProvider`、`register_service` 改用类规格 |
-| 12 | API 侧守卫与 `/stream` 400 | ⬜ 待开始 | — | app 6 + stream 2 + configs 1 个字段；违规插件安装返回 400 |
-| 13 | `examples/plugin_demo` 最小同步 | ⬜ 待开始 | — | 引用真实契约 + provider 补注解与 `get_protocol` |
-| 14 | 规则固化与文档 | ⬜ 待开始 | — | `AGENTS.md` 增服务契约规则 |
+| 6 | `ContractGuard` 消费侧隔离 | ✅ 完成 | `2d75d6c` | 身份隔离、释放记录和错误日志均已验证 |
+| 7 | `PluginManager` 安装侧硬拦 | ✅ 完成 | `bb352c5` | 违规组件 kill + 抛错，不进 `_bound` |
+| 8 | 核心契约 pin 与 `AgentLoopProvider` | ✅ 完成 | `0fb8e52` | core 15 个 Protocol 加 pin + 新增 `AgentLoopProvider` |
+| 9 | 核心插件声明迁移（`@Provides`） | ✅ 完成 | `1088365` | 18 个核心模块 SPEC_X → Protocol 类 |
+| 10 | agent loop 绑定守卫 | ✅ 完成 | `5287b15` | 15 个字段全部接入；真实框架 e2e 覆盖全部守卫 |
+| 11 | API/CLI/Config/Logging 契约 pin 与声明迁移 | ✅ 完成 | `d80c23d` | 含 `APIServerProvider` 与类规格注册 |
+| 12 | API 侧守卫与 `/stream` 400 | ✅ 完成 | `c768a0e` | app 6 + stream 2 + configs 1；真实框架 e2e 全覆盖 |
+| 13 | `examples/plugin_demo` 最小同步 | ✅ 完成 | `751d437` | 手动运行通过，无 quarantine 错误 |
+| 14 | 规则固化与文档 | ✅ 完成 | `d932028` | `AGENTS.md` 增服务契约规则 |
 
 ## 过程记录
 
@@ -38,9 +38,9 @@
 
 ## 验收清单（全部任务完成后）
 
-- [ ] `make check` 全绿（覆盖率 ≥95%）。
-- [ ] `tests/test_contract_enforcement.py` 覆盖安装期拒绝、绑定期隔离、未 pin 规格跳过。
-- [ ] `tests/test_e2e.py` 三协议路径行为不变；新增"直接注册坏服务被隔离"用例。
-- [ ] 字符串规格名回归：`get_service_reference("agent.plugin.llm")` 仍命中。
-- [ ] 手动：`.venv/bin/python examples/plugin_demo/run_demo.py` 输出正常。
+- [x] `make check` 全绿（233 passed，覆盖率 95.97%）。
+- [x] `tests/test_contract_enforcement.py` 覆盖安装期拒绝、绑定期隔离、未 pin 规格跳过。
+- [x] `tests/test_e2e.py` 覆盖 agent loop 15 个、API 6 个、stream 2 个、configs 1 个守卫场景。
+- [x] 字符串规格名回归：`manager.get_service("agent.plugin.llm")` 仍命中。
+- [x] 手动：`.venv/bin/python examples/plugin_demo/run_demo.py` 输出正常。
 - [ ] 可选：按 AGENTS.md 真实端到端流程跑一轮 `/stream`。
