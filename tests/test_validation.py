@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, Optional, Protocol, runtime_checkable
 
 import pytest
@@ -140,6 +140,18 @@ def test_any_is_a_wildcard_at_every_depth() -> None:
             return []
 
     assert validate(Concrete(), _NestedAny) == ()
+
+
+def test_any_wildcards_inside_callable_parameter_lists() -> None:
+    class Expected(Protocol):
+        # 契约侧有意保留字符串注解写法：get_type_hints 必须能解析
+        def run(self) -> "Callable[[Any], str]": ...  # noqa: UP037
+
+    class Concrete:
+        def run(self) -> Callable[[int], str]:
+            return str
+
+    assert validate(Concrete(), Expected) == ()
 
 
 def test_optional_matches_union_spelling() -> None:

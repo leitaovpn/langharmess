@@ -175,16 +175,21 @@ def _annotations_match(expected: Any, actual: Any, *, covariance: bool = False) 
         return True
     if expected == actual:
         return True
+    if isinstance(expected, list) or isinstance(actual, list):
+        # Callable 的参数列表是普通 list：逐项比对
+        return (
+            isinstance(expected, list)
+            and isinstance(actual, list)
+            and len(expected) == len(actual)
+            and all(
+                _annotations_match(item, other, covariance=covariance)
+                for item, other in zip(expected, actual)
+            )
+        )
     expected_origin = _origin(expected)
     actual_origin = _origin(actual)
     expected_args = get_args(expected)
     actual_args = get_args(actual)
-    if isinstance(expected_args, list) and isinstance(actual_args, list):
-        # Callable 的参数列表是普通 list：逐项比对
-        return len(expected_args) == len(actual_args) and all(
-            _annotations_match(item, other, covariance=covariance)
-            for item, other in zip(expected_args, actual_args)
-        )
     if expected_origin is None or actual_origin is None:
         return False
     if expected_origin is typing.Union and actual_origin is typing.Union:
