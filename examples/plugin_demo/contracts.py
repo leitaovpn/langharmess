@@ -1,13 +1,25 @@
-"""Plugin service specification names.
-
-Keeping these as plain strings mirrors Pelix/iPOPO's service-oriented style:
-components are decoupled by specification, not by importing each other's
-concrete classes.
-"""
+"""Demo components consume the real core service contracts."""
 
 from __future__ import annotations
 
-SPEC_LLM = "agent.plugin.llm"
-SPEC_TOOL = "agent.plugin.tools"
-SPEC_MIDDLEWARE = "agent.plugin.middleware"
-SPEC_AGENT_LOOP = "agent.loop"
+from langharmess_core.contracts import (
+    SPEC_AGENT_LOOP,
+    SPEC_LLM,
+    SPEC_MIDDLEWARE,
+    SPEC_TOOL,
+    AgentLoopProvider,
+    LLMProvider,
+    MiddlewareProvider,
+    ToolProvider,
+)
+
+__all__ = [
+    "SPEC_AGENT_LOOP",
+    "SPEC_LLM",
+    "SPEC_MIDDLEWARE",
+    "SPEC_TOOL",
+    "AgentLoopProvider",
+    "LLMProvider",
+    "MiddlewareProvider",
+    "ToolProvider",
+]

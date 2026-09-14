@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from langchain.agents import create_agent
 from pelix.ipopo.decorators import (
     BindField,
@@ -15,20 +17,21 @@ from pelix.ipopo.decorators import (
     Validate,
 )
 
+from langharmess_plugin.validation import ContractGuard
 from plugin_demo.contracts import (
     SPEC_AGENT_LOOP,
-    SPEC_LLM,
-    SPEC_MIDDLEWARE,
-    SPEC_TOOL,
+    LLMProvider,
+    MiddlewareProvider,
+    ToolProvider,
 )
 
 
 @ComponentFactory("agent-loop-factory")
 @Instantiate("agent-loop")
 @Provides(SPEC_AGENT_LOOP)
-@RequiresBest("_llm_provider", SPEC_LLM, optional=False, immediate_rebind=True)
-@Requires("_tool_providers", SPEC_TOOL, aggregate=True, optional=True)
-@Requires("_middleware_providers", SPEC_MIDDLEWARE, aggregate=True, optional=True)
+@RequiresBest("_llm_provider", LLMProvider, optional=False, immediate_rebind=True)
+@Requires("_tool_providers", ToolProvider, aggregate=True, optional=True)
+@Requires("_middleware_providers", MiddlewareProvider, aggregate=True, optional=True)
 class PluginAgentLoop:
     """Rebuilds a LangChain ``create_agent`` graph when plugin services change."""
 
@@ -36,6 +39,13 @@ class PluginAgentLoop:
         self._llm_provider = None
         self._tool_providers = []
         self._middleware_providers = []
+        self._guards = {
+            "_llm_provider": ContractGuard(self, "_llm_provider", LLMProvider),
+            "_tool_providers": ContractGuard(self, "_tool_providers", ToolProvider),
+            "_middleware_providers": ContractGuard(
+                self, "_middleware_providers", MiddlewareProvider
+            ),
+        }
         self._graph = None
 
     @Validate
@@ -46,20 +56,38 @@ class PluginAgentLoop:
     def _invalidate(self, bundle_context):
         self._graph = None
 
+    @BindField("_llm_provider", if_valid=True)
+    def _on_llm_bind(self, field: str, service: Any, reference: Any) -> None:
+        if not self._guards[field].admit(service):
+            self._graph = None
+            return
+        self._rebuild()
+
+    @UnbindField("_llm_provider", if_valid=True)
+    def _on_llm_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._guards[field].release(service)
+        self._graph = None
+
     @BindField("_tool_providers", if_valid=True)
     def _on_tool_bind(self, field, service, reference):
+        if not self._guards[field].admit(service):
+            return
         self._rebuild()
 
     @UnbindField("_tool_providers", if_valid=True)
     def _on_tool_unbind(self, field, service, reference):
+        self._guards[field].release(service)
         self._rebuild()
 
     @BindField("_middleware_providers", if_valid=True)
     def _on_middleware_bind(self, field, service, reference):
+        if not self._guards[field].admit(service):
+            return
         self._rebuild()
 
     @UnbindField("_middleware_providers", if_valid=True)
     def _on_middleware_unbind(self, field, service, reference):
+        self._guards[field].release(service)
         self._rebuild()
 
     def _collect_tools(self):

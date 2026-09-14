@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from langchain.agents.middleware import before_model
 from pelix.ipopo.decorators import (
     ComponentFactory,
@@ -10,7 +12,7 @@ from pelix.ipopo.decorators import (
     Provides,
 )
 
-from plugin_demo.contracts import SPEC_MIDDLEWARE
+from plugin_demo.contracts import MiddlewareProvider
 
 
 @before_model
@@ -22,14 +24,14 @@ def log_before_model(state, runtime):
 
 @ComponentFactory("logging-middleware-factory")
 @Instantiate("logging-middleware")
-@Provides(SPEC_MIDDLEWARE)
+@Provides(MiddlewareProvider)
 @Property("_plugin_name", "plugin.name", "logging-middleware")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 class LoggingMiddlewarePlugin:
     """Exposes one or more LangChain AgentMiddleware instances."""
 
-    def get_middlewares(self):
+    def get_middlewares(self) -> list[Any]:
         return [log_before_model]
 
-    def get_plugin_info(self):
+    def get_plugin_info(self) -> dict[str, str]:
         return {"name": self._plugin_name, "version": self._plugin_version}
