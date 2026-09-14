@@ -12,5 +12,9 @@ cache/
 # Logs
 *.log
 
+# Runtime state
+*.pid
+*.sock
+
 # Hook markers
 .dirty
