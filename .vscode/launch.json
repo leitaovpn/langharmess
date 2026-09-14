@@ -1,0 +1,80 @@
+{
+    // 解释器固定为 .venv（本项目已 editable 安装，直接可 import langharmess_*）
+    "version": "0.2.0",
+    "configurations": [
+        {
+            // python -m langharmess_cli：交互式 REPL。
+            // prompt_toolkit 需要真实 TTY，必须用 integratedTerminal。
+            // 默认配置目录 ~/.langharmess，可用 args 追加 --provider/--dir。
+            "name": "CLI: interactive",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "langharmess_cli",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            // 非交互命令示例（health，会以子进程方式自动拉起 API server）；
+            // 调试其它子命令时替换 args，例如 ["--provider", "chatgpt-chat", "health"]。
+            "name": "CLI: custom args",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "langharmess_cli",
+            "args": ["health"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            // python -m langharmess_cli __serve__：FastAPI/uvicorn 服务端。
+            // 单独调试它时，CLI 的 APIGuard 检测到 /health 可用就不会再拉起子进程。
+            "name": "API server",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "langharmess_cli",
+            "args": ["__serve__", "--host", "127.0.0.1", "--port", "8000"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            // 调试当前打开的测试文件
+            "name": "pytest: current file",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["${file}", "-v"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            // 供测试面板（Testing 视图）的 “Debug Test” 使用
+            "name": "Python: Debug Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "purpose": ["debug-test"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            // 调试任意单个 Python 文件（如 examples/、scripts/）
+            "name": "python: current file",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        }
+    ],
+    "compounds": [
+        {
+            // 同时以调试模式启动服务端和 CLI（CLI 会等 /health 就绪，无需手动等待）
+            "name": "full stack: API server + CLI",
+            "configurations": ["API server", "CLI: interactive"],
+            "stopAll": true,
+            "presentation": {
+                "group": "fullstack",
+                "order": 1
+            }
+        }
+    ]
+}
