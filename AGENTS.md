@@ -32,6 +32,18 @@ Current milestone:
 - Keep runtime plugin registration deterministic: production plugins must not
   use `@Instantiate`; the `PluginManager` controls instantiation and teardown.
 
+### Service contracts
+
+- 每个服务规格都是所属模块 `contracts.py` 里带 `@service_contract(SPEC_X)`
+  的 Protocol；`@Provides`/`@Requires`/`@RequiresBest` 一律声明 Protocol 类，
+  不写裸 `SPEC_*` 字符串。
+- 禁止在 Protocol 类体内写 `__SPECIFICATION__`（会污染 `__protocol_attrs__`
+  并让 `isinstance` 失效），pin 由装饰器在类创建后完成。
+- 消费方在 BindField 回调里用 `ContractGuard` 守卫注入字段；`PluginManager`
+  在安装时硬校验，违规实例被 kill 且不进入绑定集。
+- 语义是「调用兼容性」：参数形状必须能被 contract 声明的方式调用，返回注解
+  必须声明且允许协变（`dict` 满足 `Mapping`），协议里的 `Any` 处处通配。
+
 ### Module file layout
 
 Every runtime module (`langharmess_core`, `langharmess_api`,
