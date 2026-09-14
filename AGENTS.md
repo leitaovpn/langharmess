@@ -120,6 +120,69 @@ The same gate is enforced locally by `.githooks/pre-commit` and in CI by
   `~/.langharmess/langharmess.toml`; pass `--provider` for deterministic
   sessions.
 
+### Real end-to-end testing
+
+`tests/test_e2e.py` covers the plugin framework with fake models. To verify
+the real path (real provider, real agent loop, real tools) use this workflow:
+
+1. Run one protocol per pass, each in an isolated workspace that doubles as
+   the server cwd, so one run cannot poison the next:
+   ```bash
+   cd /tmp/rag-ws/chat                       # workspace with the input files
+   .venv/bin/python -m langharmess_api --host 127.0.0.1 --port 8100 &
+   .venv/bin/python driver.py chat           # POST /stream, collect NDJSON
+   ```
+2. Call `POST /stream` with `{input, model, api_key, base_url, session_id,
+   protocol}` where `protocol` is `chat`, `anthropic`, or `responses`;
+   authenticate with `Authorization: Bearer <plugin.token>` (default
+   `secret`). The server binds the workspace tools to its cwd, so start it
+   in the workspace that holds the test data.
+3. Read the raw NDJSON events: `assistant` (text deltas), `tool_call`,
+   `tool_output`, `usage`, and `error`. Runtime failures arrive as an
+   `error` event inside an HTTP 200 stream — always scan for it instead of
+   trusting the status code. `agent_loop.astream` catches exceptions and
+   turns them into error events.
+4. Verify results twice: the produced artifact (e.g. `answer.json`) and the
+   conversation state (see below). Prefer the artifact because it is what
+   the task actually asked for.
+
+Inspect what the agent actually sent and stored:
+
+```python
+import asyncio, aiosqlite
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+async def dump(db, thread):
+    saver = AsyncSqliteSaver(aiosqlite.connect(db))
+    tup = await saver.aget_tuple({"configurable": {"thread_id": thread}})
+    for m in tup.checkpoint["channel_values"]["messages"]:
+        print(type(m).__name__, getattr(m, "tool_calls", None), str(m.content)[:120])
+```
+
+Pitfalls learned from real runs:
+
+- Keep each test workspace clean (input files only). `list_directory` returns
+  everything in the cwd, so stray artifacts derail the agent into exploring
+  them; a big sibling directory once made one run burn 390k tokens.
+- Before blaming the product, check the input: a corrupted or high-entropy
+  `sales.xlsx` made agents do binary forensics and never finish the task.
+  Validate test data with a real reader (openpyxl) before each pass.
+- The `langchain_community` file tools resolve `root_dir` relative to the
+  process cwd at call time; deleting a running server's cwd yields a bare
+  `FileNotFoundError` that aborts the stream.
+- A tool raising an exception fails the whole request: the error is returned
+  as a stream error, not fed back to the model as a tool result.
+- Streaming aggregators keep partial tool-call fragments in `AIMessage.content`
+  (completed calls also land in `tool_calls`); the anthropic protocol replays
+  content verbatim, so orphan fragments must be stripped. See
+  `_strip_orphan_tool_use` in `agent_loop.py` and `tests/test_agent_loop_tool_fragments.py`.
+- Run a multi-call turn on all three protocols; `chat`/`responses` keep calls
+  in a separate `tool_calls` field while `anthropic` embeds them in content,
+  so protocol-specific breakage only shows up on that protocol.
+- One server per port per pass; kill leftover servers before restarting, and
+  never `rm -rf` a directory a server is still running from. Sessions are
+  isolated only by `session_id`, so give every pass its own id.
+
 ### CodeGraph index
 
 The CodeGraph MCP server (`codegraph_*` tools) and the `codegraph` CLI are
