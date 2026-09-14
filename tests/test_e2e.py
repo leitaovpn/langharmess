@@ -555,6 +555,29 @@ def test_real_plugin_agent_stream_renders_response_once(tmp_path: Path) -> None:
         manager.stop()
 
 
+@pytest.mark.parametrize("protocol", ["chat", "anthropic", "responses"])
+def test_agent_loop_invocation_is_unchanged_for_all_protocols(
+    tmp_path: Path, protocol: str
+) -> None:
+    registry = descriptors(tmp_path)
+    llm_descriptor = registry.get("llm")
+    assert llm_descriptor is not None
+    llm_descriptor.properties["plugin.model.protocol"] = protocol
+    manager = PluginManager(registry)
+    manager.start()
+    try:
+        for item in registry.list():
+            manager.install_plugin(item)
+
+        loop = manager.get_service(SPEC_AGENT_LOOP)
+        result = loop.invoke("What is 2 + 3?")
+
+        assert manager.get_service("agent.plugin.llm").get_protocol() == protocol
+        assert result["messages"][-1].content == "The answer is 5."
+    finally:
+        manager.stop()
+
+
 def test_raw_registered_bad_provider_is_quarantined(tmp_path: Path) -> None:
     registry = descriptors(tmp_path)
     manager = PluginManager(registry)

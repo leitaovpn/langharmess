@@ -40,7 +40,7 @@
 
 - [x] `make check` 全绿（233 passed，覆盖率 95.97%）。
 - [x] `tests/test_contract_enforcement.py` 覆盖安装期拒绝、绑定期隔离、未 pin 规格跳过。
-- [x] `tests/test_e2e.py` 覆盖 agent loop 15 个、API 6 个、stream 2 个、configs 1 个守卫场景。
+- [x] `tests/test_e2e.py` 覆盖 chat/anthropic/responses 三协议路径，以及 agent loop 15 个、API 6 个、stream 2 个、configs 1 个守卫场景。
 - [x] 字符串规格名回归：`manager.get_service("agent.plugin.llm")` 仍命中。
 - [x] 手动：`.venv/bin/python examples/plugin_demo/run_demo.py` 输出正常。
 - [ ] 可选：按 AGENTS.md 真实端到端流程跑一轮 `/stream`。
