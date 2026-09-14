@@ -460,3 +460,51 @@ def validate(instance: Any, protocol: type[Any]) -> tuple[Violation, ...]:
                     )
                 )
     return tuple(violations)
+
+
+def _quarantine(owner: Any, field: str, service: Any) -> None:
+    current = getattr(owner, field, None)
+    if isinstance(current, list):
+        for index, item in enumerate(current):
+            if item is service:
+                del current[index]
+                break
+    elif current is service:
+        setattr(owner, field, None)
+
+
+class ContractGuard:
+    """Validates services bound to one component field, quarantining violators."""
+
+    def __init__(self, owner: Any, field: str, protocol: type[Any]) -> None:
+        self._owner = owner
+        self._field = field
+        self._protocol = protocol
+        self._rejected: dict[int, tuple[Violation, ...]] = {}
+
+    @property
+    def protocol(self) -> type[Any]:
+        return self._protocol
+
+    def rejected(self) -> dict[int, tuple[Violation, ...]]:
+        """Return quarantined services, keyed by object id."""
+        return dict(self._rejected)
+
+    def admit(self, service: Any) -> bool:
+        """Return True for conforming services; quarantine and log the rest."""
+        violations = validate(service, self._protocol)
+        if not violations:
+            return True
+        self._rejected[id(service)] = violations
+        _quarantine(self._owner, self._field, service)
+        LOGGER.error(
+            "service quarantined from %s (%s): %s",
+            self._field,
+            describe(self._protocol).name,
+            format_violations(violations),
+        )
+        return False
+
+    def release(self, service: Any) -> None:
+        """Forget quarantine bookkeeping for an unbound service."""
+        self._rejected.pop(id(service), None)

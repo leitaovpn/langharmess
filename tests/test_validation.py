@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Mapping
 from typing import Any, Optional, Protocol, runtime_checkable
 
@@ -9,6 +10,7 @@ import pytest
 
 from langharmess_plugin.validation import (
     CONTRACTS,
+    ContractGuard,
     ContractViolationError,
     contract_for,
     describe,
@@ -562,3 +564,109 @@ def test_format_violations_joins_entries() -> None:
         "get_plugin_info: MISSING_METHOD "
         "(_Tool.get_plugin_info is not implemented)"
     )
+
+
+def test_format_violations_joins_multiple_entries() -> None:
+    class Concrete:
+        pass
+
+    rendered = format_violations(validate(Concrete(), _Tool))
+    assert rendered == (
+        "get_plugin_info: MISSING_METHOD (_Tool.get_plugin_info is not implemented); "
+        "get_tools: MISSING_METHOD (_Tool.get_tools is not implemented)"
+    )
+
+
+class _Owner:
+    def __init__(self) -> None:
+        self._tools: list[Any] = []
+        self._best: Any = None
+
+
+def test_guard_admits_conforming_service() -> None:
+    owner = _Owner()
+    guard = ContractGuard(owner, "_tools", _Tool)
+
+    class Good:
+        def get_tools(self) -> list[Any]:
+            return []
+
+        def get_plugin_info(self) -> dict[str, str]:
+            return {}
+
+    service = Good()
+    assert guard.admit(service) is True
+    assert guard.rejected() == {}
+
+
+def test_guard_quarantines_aggregate_service(caplog: pytest.LogCaptureFixture) -> None:
+    owner = _Owner()
+    guard = ContractGuard(owner, "_tools", _Tool)
+
+    class Bad:
+        def get_plugin_info(self) -> dict[str, str]:
+            return {}
+
+    service = Bad()
+    owner._tools.append(service)
+
+    with caplog.at_level(logging.ERROR, logger="langharmess.contract"):
+        assert guard.admit(service) is False
+
+    assert owner._tools == []
+    assert "get_tools: MISSING_METHOD" in caplog.text
+    assert guard.rejected() == {id(service): validate(service, _Tool)}
+
+
+def test_guard_quarantines_best_field() -> None:
+    owner = _Owner()
+    guard = ContractGuard(owner, "_best", _Tool)
+
+    class Bad:
+        def get_plugin_info(self) -> dict[str, str]:
+            return {}
+
+    service = Bad()
+    owner._best = service
+
+    assert guard.admit(service) is False
+    assert owner._best is None
+
+
+def test_guard_release_forgets_service() -> None:
+    owner = _Owner()
+    guard = ContractGuard(owner, "_tools", _Tool)
+
+    class Bad:
+        def get_plugin_info(self) -> dict[str, str]:
+            return {}
+
+    service = Bad()
+    owner._tools.append(service)
+    guard.admit(service)
+    assert len(guard.rejected()) == 1
+
+    guard.release(service)
+    assert guard.rejected() == {}
+
+
+def test_guard_quarantine_ignores_unrelated_list_entries() -> None:
+    owner = _Owner()
+    guard = ContractGuard(owner, "_tools", _Tool)
+
+    class Bad:
+        def get_plugin_info(self) -> dict[str, str]:
+            return {}
+
+    class Twin:
+        def get_plugin_info(self) -> dict[str, str]:
+            return {}
+
+        def __eq__(self, other: object) -> bool:  # 服务可能重载 __eq__，隔离必须按身份
+            return True
+
+    service = Bad()
+    twin = Twin()
+    owner._tools.extend([twin, service])
+    assert guard.admit(service) is False
+    assert owner._tools == [twin]
