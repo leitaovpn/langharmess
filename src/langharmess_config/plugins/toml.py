@@ -9,11 +9,11 @@ from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides, Validate
 
-from langharmess_config.contracts import SPEC_CONFIG_PROVIDER
+from langharmess_config.contracts import ConfigProvider
 
 
 @ComponentFactory("toml-config-plugin-factory")
-@Provides(SPEC_CONFIG_PROVIDER)
+@Provides(ConfigProvider)
 @Property(
     "_config_path",
     "plugin.config.path",

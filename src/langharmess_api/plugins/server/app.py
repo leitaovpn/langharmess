@@ -15,25 +15,27 @@ from pelix.ipopo.decorators import (
 )
 
 from langharmess_api.contracts import (
-    SPEC_API_SERVER,
-    SPEC_AUTH,
-    SPEC_DB,
-    SPEC_RATE_LIMIT,
-    SPEC_ROUTE,
+    APIServerProvider,
+    AuthProvider,
+    DBProvider,
+    RateLimitProvider,
+    RouteProvider,
 )
-from langharmess_config.contracts import SPEC_CONFIGS
+from langharmess_config.contracts import Configs
 from langharmess_core.common.dependencies import get_db_session
-from langharmess_logging.contracts import SPEC_LOG
+from langharmess_logging.contracts import LogProvider
 
 
 @ComponentFactory("api-server-factory")
-@Provides(SPEC_API_SERVER)
-@Requires("_route_providers", SPEC_ROUTE, aggregate=True, optional=True)
-@RequiresBest("_auth_provider", SPEC_AUTH, optional=True, immediate_rebind=True)
-@RequiresBest("_rate_limit_provider", SPEC_RATE_LIMIT, optional=True, immediate_rebind=True)
-@RequiresBest("_db_provider", SPEC_DB, optional=True, immediate_rebind=True)
-@RequiresBest("_configs", SPEC_CONFIGS, optional=True, immediate_rebind=True)
-@RequiresBest("_log_provider", SPEC_LOG, optional=True, immediate_rebind=True)
+@Provides(APIServerProvider)
+@Requires("_route_providers", RouteProvider, aggregate=True, optional=True)
+@RequiresBest("_auth_provider", AuthProvider, optional=True, immediate_rebind=True)
+@RequiresBest(
+    "_rate_limit_provider", RateLimitProvider, optional=True, immediate_rebind=True
+)
+@RequiresBest("_db_provider", DBProvider, optional=True, immediate_rebind=True)
+@RequiresBest("_configs", Configs, optional=True, immediate_rebind=True)
+@RequiresBest("_log_provider", LogProvider, optional=True, immediate_rebind=True)
 class APIServerService:
     """Builds a FastAPI app from the currently injected plugins."""
 

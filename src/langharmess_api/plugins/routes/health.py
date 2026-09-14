@@ -5,12 +5,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_api.contracts import SPEC_ROUTE
+from langharmess_api.contracts import RouteProvider
 from langharmess_core.common.dependencies import get_db_session
 
 
 @ComponentFactory("api-health-plugin-factory")
-@Provides(SPEC_ROUTE)
+@Provides(RouteProvider)
 @Property("_plugin_name", "plugin.name", "health")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 class HealthRoutePlugin:

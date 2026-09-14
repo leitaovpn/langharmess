@@ -8,7 +8,7 @@ from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, Provides, Requires
 
-from langharmess_config.contracts import SPEC_CONFIG_PROVIDER, SPEC_CONFIGS
+from langharmess_config.contracts import ConfigProvider, Configs
 
 LOGGER = logging.getLogger("langharmess.config")
 
@@ -16,8 +16,8 @@ SUPPORTED_PROTOCOLS = {"anthropic", "chat", "responses"}
 
 
 @ComponentFactory("configs-plugin-factory")
-@Provides(SPEC_CONFIGS)
-@Requires("_providers", SPEC_CONFIG_PROVIDER, aggregate=True, optional=True)
+@Provides(Configs)
+@Requires("_providers", ConfigProvider, aggregate=True, optional=True)
 class ConfigsPlugin:
     def __init__(self) -> None:
         self._providers: list[Any] = []

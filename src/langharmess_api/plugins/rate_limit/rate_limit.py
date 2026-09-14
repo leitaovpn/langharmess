@@ -8,11 +8,11 @@ from collections.abc import Callable
 from fastapi import HTTPException, Request
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_api.contracts import SPEC_RATE_LIMIT
+from langharmess_api.contracts import RateLimitProvider
 
 
 @ComponentFactory("api-rate-limit-plugin-factory")
-@Provides(SPEC_RATE_LIMIT)
+@Provides(RateLimitProvider)
 @Property("_plugin_name", "plugin.name", "rate-limit")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_limit", "plugin.limit", 2)

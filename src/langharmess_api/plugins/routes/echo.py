@@ -5,11 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_api.contracts import SPEC_ROUTE
+from langharmess_api.contracts import RouteProvider
 
 
 @ComponentFactory("api-echo-plugin-factory")
-@Provides(SPEC_ROUTE)
+@Provides(RouteProvider)
 @Property("_plugin_name", "plugin.name", "echo")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 class EchoRoutePlugin:

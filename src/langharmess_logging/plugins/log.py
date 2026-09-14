@@ -14,11 +14,11 @@ from pelix.ipopo.decorators import (
     Validate,
 )
 
-from langharmess_logging.contracts import SPEC_LOG
+from langharmess_logging.contracts import LogProvider
 
 
 @ComponentFactory("file-log-plugin-factory")
-@Provides(SPEC_LOG)
+@Provides(LogProvider)
 @Property("_directory", "plugin.log.directory", "~/.langharmess")
 @Property("_logger_name", "plugin.log.name", "langharmess")
 @Property("_filename", "plugin.log.filename", "langharmess.log")

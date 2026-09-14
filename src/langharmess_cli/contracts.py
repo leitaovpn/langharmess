@@ -6,6 +6,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
+from langharmess_plugin.validation import service_contract
+
 SPEC_CLI_COMMAND = "cli.plugin.command"
 SPEC_CLI_RUNNER = "cli.runner"
 SPEC_CLI_RENDERER = "cli.plugin.renderer"
@@ -39,6 +41,7 @@ class InteractiveCommandContext(Protocol):
     def switch_provider(self, name: str) -> bool: ...
 
 
+@service_contract(SPEC_CLI_COMMAND)
 @runtime_checkable
 class CLICommandProvider(Protocol):
     def get_commands(self) -> list[CommandSpec]: ...
@@ -48,6 +51,7 @@ class CLICommandProvider(Protocol):
     def get_plugin_info(self) -> dict[str, str]: ...
 
 
+@service_contract(SPEC_CLI_RENDERER)
 @runtime_checkable
 class InteractiveRenderer(Protocol):
     def show_welcome(self, text: str) -> None: ...

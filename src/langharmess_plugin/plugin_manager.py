@@ -7,7 +7,7 @@ from typing import Any
 from pelix.framework import BundleContext, Framework, FrameworkFactory, create_framework
 from pelix.ipopo.constants import SERVICE_IPOPO
 
-from langharmess_plugin.contracts import SPEC_PLUGIN_REGISTRAR
+from langharmess_plugin.contracts import PluginRegistrar
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 from langharmess_plugin.validation import (
     ContractViolationError,
@@ -42,7 +42,7 @@ class PluginManager:
         assert ipopo_reference is not None
         self._ipopo = self._context.get_service(ipopo_reference)
         self._registration = self._context.register_service(
-            SPEC_PLUGIN_REGISTRAR, self, {}
+            PluginRegistrar, self, {}
         )
 
     def stop(self) -> None:

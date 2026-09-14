@@ -9,7 +9,7 @@ from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
 from langharmess_cli.common.api_guard import APIGuard
 from langharmess_cli.contracts import (
-    SPEC_CLI_COMMAND,
+    CLICommandProvider,
     CommandSpec,
     InteractiveCommandContext,
     InteractiveCommandSpec,
@@ -17,7 +17,7 @@ from langharmess_cli.contracts import (
 
 
 @ComponentFactory("cli-health-plugin-factory")
-@Provides(SPEC_CLI_COMMAND)
+@Provides(CLICommandProvider)
 @Property("_plugin_name", "plugin.name", "health-command")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_base_url", "plugin.base_url", "http://127.0.0.1:8000")

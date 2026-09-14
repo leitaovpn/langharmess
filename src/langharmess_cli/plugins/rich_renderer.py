@@ -15,7 +15,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from langharmess_cli.common.i18n import tr
-from langharmess_cli.contracts import SPEC_CLI_RENDERER
+from langharmess_cli.contracts import InteractiveRenderer
 
 SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 THROTTLE_SECONDS = 0.125
@@ -39,7 +39,7 @@ class _ToolRun:
 
 
 @ComponentFactory("rich-cli-renderer-factory")
-@Provides(SPEC_CLI_RENDERER)
+@Provides(InteractiveRenderer)
 @Property("_plugin_name", "plugin.name", "rich-renderer")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_locale", "plugin.ui.locale", "en")

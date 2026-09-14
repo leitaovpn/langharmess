@@ -6,7 +6,7 @@ from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
 from langharmess_cli.common.i18n import tr
 from langharmess_cli.contracts import (
-    SPEC_CLI_COMMAND,
+    CLICommandProvider,
     CommandSpec,
     InteractiveCommandContext,
     InteractiveCommandSpec,
@@ -14,7 +14,7 @@ from langharmess_cli.contracts import (
 
 
 @ComponentFactory("cli-shell-command-factory")
-@Provides(SPEC_CLI_COMMAND)
+@Provides(CLICommandProvider)
 @Property("_plugin_name", "plugin.name", "shell-command")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_locale", "plugin.ui.locale", "en")

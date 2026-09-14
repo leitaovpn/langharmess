@@ -6,11 +6,11 @@ from collections.abc import Callable
 
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_api.contracts import SPEC_DB
+from langharmess_api.contracts import DBProvider
 
 
 @ComponentFactory("api-db-plugin-factory")
-@Provides(SPEC_DB)
+@Provides(DBProvider)
 @Property("_plugin_name", "plugin.name", "db")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 class DBPlugin:

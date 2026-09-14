@@ -8,19 +8,22 @@ import types
 import typing
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Literal, get_args, get_origin, get_type_hints
+from typing import Any, Literal, TypeVar, get_args, get_origin, get_type_hints
 
 LOGGER = logging.getLogger("langharmess.contract")
 
 SPECIFICATION_FIELD = "__SPECIFICATION__"
 
 CONTRACTS: dict[str, type[Any]] = {}
+ContractClass = TypeVar("ContractClass", bound=type[Any])
 
 
-def service_contract(specification: str) -> Callable[[type[Any]], type[Any]]:
+def service_contract(
+    specification: str,
+) -> Callable[[ContractClass], ContractClass]:
     """Pin a Protocol class to a Pelix specification name and register it."""
 
-    def decorate(cls: type[Any]) -> type[Any]:
+    def decorate(cls: ContractClass) -> ContractClass:
         existing = CONTRACTS.get(specification)
         if existing is not None and existing is not cls:
             raise ValueError(

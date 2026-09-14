@@ -8,11 +8,11 @@ from typing import Any
 from fastapi import HTTPException, Request
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_api.contracts import SPEC_AUTH
+from langharmess_api.contracts import AuthProvider
 
 
 @ComponentFactory("api-auth-plugin-factory")
-@Provides(SPEC_AUTH)
+@Provides(AuthProvider)
 @Property("_plugin_name", "plugin.name", "auth")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_token", "plugin.token", "secret")

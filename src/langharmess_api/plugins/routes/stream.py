@@ -13,10 +13,10 @@ from fastapi.responses import StreamingResponse
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides, RequiresBest
 from pydantic import BaseModel
 
-from langharmess_api.contracts import SPEC_ROUTE
-from langharmess_core.contracts import SPEC_AGENT_LOOP, ModelProtocol
+from langharmess_api.contracts import RouteProvider
+from langharmess_core.contracts import AgentLoopProvider, ModelProtocol
 from langharmess_core.plugin import runtime_llm_descriptor
-from langharmess_plugin.contracts import SPEC_PLUGIN_REGISTRAR
+from langharmess_plugin.contracts import PluginRegistrar
 
 LOGGER = logging.getLogger("langharmess.server")
 
@@ -39,12 +39,12 @@ class StreamRequest(BaseModel):
 
 
 @ComponentFactory("api-stream-route-factory")
-@Provides(SPEC_ROUTE)
+@Provides(RouteProvider)
 @Property("_plugin_name", "plugin.name", "stream")
 @Property("_plugin_version", "plugin.version", "1.0.0")
-@RequiresBest("_agent_loop", SPEC_AGENT_LOOP, optional=True, immediate_rebind=True)
+@RequiresBest("_agent_loop", AgentLoopProvider, optional=True, immediate_rebind=True)
 @RequiresBest(
-    "_plugin_registrar", SPEC_PLUGIN_REGISTRAR, optional=True, immediate_rebind=True
+    "_plugin_registrar", PluginRegistrar, optional=True, immediate_rebind=True
 )
 class StreamRoutePlugin:
     def __init__(self) -> None:
