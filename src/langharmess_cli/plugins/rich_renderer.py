@@ -20,6 +20,10 @@ from langharmess_cli.i18n import tr
 SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 THROTTLE_SECONDS = 0.125
 ARG_SUMMARY_MAX = 60
+# Status line plus slack: the live frame must stay shorter than the terminal,
+# otherwise rich cannot move the cursor back to the top and each re-render
+# duplicates the whole frame into the scrollback.
+LIVE_MARGIN = 3
 
 
 @dataclass
@@ -173,7 +177,47 @@ class RichInteractiveRenderer:
         if not force and now - self._last_frame < THROTTLE_SECONDS:
             return
         self._last_frame = now
+        committed = self._commit_overflow()
+        if self._live is not None and committed:
+            self._live.update(self._build_frame())
+        for chunk in committed:
+            self.console.print(chunk)
         self._render_frame()
+
+    def _live_budget(self) -> int:
+        return max(1, self.console.height - LIVE_MARGIN)
+
+    def _commit_overflow(self) -> list[Any]:
+        """Trim segments that no longer fit the live frame; return them for printing."""
+        committed: list[Any] = []
+        while True:
+            rendered = self.console.render_lines(
+                self._build_frame(), self.console.options
+            )
+            excess = len(rendered) - self._live_budget()
+            if excess <= 0 or not self._segments:
+                return committed
+            head = self._segments[0]
+            if not isinstance(head, str):
+                committed.append(self._tool_line(head))
+                self._segments.pop(0)
+                continue
+            lines = head.split("\n")
+            if len(lines) > 1:
+                cut = min(excess, len(lines) - 1)
+                for boundary in range(cut, 0, -1):
+                    if lines[boundary - 1].strip() == "":
+                        cut = boundary
+                        break
+                committed.append(Markdown("\n".join(lines[:cut])))
+                self._segments[0] = "\n".join(lines[cut:])
+            else:
+                width = max(20, self.console.width - 2)
+                keep_chars = max(width, len(head) - (excess + 1) * width)
+                committed.append(Markdown(head[:keep_chars]))
+                self._segments[0] = head[keep_chars:]
+            if not self._segments[0]:
+                self._segments.pop(0)
 
     def _render_frame(self) -> None:
         self._spinner_idx += 1
@@ -182,7 +226,7 @@ class RichInteractiveRenderer:
                 self._build_frame(),
                 console=self.console,
                 refresh_per_second=8,
-                vertical_overflow="visible",
+                vertical_overflow="crop",
             )
             self._live.start(refresh=True)
         else:

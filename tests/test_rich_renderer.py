@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from io import StringIO
 from typing import Any
 
@@ -13,6 +14,86 @@ from langharmess_cli.contracts import InteractiveRenderer
 from langharmess_cli.plugins.rich_renderer import RichInteractiveRenderer
 
 USAGE = {"type": "usage", "input_tokens": 10, "output_tokens": 2, "total_tokens": 12}
+
+
+class _TerminalEmulator:
+    """Minimal VT100 emulator covering the control codes rich Live emits.
+
+    Tracks the visible pane plus scrolled history so tests can assert what a
+    real terminal would show after a stream of live re-renders.
+    """
+
+    def __init__(self, rows: int, cols: int) -> None:
+        self.rows = rows
+        self.cols = cols
+        self.screen = [[" "] * cols for _ in range(rows)]
+        self.history: list[str] = []
+        self.row = 0
+        self.col = 0
+
+    def _scroll(self) -> None:
+        self.history.append("".join(self.screen[0]).rstrip())
+        self.screen.pop(0)
+        self.screen.append([" "] * self.cols)
+
+    def _csi(self, params: str, final: str) -> None:
+        arg = int(params) if params.isdigit() else 1
+        if final == "A":
+            self.row = max(0, self.row - arg)
+        elif final == "B":
+            self.row = min(self.rows - 1, self.row + arg)
+        elif final == "C":
+            self.col = min(self.cols - 1, self.col + arg)
+        elif final == "D":
+            self.col = max(0, self.col - arg)
+        elif final == "K":
+            mode = params or "0"
+            start, end = (self.col, self.cols) if mode == "0" else (0, self.cols)
+            if mode == "1":
+                start, end = 0, self.col + 1
+            for x in range(start, end):
+                self.screen[self.row][x] = " "
+        elif final == "J" and params == "2":
+            self.screen = [[" "] * self.cols for _ in range(self.rows)]
+
+    def feed(self, data: str) -> None:
+        i = 0
+        n = len(data)
+        while i < n:
+            ch = data[i]
+            if ch == "\x1b":
+                if i + 1 < n and data[i + 1] == "[":
+                    j = i + 2
+                    while j < n and not ("@" <= data[j] <= "~"):
+                        j += 1
+                    self._csi(data[i + 2 : j], data[j] if j < n else "")
+                    i = j + 1
+                else:
+                    i += 2
+            elif ch == "\r":
+                self.col = 0
+                i += 1
+            elif ch == "\n":
+                if self.row == self.rows - 1:
+                    self._scroll()
+                else:
+                    self.row += 1
+                self.col = 0
+                i += 1
+            else:
+                if self.col < self.cols:
+                    self.screen[self.row][self.col] = ch
+                self.col += 1
+                i += 1
+
+    def lines(self) -> list[str]:
+        return self.history + ["".join(row).rstrip() for row in self.screen]
+
+
+def terminal_lines(raw: str, rows: int = 24, cols: int = 100) -> list[str]:
+    emulator = _TerminalEmulator(rows, cols)
+    emulator.feed(raw)
+    return emulator.lines()
 
 
 def make_renderer(terminal: bool = False) -> tuple[RichInteractiveRenderer, StringIO]:
@@ -284,3 +365,60 @@ def test_assistant_events_are_throttled_but_flushes_force(
     renderer.render_event({"type": "assistant", "content": "c"})  # window elapsed
     renderer.finish_response()  # flush forces a final frame
     assert frames == 4
+
+
+def test_long_stream_renders_each_segment_exactly_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = StringIO()
+    renderer = RichInteractiveRenderer()
+    renderer.console = Console(file=output, force_terminal=True, width=100, height=24)
+    patch_clock(monkeypatch, [i * 0.2 for i in range(200)])
+    renderer.start_response()
+    for index in range(30):
+        renderer.render_event({"type": "assistant", "content": f"\n\nSEG-{index:04d}"})
+    renderer.finish_response()
+
+    visible = "\n".join(terminal_lines(output.getvalue()))
+    segments = re.findall(r"SEG-\d{4}", visible)
+    assert segments.count("SEG-0001") == 1
+    assert len(segments) == 30
+
+
+def test_overflow_commit_moves_tool_row_out_of_the_frame() -> None:
+    output = StringIO()
+    renderer = RichInteractiveRenderer()
+    renderer.console = Console(file=output, force_terminal=True, width=40, height=6)
+    renderer.start_response()
+    renderer._segments = [
+        renderer_module._ToolRun(
+            name="bash", args_summary="pwd", started=0.0, status="done",
+            duration_ms=5, output_bytes=10,
+        ),
+        "tail\n" * 10,
+    ]
+
+    committed = renderer._commit_overflow()
+
+    assert all(
+        not isinstance(segment, renderer_module._ToolRun) for segment in renderer._segments
+    )
+    assert "bash" in render_plain(committed[0])
+
+
+def test_overflow_commit_splits_unbroken_long_line() -> None:
+    output = StringIO()
+    renderer = RichInteractiveRenderer()
+    renderer.console = Console(file=output, force_terminal=True, width=40, height=6)
+    renderer.start_response()
+    long_text = "x" * 500
+    renderer._segments = [long_text, "tail"]
+
+    committed = renderer._commit_overflow()
+
+    assert len(renderer._segments) == 2
+    assert renderer._segments[1] == "tail"
+    head = renderer._segments[0]
+    assert isinstance(head, str)
+    assert len(head) < len(long_text)
+    assert "x" in render_plain(committed[0])
