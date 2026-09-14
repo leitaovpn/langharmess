@@ -10,11 +10,11 @@ import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from pelix.ipopo.decorators import ComponentFactory, Invalidate, Property, Provides
 
-from langharmess_core.contracts import SPEC_CHECKPOINTER
+from langharmess_core.contracts import CheckpointerProvider
 
 
 @ComponentFactory("sqlite-checkpointer-plugin-factory")
-@Provides(SPEC_CHECKPOINTER)
+@Provides(CheckpointerProvider)
 @Property("_plugin_name", "plugin.name", "sqlite-checkpointer")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_ranking", "service.ranking", 1000)

@@ -6,11 +6,11 @@ from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, HiddenProperty, Property, Provides
 
-from langharmess_core.contracts import SPEC_CACHE
+from langharmess_core.contracts import CacheProvider
 
 
 @ComponentFactory("cache-plugin-factory")
-@Provides(SPEC_CACHE)
+@Provides(CacheProvider)
 @Property("_plugin_name", "plugin.name", "cache-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @HiddenProperty("_cache", "plugin.cache", None)

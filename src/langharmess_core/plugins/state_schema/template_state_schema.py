@@ -6,11 +6,11 @@ from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, HiddenProperty, Property, Provides
 
-from langharmess_core.contracts import SPEC_STATE_SCHEMA
+from langharmess_core.contracts import StateSchemaProvider
 
 
 @ComponentFactory("state-schema-plugin-factory")
-@Provides(SPEC_STATE_SCHEMA)
+@Provides(StateSchemaProvider)
 @Property("_plugin_name", "plugin.name", "state-schema-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @HiddenProperty("_state_schema", "plugin.state_schema", None)

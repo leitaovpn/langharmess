@@ -7,11 +7,11 @@ from typing import Any
 from langchain.agents.middleware import before_model
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_core.contracts import SPEC_MIDDLEWARE
+from langharmess_core.contracts import MiddlewareProvider
 
 
 @ComponentFactory("middleware-plugin-factory")
-@Provides(SPEC_MIDDLEWARE)
+@Provides(MiddlewareProvider)
 @Property("_plugin_name", "plugin.name", "middleware-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 class TemplateMiddlewarePlugin:

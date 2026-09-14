@@ -7,11 +7,11 @@ from langchain_community.tools import ShellTool
 from langchain_core.tools import BaseTool
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_core.contracts import SPEC_TOOL
+from langharmess_core.contracts import ToolProvider
 
 
 @ComponentFactory("workspace-tools-plugin-factory")
-@Provides(SPEC_TOOL)
+@Provides(ToolProvider)
 @Property("_plugin_name", "plugin.name", "workspace-tools")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_root_dir", "plugin.tools.root_dir", ".")

@@ -6,11 +6,11 @@ from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, HiddenProperty, Property, Provides
 
-from langharmess_core.contracts import SPEC_STORE
+from langharmess_core.contracts import StoreProvider
 
 
 @ComponentFactory("store-plugin-factory")
-@Provides(SPEC_STORE)
+@Provides(StoreProvider)
 @Property("_plugin_name", "plugin.name", "store-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @HiddenProperty("_store", "plugin.store", None)

@@ -10,11 +10,11 @@ from langchain_openai import ChatOpenAI
 from pelix.ipopo.decorators import ComponentFactory, HiddenProperty, Property, Provides
 from pydantic import SecretStr
 
-from langharmess_core.contracts import SPEC_LLM, ModelProtocol
+from langharmess_core.contracts import LLMProvider, ModelProtocol
 
 
 @ComponentFactory("llm-plugin-factory")
-@Provides(SPEC_LLM)
+@Provides(LLMProvider)
 @Property("_plugin_name", "plugin.name", "llm-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_ranking", "service.ranking", 100)

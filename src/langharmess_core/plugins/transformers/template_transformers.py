@@ -6,11 +6,11 @@ from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_core.contracts import SPEC_TRANSFORMERS
+from langharmess_core.contracts import TransformersProvider
 
 
 @ComponentFactory("transformers-plugin-factory")
-@Provides(SPEC_TRANSFORMERS)
+@Provides(TransformersProvider)
 @Property("_plugin_name", "plugin.name", "transformers-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_items", "plugin.transformers", None)

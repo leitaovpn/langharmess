@@ -6,11 +6,11 @@ from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, HiddenProperty, Property, Provides
 
-from langharmess_core.contracts import SPEC_RESPONSE_FORMAT
+from langharmess_core.contracts import ResponseFormatProvider
 
 
 @ComponentFactory("response-format-plugin-factory")
-@Provides(SPEC_RESPONSE_FORMAT)
+@Provides(ResponseFormatProvider)
 @Property("_plugin_name", "plugin.name", "response-format-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @HiddenProperty("_response_format", "plugin.response_format", None)

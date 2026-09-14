@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_core.contracts import SPEC_SYSTEM_PROMPT
+from langharmess_core.contracts import SystemPromptProvider
 
 
 @ComponentFactory("system-prompt-plugin-factory")
-@Provides(SPEC_SYSTEM_PROMPT)
+@Provides(SystemPromptProvider)
 @Property("_plugin_name", "plugin.name", "system-prompt-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_system_prompt", "plugin.system_prompt", "")

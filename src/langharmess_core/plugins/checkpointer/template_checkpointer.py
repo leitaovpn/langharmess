@@ -6,11 +6,11 @@ from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, HiddenProperty, Property, Provides
 
-from langharmess_core.contracts import SPEC_CHECKPOINTER
+from langharmess_core.contracts import CheckpointerProvider
 
 
 @ComponentFactory("checkpointer-plugin-factory")
-@Provides(SPEC_CHECKPOINTER)
+@Provides(CheckpointerProvider)
 @Property("_plugin_name", "plugin.name", "checkpointer-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @HiddenProperty("_checkpointer", "plugin.checkpointer", None)

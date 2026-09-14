@@ -6,11 +6,11 @@ from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, HiddenProperty, Property, Provides
 
-from langharmess_core.contracts import SPEC_CONTEXT_SCHEMA
+from langharmess_core.contracts import ContextSchemaProvider
 
 
 @ComponentFactory("context-schema-plugin-factory")
-@Provides(SPEC_CONTEXT_SCHEMA)
+@Provides(ContextSchemaProvider)
 @Property("_plugin_name", "plugin.name", "context-schema-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @HiddenProperty("_context_schema", "plugin.context_schema", None)

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_core.contracts import SPEC_DEBUG
+from langharmess_core.contracts import DebugProvider
 
 
 @ComponentFactory("debug-plugin-factory")
-@Provides(SPEC_DEBUG)
+@Provides(DebugProvider)
 @Property("_plugin_name", "plugin.name", "debug-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_debug", "plugin.debug", False)

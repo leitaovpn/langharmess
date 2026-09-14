@@ -19,7 +19,6 @@ from pelix.ipopo.decorators import (
 )
 
 from langharmess_core.contracts import (
-    SPEC_AGENT_LOOP,
     SPEC_CACHE,
     SPEC_CHECKPOINTER,
     SPEC_CONTEXT_SCHEMA,
@@ -35,6 +34,7 @@ from langharmess_core.contracts import (
     SPEC_SYSTEM_PROMPT,
     SPEC_TOOL,
     SPEC_TRANSFORMERS,
+    AgentLoopProvider,
 )
 
 
@@ -93,7 +93,7 @@ def _strip_orphan_tool_use(message: Any) -> None:
 
 
 @ComponentFactory("agent-loop-factory")
-@Provides(SPEC_AGENT_LOOP)
+@Provides(AgentLoopProvider)
 @RequiresBest("_llm_provider", SPEC_LLM, optional=False, immediate_rebind=True)
 @Requires("_tool_providers", SPEC_TOOL, aggregate=True, optional=True)
 @Requires("_middleware_providers", SPEC_MIDDLEWARE, aggregate=True, optional=True)

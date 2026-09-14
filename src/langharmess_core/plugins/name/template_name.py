@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_core.contracts import SPEC_NAME
+from langharmess_core.contracts import NameProvider
 
 
 @ComponentFactory("agent-name-plugin-factory")
-@Provides(SPEC_NAME)
+@Provides(NameProvider)
 @Property("_plugin_name", "plugin.name", "agent-name-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_agent_name", "plugin.agent_name", "")

@@ -6,11 +6,11 @@ from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_core.contracts import SPEC_INTERRUPT_AFTER
+from langharmess_core.contracts import InterruptAfterProvider
 
 
 @ComponentFactory("interrupt-after-plugin-factory")
-@Provides(SPEC_INTERRUPT_AFTER)
+@Provides(InterruptAfterProvider)
 @Property("_plugin_name", "plugin.name", "interrupt-after-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_items", "plugin.interrupt_after", None)
