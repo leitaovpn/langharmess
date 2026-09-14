@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from langchain_core.language_models.chat_models import BaseChatModel
+
+from langharmess_plugin.validation import service_contract
 
 SPEC_LLM = "agent.plugin.llm"
 SPEC_TOOL = "agent.plugin.tools"
@@ -44,6 +47,7 @@ ALL_PLUGIN_SPECS = (
 )
 
 
+@service_contract(SPEC_LLM)
 @runtime_checkable
 class LLMProvider(Protocol):
     """Contract implemented by every ``agent.plugin.llm`` service."""
@@ -55,6 +59,7 @@ class LLMProvider(Protocol):
     def get_plugin_info(self) -> dict[str, str]: ...
 
 
+@service_contract(SPEC_TOOL)
 @runtime_checkable
 class ToolProvider(Protocol):
     """Contract implemented by every ``agent.plugin.tools`` service."""
@@ -64,6 +69,7 @@ class ToolProvider(Protocol):
     def get_plugin_info(self) -> dict[str, str]: ...
 
 
+@service_contract(SPEC_MIDDLEWARE)
 @runtime_checkable
 class MiddlewareProvider(Protocol):
     """Contract implemented by every ``agent.plugin.middleware`` service."""
@@ -73,6 +79,7 @@ class MiddlewareProvider(Protocol):
     def get_plugin_info(self) -> dict[str, str]: ...
 
 
+@service_contract(SPEC_SYSTEM_PROMPT)
 @runtime_checkable
 class SystemPromptProvider(Protocol):
     """Contract implemented by every ``agent.plugin.system_prompt`` service."""
@@ -82,56 +89,81 @@ class SystemPromptProvider(Protocol):
     def get_plugin_info(self) -> dict[str, str]: ...
 
 
+@service_contract(SPEC_RESPONSE_FORMAT)
 @runtime_checkable
 class ResponseFormatProvider(Protocol):
     def get_response_format(self) -> Any: ...
 
 
+@service_contract(SPEC_STATE_SCHEMA)
 @runtime_checkable
 class StateSchemaProvider(Protocol):
     def get_state_schema(self) -> Any: ...
 
 
+@service_contract(SPEC_CONTEXT_SCHEMA)
 @runtime_checkable
 class ContextSchemaProvider(Protocol):
     def get_context_schema(self) -> Any: ...
 
 
+@service_contract(SPEC_CHECKPOINTER)
 @runtime_checkable
 class CheckpointerProvider(Protocol):
     def get_checkpointer(self) -> Any: ...
 
 
+@service_contract(SPEC_STORE)
 @runtime_checkable
 class StoreProvider(Protocol):
     def get_store(self) -> Any: ...
 
 
+@service_contract(SPEC_INTERRUPT_BEFORE)
 @runtime_checkable
 class InterruptBeforeProvider(Protocol):
     def get_interrupt_before(self) -> list[str]: ...
 
 
+@service_contract(SPEC_INTERRUPT_AFTER)
 @runtime_checkable
 class InterruptAfterProvider(Protocol):
     def get_interrupt_after(self) -> list[str]: ...
 
 
+@service_contract(SPEC_DEBUG)
 @runtime_checkable
 class DebugProvider(Protocol):
     def get_debug(self) -> bool: ...
 
 
+@service_contract(SPEC_NAME)
 @runtime_checkable
 class NameProvider(Protocol):
     def get_name(self) -> str | None: ...
 
 
+@service_contract(SPEC_CACHE)
 @runtime_checkable
 class CacheProvider(Protocol):
     def get_cache(self) -> Any: ...
 
 
+@service_contract(SPEC_TRANSFORMERS)
 @runtime_checkable
 class TransformersProvider(Protocol):
     def get_transformers(self) -> list[Any]: ...
+
+
+@service_contract(SPEC_AGENT_LOOP)
+@runtime_checkable
+class AgentLoopProvider(Protocol):
+    """Contract implemented by every ``agent.loop`` service."""
+
+    def invoke(self, message: str, *, thread_id: str | None = None) -> Any: ...
+
+    def astream(
+        self, message: str, *, thread_id: str | None = None
+    ) -> AsyncIterator[dict[str, Any]]: ...
+
+    def describe(self) -> dict[str, Any]: ...
