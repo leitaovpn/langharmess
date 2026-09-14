@@ -404,6 +404,17 @@ git commit -m "契约签名提取：describe 剥离 self、区分参数种类、
 
 ## Task 3: 注解兼容判定（Any 通配、union 归一、返回协变）
 
+> **执行期修正（2026-09-14 实现后回填）**：本节的示例代码在两轮代码审查后被修正了三处，
+> 重跑本节时以仓库当前代码为准：
+> 1) `isinstance(expected_args, list)` 分支是死代码（`get_args` 恒返回 tuple），导致
+>    `Callable[[Any], str]` 里的 `Any` 通配失效 → 改为在 `_annotations_match` 顶部加
+>    「任一侧是 list 即逐项比对」规则；
+> 2) union 判定必须放在 origin-None 早退**之前**，且**任一侧**为 union 即进入（另一侧
+>    视为单分支），否则契约 `str | None` 会误拒实现 `str`；
+> 3) 返回位置的 union 按**协变**方向判定（actual 的每个分支要被 expected 覆盖），参数位置
+>    保持反协变方向（expected 的每个分支要被 actual 覆盖）；返回位置的普通类按
+>    `issubclass` 容忍子类。
+
 **Files:**
 - Modify: `src/langharmess_plugin/validation.py`
 - Modify: `tests/test_validation.py`
