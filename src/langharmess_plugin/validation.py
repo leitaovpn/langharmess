@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import inspect
 import logging
+import types
+import typing
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, get_type_hints
+from typing import Any, Literal, get_args, get_origin, get_type_hints
 
 LOGGER = logging.getLogger("langharmess.contract")
 
@@ -35,6 +37,30 @@ def service_contract(specification: str) -> Callable[[type[Any]], type[Any]]:
 def contract_for(specification: str) -> type[Any] | None:
     """Return the pinned contract for a service specification."""
     return CONTRACTS.get(specification)
+
+
+ViolationCode = Literal[
+    "MISSING_METHOD",
+    "NOT_CALLABLE",
+    "PARAM_NOT_ACCEPTED",
+    "PARAM_KIND_CONFLICT",
+    "PARAM_EXTRA_REQUIRED",
+    "PARAM_ANNOTATION_MISMATCH",
+    "RETURN_ANNOTATION_MISSING",
+    "RETURN_ANNOTATION_MISMATCH",
+    "UNRESOLVED_SIGNATURE",
+]
+
+
+@dataclass(frozen=True)
+class Violation:
+    """One failed contract check."""
+
+    specification: str
+    protocol: str
+    method: str
+    code: ViolationCode
+    detail: str
 
 
 @dataclass(frozen=True)
@@ -131,6 +157,66 @@ def _method_contract(name: str, member: Callable[..., Any]) -> MethodContract:
     )
 
 
+def _origin(annotation: Any) -> Any:
+    origin = get_origin(annotation)
+    return typing.Union if origin is types.UnionType else origin
+
+
+def _annotations_match(expected: Any, actual: Any, *, covariance: bool = False) -> bool:
+    """Check an actual annotation against the expected one.
+
+    ``Any`` matches anything at every depth; unions compare arm-wise and
+    ``X | None`` equals ``Optional[X]``; with ``covariance`` a more specific
+    origin is accepted (``dict`` satisfies ``Mapping``).
+    """
+    if expected is Any or expected is None:
+        return True
+    if actual is Any or actual is None:
+        return True
+    if expected == actual:
+        return True
+    expected_origin = _origin(expected)
+    actual_origin = _origin(actual)
+    expected_args = get_args(expected)
+    actual_args = get_args(actual)
+    if isinstance(expected_args, list) and isinstance(actual_args, list):
+        # Callable 的参数列表是普通 list：逐项比对
+        return len(expected_args) == len(actual_args) and all(
+            _annotations_match(item, other, covariance=covariance)
+            for item, other in zip(expected_args, actual_args)
+        )
+    if expected_origin is None or actual_origin is None:
+        return False
+    if expected_origin is typing.Union and actual_origin is typing.Union:
+        return all(
+            any(
+                _annotations_match(arm, other, covariance=covariance)
+                for other in actual_args
+            )
+            for arm in expected_args
+        )
+    if expected_origin is not actual_origin:
+        if not (
+            covariance
+            and isinstance(expected_origin, type)
+            and isinstance(actual_origin, type)
+        ):
+            return False
+        try:
+            if not issubclass(actual_origin, expected_origin):
+                return False
+        except TypeError:
+            return False
+    if not expected_args or not actual_args:
+        return True
+    if len(expected_args) != len(actual_args):
+        return False
+    return all(
+        _annotations_match(item, other, covariance=covariance)
+        for item, other in zip(expected_args, actual_args)
+    )
+
+
 def describe(protocol: type[Any]) -> ProtocolContract:
     """Return the cached expected shape of a pinned service contract."""
     cached = _CONTRACT_CACHE.get(protocol)
@@ -149,3 +235,70 @@ def describe(protocol: type[Any]) -> ProtocolContract:
     )
     _CONTRACT_CACHE[protocol] = contract
     return contract
+
+
+def validate(instance: Any, protocol: type[Any]) -> tuple[Violation, ...]:
+    """Check an instance against a pinned contract and return all violations."""
+    contract = describe(protocol)
+    specification = contract.specification or contract.name
+    violations: list[Violation] = []
+    for expected in contract.methods:
+        if expected.error is not None:
+            violations.append(
+                Violation(
+                    specification,
+                    contract.name,
+                    expected.name,
+                    "UNRESOLVED_SIGNATURE",
+                    expected.error,
+                )
+            )
+            continue
+        # 运行时属性可能缺失或不是可调用对象，交由 _method_contract 兜底
+        member: Any = getattr(instance, expected.name, None)
+        actual = _method_contract(expected.name, member)
+        if (
+            expected.return_annotation is not None
+            and expected.return_annotation is not Any
+        ):
+            if actual.return_annotation is None:
+                violations.append(
+                    Violation(
+                        specification,
+                        contract.name,
+                        expected.name,
+                        "RETURN_ANNOTATION_MISSING",
+                        f"expected {expected.return_annotation!r}",
+                    )
+                )
+            elif not _annotations_match(
+                expected.return_annotation, actual.return_annotation, covariance=True
+            ):
+                violations.append(
+                    Violation(
+                        specification,
+                        contract.name,
+                        expected.name,
+                        "RETURN_ANNOTATION_MISMATCH",
+                        f"{actual.return_annotation!r} does not satisfy "
+                        f"{expected.return_annotation!r}",
+                    )
+                )
+        by_name = {parameter.name: parameter for parameter in actual.parameters}
+        for parameter in expected.parameters:
+            actual_parameter = by_name.get(parameter.name)
+            if actual_parameter is None or parameter.annotation is None:
+                continue
+            if not _annotations_match(parameter.annotation, actual_parameter.annotation):
+                violations.append(
+                    Violation(
+                        specification,
+                        contract.name,
+                        expected.name,
+                        "PARAM_ANNOTATION_MISMATCH",
+                        f"parameter {parameter.name!r} is "
+                        f"{actual_parameter.annotation!r}, expected "
+                        f"{parameter.annotation!r}",
+                    )
+                )
+    return tuple(violations)

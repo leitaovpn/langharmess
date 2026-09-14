@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from collections.abc import Mapping
+from typing import Any, Optional, Protocol, runtime_checkable
 
 import pytest
 
@@ -11,6 +12,7 @@ from langharmess_plugin.validation import (
     contract_for,
     describe,
     service_contract,
+    validate,
 )
 
 
@@ -122,3 +124,167 @@ def test_describe_reports_unresolvable_annotation() -> None:
 
 def test_describe_caches_result() -> None:
     assert describe(_Shape) is describe(_Shape)
+
+
+def test_describe_reports_pinned_specification() -> None:
+    assert describe(DemoProvider).specification == "test.contract.demo"
+
+
+class _NestedAny(Protocol):
+    def run(self, value: list[Any]) -> list[Any]: ...
+
+
+def test_any_is_a_wildcard_at_every_depth() -> None:
+    class Concrete:
+        def run(self, value: list[object]) -> list[str]:
+            return []
+
+    assert validate(Concrete(), _NestedAny) == ()
+
+
+def test_optional_matches_union_spelling() -> None:
+    # Optional 必须能经模块全局解析：get_type_hints 看不到函数内局部导入
+    class Expected(Protocol):
+        def run(self) -> int | None: ...
+
+    class Concrete:
+        # 本用例就是要验证 Optional[X] 与 X | None 等价，保留旧式拼写
+        def run(self) -> Optional[int]:  # noqa: UP045
+            return None
+
+    assert validate(Concrete(), Expected) == ()
+
+
+def test_return_annotation_allows_covariance() -> None:
+    class Expected(Protocol):
+        def run(self) -> Mapping[str, Any]: ...
+
+    class Concrete:
+        def run(self) -> dict[str, Any]:
+            return {}
+
+    assert validate(Concrete(), Expected) == ()
+
+
+def test_mismatched_return_annotation_is_reported() -> None:
+    class Expected(Protocol):
+        def run(self) -> list[str]: ...
+
+    class Concrete:
+        def run(self) -> list[int]:
+            return []
+
+    codes = [violation.code for violation in validate(Concrete(), Expected)]
+    assert codes == ["RETURN_ANNOTATION_MISMATCH"]
+
+
+def test_parameter_annotation_mismatch_is_reported() -> None:
+    class Expected(Protocol):
+        def run(self, value: int) -> None: ...
+
+    class Concrete:
+        def run(self, value: str) -> None: ...
+
+    codes = [violation.code for violation in validate(Concrete(), Expected)]
+    assert codes == ["PARAM_ANNOTATION_MISMATCH"]
+
+
+def test_any_actual_annotation_is_accepted() -> None:
+    class Expected(Protocol):
+        def run(self, value: list[int]) -> int: ...
+
+    class Concrete:
+        def run(self, value: list[Any]) -> int:
+            return 0
+
+    assert validate(Concrete(), Expected) == ()
+
+
+def test_union_annotations_compare_arm_wise() -> None:
+    class Expected(Protocol):
+        def run(self) -> int | str: ...
+
+    class Concrete:
+        def run(self) -> int | str | None:
+            return None
+
+    assert validate(Concrete(), Expected) == ()
+
+
+def test_union_arm_absent_from_actual_is_reported() -> None:
+    class Expected(Protocol):
+        def run(self) -> int | str: ...
+
+    class Concrete:
+        def run(self) -> int | None:
+            return None
+
+    codes = [violation.code for violation in validate(Concrete(), Expected)]
+    assert codes == ["RETURN_ANNOTATION_MISMATCH"]
+
+
+def test_parameter_annotations_are_invariant() -> None:
+    class Expected(Protocol):
+        def run(self, value: Mapping[str, Any]) -> None: ...
+
+    class Concrete:
+        def run(self, value: dict[str, Any]) -> None: ...
+
+    codes = [violation.code for violation in validate(Concrete(), Expected)]
+    assert codes == ["PARAM_ANNOTATION_MISMATCH"]
+
+
+def test_covariance_rejects_unrelated_return_origin() -> None:
+    class Expected(Protocol):
+        def run(self) -> Mapping[str, Any]: ...
+
+    class Concrete:
+        def run(self) -> list[Any]:
+            return []
+
+    codes = [violation.code for violation in validate(Concrete(), Expected)]
+    assert codes == ["RETURN_ANNOTATION_MISMATCH"]
+
+
+def test_return_annotation_arity_mismatch_is_reported() -> None:
+    class Expected(Protocol):
+        def run(self) -> tuple[str, int]: ...
+
+    class Concrete:
+        def run(self) -> tuple[str]:
+            return ("x",)
+
+    codes = [violation.code for violation in validate(Concrete(), Expected)]
+    assert codes == ["RETURN_ANNOTATION_MISMATCH"]
+
+
+def test_missing_return_annotation_is_reported() -> None:
+    class Expected(Protocol):
+        def run(self) -> str: ...
+
+    class Concrete:
+        def run(self):  # type: ignore[no-untyped-def]
+            return "value"
+
+    codes = [violation.code for violation in validate(Concrete(), Expected)]
+    assert codes == ["RETURN_ANNOTATION_MISSING"]
+
+
+def test_unannotated_contract_parameter_is_skipped() -> None:
+    class Loose(Protocol):
+        def run(self, value) -> int: ...  # type: ignore[no-untyped-def]
+
+    class Concrete:
+        def run(self, value: str) -> int:
+            return 0
+
+    assert validate(Concrete(), Loose) == ()
+
+
+def test_unresolvable_contract_annotation_is_reported() -> None:
+    def broken(self, value: MissingName) -> None: ...  # type: ignore[name-defined, no-untyped-def]  # noqa: F821
+
+    protocol_class = type("BrokenProvider", (Protocol,), {"broken": broken})  # type: ignore[arg-type]
+
+    codes = [violation.code for violation in validate(_Implementation(), protocol_class)]
+    assert codes == ["UNRESOLVED_SIGNATURE"]
