@@ -9,6 +9,11 @@ from pelix.ipopo.constants import SERVICE_IPOPO
 
 from langharmess_plugin.contracts import SPEC_PLUGIN_REGISTRAR
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
+from langharmess_plugin.validation import (
+    ContractViolationError,
+    contract_for,
+    validate,
+)
 
 
 class PluginManager:
@@ -133,11 +138,22 @@ class PluginManager:
     def _instantiate(self, descriptor: PluginDescriptor) -> None:
         if descriptor.name in self._bound:
             raise ValueError(f"Plugin {descriptor.name!r} is already bound")
-        self._ipopo.instantiate(
+        instance = self._ipopo.instantiate(
             descriptor.factory,
             descriptor.instance,
             dict(descriptor.properties) or None,
         )
+        protocol = contract_for(descriptor.specification)
+        if protocol is not None:
+            violations = validate(instance, protocol)
+            if violations:
+                self._ipopo.kill(descriptor.instance)
+                raise ContractViolationError(
+                    plugin=descriptor.name,
+                    specification=descriptor.specification,
+                    protocol=protocol.__name__,
+                    violations=violations,
+                )
         self._bound.add(descriptor.name)
 
     def _unbind(self, name: str) -> None:

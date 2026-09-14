@@ -19,7 +19,7 @@ def descriptor(name: str, enabled: bool = True) -> PluginDescriptor:
         module=f"module.{name}",
         factory=f"{name}-factory",
         instance=name,
-        specification=f"agent.plugin.{name}",
+        specification=f"test.plugin.{name}",
         enabled=enabled,
     )
 
