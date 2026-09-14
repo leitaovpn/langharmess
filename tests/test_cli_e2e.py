@@ -56,7 +56,7 @@ def test_cli_reuses_running_api_server() -> None:
             sys.executable,
             "-m",
             "uvicorn",
-            "langharmess_api.server:create_app",
+            "langharmess_api.common.server:create_app",
             "--factory",
             "--host",
             "127.0.0.1",

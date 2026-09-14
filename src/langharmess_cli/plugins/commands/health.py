@@ -1,4 +1,4 @@
-"""Health command plugin template."""
+"""Health command plugin."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import argparse
 import httpx
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_cli.api_guard import APIGuard
+from langharmess_cli.common.api_guard import APIGuard
 from langharmess_cli.contracts import (
     SPEC_CLI_COMMAND,
     CommandSpec,
@@ -16,15 +16,15 @@ from langharmess_cli.contracts import (
 )
 
 
-@ComponentFactory("cli-health-command-factory")
+@ComponentFactory("cli-health-plugin-factory")
 @Provides(SPEC_CLI_COMMAND)
-@Property("_plugin_name", "plugin.name", "template-health-command")
+@Property("_plugin_name", "plugin.name", "health-command")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_base_url", "plugin.base_url", "http://127.0.0.1:8000")
 @Property("_token", "plugin.token", "secret")
-class TemplateHealthCommandPlugin:
+class HealthCommandPlugin:
     def __init__(self) -> None:
-        self._plugin_name = "template-health-command"
+        self._plugin_name = "health-command"
         self._plugin_version = "1.0.0"
         self._base_url = "http://127.0.0.1:8000"
         self._token = "secret"

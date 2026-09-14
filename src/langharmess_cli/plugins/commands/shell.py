@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
+from langharmess_cli.common.i18n import tr
 from langharmess_cli.contracts import (
     SPEC_CLI_COMMAND,
     CommandSpec,
     InteractiveCommandContext,
     InteractiveCommandSpec,
 )
-from langharmess_cli.i18n import tr
 
 
 @ComponentFactory("cli-shell-command-factory")

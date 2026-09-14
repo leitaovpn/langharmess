@@ -14,9 +14,9 @@ from pelix.ipopo.decorators import ComponentFactory, Property, Provides, Require
 from pydantic import BaseModel
 
 from langharmess_api.contracts import SPEC_ROUTE
-from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_LLM, ModelProtocol
+from langharmess_core.contracts import SPEC_AGENT_LOOP, ModelProtocol
+from langharmess_core.plugin import runtime_llm_descriptor
 from langharmess_plugin.contracts import SPEC_PLUGIN_REGISTRAR
-from langharmess_plugin.registry import PluginDescriptor
 
 LOGGER = logging.getLogger("langharmess.server")
 
@@ -75,16 +75,7 @@ class StreamRoutePlugin:
                 if payload.stream_usage is not None:
                     properties["plugin.model.stream_usage"] = payload.stream_usage
                 self._plugin_registrar.ensure_plugin(
-                    PluginDescriptor(
-                        name="runtime-llm",
-                        version="1.0.0",
-                        module="langharmess_core.plugins.loop.llm.llm",
-                        factory="llm-plugin-factory",
-                        instance="runtime-llm",
-                        specification=SPEC_LLM,
-                        ranking=1000,
-                        properties=properties,
-                    )
+                    runtime_llm_descriptor(properties)
                 )
                 if self._agent_loop is None:
                     raise HTTPException(status_code=503, detail="Agent loop unavailable")

@@ -12,11 +12,11 @@ from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import fragment_list_to_text
 
-import langharmess_cli.plugins.commands.template_health as health_module
+import langharmess_cli.plugins.commands.health as health_module
+from langharmess_cli.common.interactive import InteractiveCLIRunner
 from langharmess_cli.contracts import InteractiveCommandSpec
-from langharmess_cli.interactive import InteractiveCLIRunner
+from langharmess_cli.plugins.commands.health import HealthCommandPlugin
 from langharmess_cli.plugins.commands.shell import ShellCommandPlugin
-from langharmess_cli.plugins.commands.template_health import TemplateHealthCommandPlugin
 from langharmess_cli.plugins.rich_renderer import RichInteractiveRenderer
 
 
@@ -89,7 +89,7 @@ def test_interactive_runner_stream_request(
         captured.update(kwargs)
         return FakeStreamResponse()
 
-    monkeypatch.setattr("langharmess_cli.interactive.httpx.stream", fake_stream)
+    monkeypatch.setattr("langharmess_cli.common.interactive.httpx.stream", fake_stream)
     runner = InteractiveCLIRunner(
         base_url="http://127.0.0.1:8000",
         token="secret",
@@ -114,8 +114,8 @@ def test_interactive_runner_stream_request(
     }
 
 
-def test_template_health_provides_interactive_command() -> None:
-    plugin = TemplateHealthCommandPlugin()
+def test_health_provides_interactive_command() -> None:
+    plugin = HealthCommandPlugin()
     commands = plugin.get_interactive_commands()
     assert [command.name for command in commands] == ["health"]
 
@@ -215,7 +215,7 @@ def test_shell_plugin_localizes_help_in_zh(
     assert "未知命令: /missing" in capsys.readouterr().out
 
 
-def test_template_health_interactive_handler(
+def test_health_interactive_handler(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -235,7 +235,7 @@ def test_template_health_interactive_handler(
     monkeypatch.setattr(health_module, "APIGuard", FakeGuard)
     monkeypatch.setattr(health_module.httpx, "get", lambda *a, **k: Response())
 
-    plugin = TemplateHealthCommandPlugin()
+    plugin = HealthCommandPlugin()
     runner = InteractiveCLIRunner(
         base_url="http://127.0.0.1:8000", token="secret", commands=[]
     )
@@ -394,7 +394,7 @@ def test_runner_localizes_cancelled_in_zh(monkeypatch: pytest.MonkeyPatch) -> No
             raise KeyboardInterrupt
 
     monkeypatch.setattr(
-        "langharmess_cli.interactive.httpx.stream", lambda *a, **k: Response()
+        "langharmess_cli.common.interactive.httpx.stream", lambda *a, **k: Response()
     )
     renderer = RecordingRenderer()
     runner = InteractiveCLIRunner(
@@ -432,7 +432,7 @@ def test_runner_forwards_usage_events_to_renderer(
             return [json.dumps(usage)]
 
     monkeypatch.setattr(
-        "langharmess_cli.interactive.httpx.stream", lambda *a, **k: FakeStreamResponse()
+        "langharmess_cli.common.interactive.httpx.stream", lambda *a, **k: FakeStreamResponse()
     )
     renderer = RecordingRenderer()
     runner = InteractiveCLIRunner(
@@ -464,7 +464,7 @@ def test_runner_sends_stream_usage_escape_hatch(
         captured.update(kwargs)
         return FakeStreamResponse()
 
-    monkeypatch.setattr("langharmess_cli.interactive.httpx.stream", fake_stream)
+    monkeypatch.setattr("langharmess_cli.common.interactive.httpx.stream", fake_stream)
     monkeypatch.setenv("LANG_HARMESS_STREAM_USAGE", "false")
     runner = InteractiveCLIRunner(base_url="http://api", token="secret", commands=[])
     runner.do_stream("hi")

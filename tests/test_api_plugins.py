@@ -11,19 +11,19 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from langharmess_api.dependencies import get_db_session
-from langharmess_api.plugins.auth.template_auth import TemplateAuthPlugin
-from langharmess_api.plugins.db.template_db import TemplateDBPlugin
-from langharmess_api.plugins.rate_limit.template_rate_limit import (
-    TemplateRateLimitPlugin,
+from langharmess_api.plugins.auth.auth import AuthPlugin
+from langharmess_api.plugins.db.db import DBPlugin
+from langharmess_api.plugins.rate_limit.rate_limit import (
+    RateLimitPlugin,
 )
+from langharmess_api.plugins.routes.health import HealthRoutePlugin
 from langharmess_api.plugins.routes.stream import StreamRoutePlugin
-from langharmess_api.plugins.routes.template_health import TemplateHealthRoutePlugin
-from langharmess_core.agent_loop import PluginAgentLoop
+from langharmess_core.common.dependencies import get_db_session
+from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop
 
 
 def test_auth_plugin_rejects_missing_token() -> None:
-    plugin = TemplateAuthPlugin()
+    plugin = AuthPlugin()
     plugin._token = "secret"
     dependency = plugin.get_auth_dependency()
     request = Request({"type": "http", "headers": []})
@@ -36,7 +36,7 @@ def test_auth_plugin_rejects_missing_token() -> None:
 
 
 def test_auth_plugin_accepts_correct_token() -> None:
-    plugin = TemplateAuthPlugin()
+    plugin = AuthPlugin()
     plugin._token = "secret"
     dependency = plugin.get_auth_dependency()
     request = Request(
@@ -46,7 +46,7 @@ def test_auth_plugin_accepts_correct_token() -> None:
 
 
 def test_rate_limit_plugin_enforces_limit() -> None:
-    plugin = TemplateRateLimitPlugin()
+    plugin = RateLimitPlugin()
     plugin._limit = 2
     dependency = plugin.get_rate_limit_dependency()
     request = Request({"type": "http", "client": ("127.0.0.1", 1234)})
@@ -61,13 +61,13 @@ def test_rate_limit_plugin_enforces_limit() -> None:
 
 
 def test_db_plugin_returns_session() -> None:
-    plugin = TemplateDBPlugin()
+    plugin = DBPlugin()
     dependency = plugin.get_session_dependency()
     assert dependency() == {"connected": True}
 
 
 def test_health_route_has_router_and_dependency() -> None:
-    plugin = TemplateHealthRoutePlugin()
+    plugin = HealthRoutePlugin()
     router = plugin.get_router()
     assert router is not None
     assert get_db_session is not None

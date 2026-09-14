@@ -37,20 +37,22 @@ class APIGuard:
         host = parsed.hostname or "127.0.0.1"
         port = parsed.port or 8000
 
-        command = (
-            [sys.executable, "__serve__", "--host", host, "--port", str(port)]
-            if getattr(sys, "frozen", False)
-            else [
-                sys.executable,
-                "-m",
-                "langharmess_cli",
-                "__serve__",
-                "--host",
-                host,
-                "--port",
-                str(port),
-            ]
-        )
+        if getattr(sys, "frozen", False):
+            # A frozen executable cannot spawn `python -m`; serve in-process.
+            from langharmess_api.__main__ import main as serve
+
+            serve(["--host", host, "--port", str(port)])
+            return
+
+        command = [
+            sys.executable,
+            "-m",
+            "langharmess_api",
+            "--host",
+            host,
+            "--port",
+            str(port),
+        ]
         self._process = subprocess.Popen(command)
         atexit.register(self._terminate)
 

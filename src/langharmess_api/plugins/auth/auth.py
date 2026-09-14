@@ -1,4 +1,4 @@
-"""Bearer token authentication plugin template."""
+"""Bearer token authentication plugin."""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 from langharmess_api.contracts import SPEC_AUTH
 
 
-@ComponentFactory("api-auth-template-factory")
+@ComponentFactory("api-auth-plugin-factory")
 @Provides(SPEC_AUTH)
-@Property("_plugin_name", "plugin.name", "template-auth")
+@Property("_plugin_name", "plugin.name", "auth")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_token", "plugin.token", "secret")
-class TemplateAuthPlugin:
+class AuthPlugin:
     def __init__(self) -> None:
-        self._plugin_name = "template-auth"
+        self._plugin_name = "auth"
         self._plugin_version = "1.0.0"
         self._token = "secret"
 

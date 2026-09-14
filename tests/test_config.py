@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from langharmess_config.builtins import config_descriptors
 from langharmess_config.contracts import SPEC_CONFIGS
+from langharmess_config.plugin import config_descriptors
 from langharmess_config.plugins.configs import ConfigsPlugin
 from langharmess_config.plugins.toml import TOMLConfigPlugin
 from langharmess_plugin.plugin_manager import PluginManager

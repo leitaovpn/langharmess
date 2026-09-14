@@ -18,8 +18,8 @@ from prompt_toolkit.history import FileHistory, History, InMemoryHistory
 from prompt_toolkit.shortcuts import CompleteStyle
 from prompt_toolkit.styles import Style
 
+from langharmess_cli.common.i18n import tr
 from langharmess_cli.contracts import InteractiveCommandSpec, InteractiveRenderer
-from langharmess_cli.i18n import tr
 from langharmess_cli.plugins.rich_renderer import RichInteractiveRenderer
 
 

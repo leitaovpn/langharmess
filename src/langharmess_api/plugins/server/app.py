@@ -21,8 +21,8 @@ from langharmess_api.contracts import (
     SPEC_RATE_LIMIT,
     SPEC_ROUTE,
 )
-from langharmess_api.dependencies import get_db_session
 from langharmess_config.contracts import SPEC_CONFIGS
+from langharmess_core.common.dependencies import get_db_session
 from langharmess_logging.contracts import SPEC_LOG
 
 

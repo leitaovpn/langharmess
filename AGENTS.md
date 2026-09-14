@@ -27,8 +27,14 @@ Current milestone:
   each other's concrete classes.
 - Public agent contracts live in `src/langharmess_core/contracts.py`.
 - Plugin lifecycle and registration live in `src/langharmess_plugin/`.
-- Agent plugins live in `src/langharmess_core/plugins/loop/`.
-- API plugins live in `src/langharmess_api/plugins/`.
+- Modules follow one layout: `plugin.py` builds plugin descriptors, `plugins/`
+  holds the component implementations (one topic per directory), and
+  `common/` holds assembly helpers shared with entrypoints.
+- Agent plugins live in `src/langharmess_core/plugins/`; the agent loop
+  component is `src/langharmess_core/plugins/loop/agent_loop.py`.
+- API plugins live in `src/langharmess_api/plugins/`; the FastAPI component is
+  `src/langharmess_api/plugins/server/app.py` and the server factory is
+  `src/langharmess_api/common/server.py`.
 - CLI command plugins live in `src/langharmess_cli/plugins/commands/`.
 - The agent loop is an iPOPO component that rebuilds a LangChain
   `create_agent` graph when injected services change.
@@ -71,15 +77,16 @@ The same gate is enforced locally by `.githooks/pre-commit` and in CI by
 ### Debugging
 
 - Entry points: `.venv/bin/python -m langharmess_cli` (CLI) and
-  `.venv/bin/python -m langharmess_cli __serve__` (API server). The package
-  is installed editable into `.venv`, so no `PYTHONPATH` setup is needed.
+  `.venv/bin/python -m langharmess_api` (API server). The package is
+  installed editable into `.venv`, so no `PYTHONPATH` setup is needed.
   Ready-made configurations live in `.vscode/launch.json`.
 - Interactive mode uses prompt_toolkit and needs a real TTY: debug it with
   `"console": "integratedTerminal"`.
 - The interactive CLI auto-starts the API server as a subprocess
-  (`langharmess_cli.api_guard.APIGuard`); a debugger attached to the CLI does
-  not follow into it. To debug the server, launch `__serve__` separately or
-  use the "full stack" compound — the CLI reuses an already-running server.
+  (`langharmess_cli.common.api_guard.APIGuard`); a debugger attached to the CLI
+  does not follow into it. To debug the server, launch the "API server"
+  configuration separately or use the "full stack" compound — the CLI reuses
+  an already-running server.
 - Without `--provider` the CLI picks a random provider from
   `~/.langharmess/langharmess.toml`; pass `--provider` for deterministic
   sessions.

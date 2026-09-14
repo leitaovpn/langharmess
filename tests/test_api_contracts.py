@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from langharmess_api.app import APIServerService
 from langharmess_api.contracts import (
     SPEC_API_SERVER,
     SPEC_AUTH,
@@ -16,12 +15,13 @@ from langharmess_api.contracts import (
     RateLimitProvider,
     RouteProvider,
 )
-from langharmess_api.plugins.auth.template_auth import TemplateAuthPlugin
-from langharmess_api.plugins.db.template_db import TemplateDBPlugin
-from langharmess_api.plugins.rate_limit.template_rate_limit import (
-    TemplateRateLimitPlugin,
+from langharmess_api.plugins.auth.auth import AuthPlugin
+from langharmess_api.plugins.db.db import DBPlugin
+from langharmess_api.plugins.rate_limit.rate_limit import (
+    RateLimitPlugin,
 )
-from langharmess_api.plugins.routes.template_health import TemplateHealthRoutePlugin
+from langharmess_api.plugins.routes.health import HealthRoutePlugin
+from langharmess_api.plugins.server.app import APIServerService
 
 
 def test_spec_constants() -> None:
@@ -33,10 +33,10 @@ def test_spec_constants() -> None:
 
 
 def test_template_plugins_conform_to_protocols() -> None:
-    assert isinstance(TemplateAuthPlugin(), AuthProvider)
-    assert isinstance(TemplateRateLimitPlugin(), RateLimitProvider)
-    assert isinstance(TemplateDBPlugin(), DBProvider)
-    assert isinstance(TemplateHealthRoutePlugin(), RouteProvider)
+    assert isinstance(AuthPlugin(), AuthProvider)
+    assert isinstance(RateLimitPlugin(), RateLimitProvider)
+    assert isinstance(DBPlugin(), DBProvider)
+    assert isinstance(HealthRoutePlugin(), RouteProvider)
 
 
 def test_api_server_service_builds_app() -> None:

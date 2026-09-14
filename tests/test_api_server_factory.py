@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import langharmess_api.server as server_module
+import langharmess_api.common.server as server_module
 
 
 def test_create_app_uses_plugin_manager_once(

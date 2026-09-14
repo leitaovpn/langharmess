@@ -1,4 +1,4 @@
-"""Health route plugin template."""
+"""Health route plugin."""
 
 from __future__ import annotations
 
@@ -6,16 +6,16 @@ from fastapi import APIRouter, Depends
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
 from langharmess_api.contracts import SPEC_ROUTE
-from langharmess_api.dependencies import get_db_session
+from langharmess_core.common.dependencies import get_db_session
 
 
-@ComponentFactory("api-health-route-template-factory")
+@ComponentFactory("api-health-plugin-factory")
 @Provides(SPEC_ROUTE)
-@Property("_plugin_name", "plugin.name", "template-health")
+@Property("_plugin_name", "plugin.name", "health")
 @Property("_plugin_version", "plugin.version", "1.0.0")
-class TemplateHealthRoutePlugin:
+class HealthRoutePlugin:
     def __init__(self) -> None:
-        self._plugin_name = "template-health"
+        self._plugin_name = "health"
         self._plugin_version = "1.0.0"
 
     def get_router(self) -> APIRouter:

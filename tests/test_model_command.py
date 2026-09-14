@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from langharmess_cli.interactive import InteractiveCLIRunner
+from langharmess_cli.common.interactive import InteractiveCLIRunner
 from langharmess_cli.plugins.commands.model import ModelCommandPlugin
 
 

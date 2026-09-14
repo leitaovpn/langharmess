@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from langharmess_logging.contracts import LogProvider
-from langharmess_logging.plugin import FileLogPlugin
+from langharmess_logging.plugins.log import FileLogPlugin
 
 
 def test_file_log_plugin_writes_to_its_configured_directory(tmp_path: Path) -> None:

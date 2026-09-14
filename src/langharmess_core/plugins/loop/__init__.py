@@ -1,1 +1,1 @@
-"""Agent loop plugin templates."""
+"""Agent loop plugin."""

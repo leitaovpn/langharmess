@@ -8,14 +8,14 @@ from langharmess_core.contracts import (
     SystemPromptProvider,
     ToolProvider,
 )
-from langharmess_core.plugins.loop.llm.llm import LLMPlugin
-from langharmess_core.plugins.loop.middleware.template_middleware import (
+from langharmess_core.plugins.llm.llm import LLMPlugin
+from langharmess_core.plugins.middleware.template_middleware import (
     TemplateMiddlewarePlugin,
 )
-from langharmess_core.plugins.loop.system_prompt.template_system_prompt import (
+from langharmess_core.plugins.system_prompt.template_system_prompt import (
     TemplateSystemPromptPlugin,
 )
-from langharmess_core.plugins.loop.tools.tools import ToolPlugin
+from langharmess_core.plugins.tools.tools import ToolPlugin
 
 
 def test_concrete_plugins_conform_to_their_protocols() -> None:

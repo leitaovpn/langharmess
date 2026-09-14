@@ -14,8 +14,8 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
 
+from langharmess_cli.common.i18n import tr
 from langharmess_cli.contracts import SPEC_CLI_RENDERER
-from langharmess_cli.i18n import tr
 
 SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 THROTTLE_SECONDS = 0.125

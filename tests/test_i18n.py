@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from langharmess_cli.i18n import LOCALES, STRINGS, get_locale, tr
+from langharmess_cli.common.i18n import LOCALES, STRINGS, get_locale, tr
 
 
 def test_locales_are_english_and_chinese() -> None:

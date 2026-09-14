@@ -1,4 +1,4 @@
-"""In-memory sliding window rate limit plugin template."""
+"""In-memory sliding window rate limit plugin."""
 
 from __future__ import annotations
 
@@ -11,15 +11,15 @@ from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 from langharmess_api.contracts import SPEC_RATE_LIMIT
 
 
-@ComponentFactory("api-rate-limit-template-factory")
+@ComponentFactory("api-rate-limit-plugin-factory")
 @Provides(SPEC_RATE_LIMIT)
-@Property("_plugin_name", "plugin.name", "template-rate-limit")
+@Property("_plugin_name", "plugin.name", "rate-limit")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_limit", "plugin.limit", 2)
 @Property("_window_seconds", "plugin.window_seconds", 60.0)
-class TemplateRateLimitPlugin:
+class RateLimitPlugin:
     def __init__(self) -> None:
-        self._plugin_name = "template-rate-limit"
+        self._plugin_name = "rate-limit"
         self._plugin_version = "1.0.0"
         self._limit = 2
         self._window_seconds = 60.0

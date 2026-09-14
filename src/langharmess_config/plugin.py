@@ -1,4 +1,4 @@
-"""Descriptors for the built-in configuration service chain."""
+"""Descriptors and assembly helpers for the built-in configuration plugins."""
 
 from __future__ import annotations
 

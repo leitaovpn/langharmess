@@ -10,12 +10,12 @@ from types import SimpleNamespace
 
 import pytest
 
-import langharmess_cli.__main__ as main_module
-from langharmess_cli import api_guard as api_guard_module
-from langharmess_cli.api_guard import APIGuard
+import langharmess_cli.common.api_guard as api_guard_module
+import langharmess_cli.common.cli as main_module
+from langharmess_cli.common.api_guard import APIGuard
+from langharmess_cli.common.runner import CLIRunner
 from langharmess_cli.contracts import CLICommandProvider, CommandSpec
-from langharmess_cli.plugins.commands.template_health import TemplateHealthCommandPlugin
-from langharmess_cli.runner import CLIRunner
+from langharmess_cli.plugins.commands.health import HealthCommandPlugin
 
 
 def test_command_spec_defaults() -> None:
@@ -49,8 +49,8 @@ def test_runner_registers_and_executes_plugin_command() -> None:
     assert "--log" not in help_text
 
 
-def test_template_health_command_provider_conforms() -> None:
-    plugin = TemplateHealthCommandPlugin()
+def test_health_command_provider_conforms() -> None:
+    plugin = HealthCommandPlugin()
     assert isinstance(plugin, CLICommandProvider)
     commands = plugin.get_commands()
     assert [command.name for command in commands] == ["health"]
@@ -107,8 +107,7 @@ def test_api_guard_starts_server(monkeypatch: pytest.MonkeyPatch) -> None:
         [
             sys.executable,
             "-m",
-            "langharmess_cli",
-            "__serve__",
+            "langharmess_api",
             "--host",
             "127.0.0.1",
             "--port",
@@ -120,13 +119,14 @@ def test_api_guard_starts_server(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_api_guard_uses_frozen_executable_to_start_server(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    commands = []
-    process = SimpleNamespace(poll=lambda: None, terminate=lambda: None)
+    import langharmess_api.__main__ as api_main_module
+
+    calls = []
     monkeypatch.setattr(api_guard_module.sys, "frozen", True, raising=False)
     monkeypatch.setattr(
-        api_guard_module.subprocess,
-        "Popen",
-        lambda command: commands.append(command) or process,
+        api_main_module,
+        "main",
+        lambda argv=None: calls.append(argv) or 0,
     )
     guard = APIGuard("http://127.0.0.1:9123")
     states = [False, True]
@@ -134,36 +134,26 @@ def test_api_guard_uses_frozen_executable_to_start_server(
 
     guard.ensure_api_server()
 
-    assert commands == [
-        [sys.executable, "__serve__", "--host", "127.0.0.1", "--port", "9123"]
-    ]
+    assert calls == [["--host", "127.0.0.1", "--port", "9123"]]
+    assert guard._process is None
 
 
-def test_main_dispatches_internal_frozen_server(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(sys, "argv", ["langharmess", "__serve__", "--port", "9123"])
-    monkeypatch.setattr(
-        main_module, "_serve", lambda argv: 7 if argv == ["--port", "9123"] else 1
-    )
-    assert main_module.main() == 7
-
-
-def test_internal_server_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_api_server_entrypoint_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
     import uvicorn
 
-    import langharmess_api.server as server_module
+    import langharmess_api.__main__ as api_main_module
+    import langharmess_api.common.server as server_module
 
     app = object()
     captured = {}
     monkeypatch.setattr(server_module, "create_app", lambda: app)
+    monkeypatch.setattr(uvicorn, "run", lambda target, **kwargs: captured.update(
+        target=target, **kwargs
+    ))
     monkeypatch.setattr(
-        uvicorn,
-        "run",
-        lambda target, **kwargs: captured.update(target=target, **kwargs),
+        sys, "argv", ["langharmess_api", "--host", "0.0.0.0", "--port", "9123"]
     )
-
-    assert main_module._serve(["--host", "0.0.0.0", "--port", "9123"]) == 0
+    assert api_main_module.main() == 0
     assert captured == {
         "target": app,
         "host": "0.0.0.0",
@@ -175,7 +165,7 @@ def test_internal_server_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_health_command_handler(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    import langharmess_cli.plugins.commands.template_health as health_module
+    import langharmess_cli.plugins.commands.health as health_module
 
     class FakeGuard:
         def __init__(self, base_url):
@@ -193,7 +183,7 @@ def test_health_command_handler(
     monkeypatch.setattr(health_module, "APIGuard", FakeGuard)
     monkeypatch.setattr(health_module.httpx, "get", lambda *a, **k: Response())
 
-    plugin = TemplateHealthCommandPlugin()
+    plugin = HealthCommandPlugin()
     args = type("Args", (), {"base_url": "http://127.0.0.1:8000"})()
     assert plugin._handler(args) == 0
     assert "{'status': 'ok'}" in capsys.readouterr().out
