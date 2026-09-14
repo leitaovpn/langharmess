@@ -27,19 +27,48 @@ Current milestone:
   each other's concrete classes.
 - Public agent contracts live in `src/langharmess_core/contracts.py`.
 - Plugin lifecycle and registration live in `src/langharmess_plugin/`.
-- Modules follow one layout: `plugin.py` builds plugin descriptors, `plugins/`
-  holds the component implementations (one topic per directory), and
-  `common/` holds assembly helpers shared with entrypoints.
-- Agent plugins live in `src/langharmess_core/plugins/`; the agent loop
-  component is `src/langharmess_core/plugins/loop/agent_loop.py`.
-- API plugins live in `src/langharmess_api/plugins/`; the FastAPI component is
-  `src/langharmess_api/plugins/server/app.py` and the server factory is
-  `src/langharmess_api/common/server.py`.
-- CLI command plugins live in `src/langharmess_cli/plugins/commands/`.
 - The agent loop is an iPOPO component that rebuilds a LangChain
   `create_agent` graph when injected services change.
 - Keep runtime plugin registration deterministic: production plugins must not
   use `@Instantiate`; the `PluginManager` controls instantiation and teardown.
+
+### Module file layout
+
+Every runtime module (`langharmess_core`, `langharmess_api`,
+`langharmess_cli`, `langharmess_config`, `langharmess_logging`) follows one
+layout:
+
+```text
+<module>/
+├── __init__.py
+├── __main__.py          # thin entrypoint only (api/cli); CLI and API server
+├── contracts.py         # SPEC_* constants and Provider protocols
+├── plugin.py            # plugin descriptors and assembly helpers
+├── common/              # assembly helpers shared with entrypoints
+└── plugins/             # plugin implementations, one topic per directory
+    └── <topic>/
+        └── <name>.py    # component factory + iPOPO component
+```
+
+Rules:
+
+- `plugin.py` is the only place that builds `PluginDescriptor` objects;
+  entrypoints join `config`/`log`/module descriptor lists but never inline
+  `PluginDescriptor(...)` literals.
+- `plugins/<topic>/` owns the component implementation. One-topic modules may
+  use `plugins/<name>.py` directly (e.g.
+  `langharmess_logging/plugins/log.py`, `langharmess_cli/plugins/rich_renderer.py`).
+- `common/` holds assembly helpers: CLI and server entry logic, API guards,
+  the interactive runner, i18n, and shared FastAPI dependency sentinels.
+- Descriptor `module=` strings and factory names must match the moved paths;
+  prefer naming a factory `<name>-plugin-factory` so it tracks its file.
+- The agent loop component is `langharmess_core/plugins/loop/agent_loop.py`;
+  the FastAPI component is `langharmess_api/plugins/server/app.py` with the
+  server factory in `langharmess_api/common/server.py`.
+- Tests import public paths; keep `tests/test_imports.py` `PUBLIC_MODULES`
+  in sync when modules move.
+- `langharmess_plugin/` is the framework layer and keeps its flat layout
+  (`contracts.py`, `registry.py`, `plugin_manager.py`).
 
 ## Packages
 
