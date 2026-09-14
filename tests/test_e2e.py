@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 from io import StringIO
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -38,6 +39,7 @@ from langharmess_core.contracts import (
     SPEC_STORE,
     SPEC_SYSTEM_PROMPT,
     SPEC_TRANSFORMERS,
+    ToolProvider,
 )
 from langharmess_plugin.plugin_manager import PluginManager
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
@@ -549,5 +551,55 @@ def test_real_plugin_agent_stream_renders_response_once(tmp_path: Path) -> None:
         renderer.finish_response()
 
         assert output.getvalue().count("The answer is 5.") == 1
+    finally:
+        manager.stop()
+
+
+def test_raw_registered_bad_provider_is_quarantined(tmp_path: Path) -> None:
+    registry = descriptors(tmp_path)
+    manager = PluginManager(registry)
+    manager.start()
+    try:
+        for item in registry.list():
+            manager.install_plugin(item)
+        loop = manager.get_service(SPEC_AGENT_LOOP)
+        assert loop.describe()["tools"] == ["add"]
+
+        class RawBadToolProvider:
+            def get_tools(self, root: str) -> list[Any]:
+                return []
+
+            def get_plugin_info(self) -> dict[str, str]:
+                return {"name": "raw-bad"}
+
+        manager._context.register_service(ToolProvider, RawBadToolProvider(), {})
+
+        assert manager.get_service("agent.plugin.tools") is not None
+        assert loop.describe()["tools"] == ["add"]
+        assert len(loop._guards["_tool_providers"].rejected()) == 1
+    finally:
+        manager.stop()
+
+
+def test_all_agent_loop_guards_quarantine_raw_bad_services(tmp_path: Path) -> None:
+    registry = descriptors(tmp_path)
+    manager = PluginManager(registry)
+    manager.start()
+    try:
+        for item in registry.list():
+            manager.install_plugin(item)
+        loop = manager.get_service(SPEC_AGENT_LOOP)
+
+        fields = [field for field in loop._guards if field != "_llm_provider"]
+        fields.append("_llm_provider")  # A rejected required LLM invalidates the loop; run last.
+        for field in fields:
+            guard = loop._guards[field]
+            bad_service = object()
+            manager._context.register_service(
+                guard.protocol,
+                bad_service,
+                {"service.ranking": 10_000},
+            )
+            assert id(bad_service) in guard.rejected(), field
     finally:
         manager.stop()
