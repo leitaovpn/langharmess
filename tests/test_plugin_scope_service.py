@@ -111,6 +111,22 @@ def test_find_service_requires_started_manager() -> None:
         manager.find_service("agent.plugin.llm")
 
 
+def test_find_services_passes_scope_filter_and_returns_all_matches() -> None:
+    manager = make_manager()
+    first = Mock()
+    second = Mock()
+    manager._context.get_all_service_references.return_value = [first, second]
+    manager._context.get_service.side_effect = ["first", "second"]
+
+    assert manager.find_services("agent.plugin.tools", "(plugin.scope_id=root)") == [
+        "first",
+        "second",
+    ]
+    manager._context.get_all_service_references.assert_called_once_with(
+        "agent.plugin.tools", "(plugin.scope_id=root)"
+    )
+
+
 @pytest.mark.parametrize(
     "bad_filter",
     ["(plugin.agent_id=ag1", "no parens at all", "(unbalanced))", ""],

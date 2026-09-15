@@ -22,6 +22,8 @@ def api_auth_descriptor() -> PluginDescriptor:
         specification=SPEC_AUTH,
         properties={"plugin.token": "secret"},
         swap_policy="hot",
+        scope="server",
+        scope_parent="root",
     )
 
 
@@ -35,6 +37,8 @@ def api_rate_limit_descriptor() -> PluginDescriptor:
         specification=SPEC_RATE_LIMIT,
         properties={"plugin.limit": 100},
         swap_policy="hot",
+        scope="server",
+        scope_parent="root",
     )
 
 
@@ -46,6 +50,7 @@ def api_db_descriptor() -> PluginDescriptor:
         factory="api-db-plugin-factory",
         instance="api-db",
         specification=SPEC_DB,
+        scope="root",
     )
 
 
@@ -57,6 +62,8 @@ def api_health_descriptor() -> PluginDescriptor:
         factory="api-health-plugin-factory",
         instance="api-health",
         specification=SPEC_ROUTE,
+        scope="server",
+        scope_parent="root",
     )
 
 
@@ -68,6 +75,8 @@ def api_stream_descriptor() -> PluginDescriptor:
         factory="api-stream-route-factory",
         instance="api-stream",
         specification=SPEC_ROUTE,
+        scope="server",
+        scope_parent="root",
     )
 
 
@@ -80,6 +89,8 @@ def api_plugins_descriptor(directory: str) -> PluginDescriptor:
         instance="api-plugins",
         specification=SPEC_ROUTE,
         properties={"plugin.config_dir": directory},
+        scope="server",
+        scope_parent="root",
     )
 
 
@@ -91,6 +102,8 @@ def api_sessions_descriptor() -> PluginDescriptor:
         factory="api-sessions-route-factory",
         instance="api-sessions",
         specification=SPEC_ROUTE,
+        scope="server",
+        scope_parent="root",
     )
 
 
@@ -102,6 +115,8 @@ def api_agents_descriptor() -> PluginDescriptor:
         factory="api-agents-route-factory",
         instance="api-agents",
         specification=SPEC_ROUTE,
+        scope="server",
+        scope_parent="root",
     )
 
 
@@ -113,4 +128,6 @@ def api_server_descriptor() -> PluginDescriptor:
         factory="api-server-factory",
         instance="api-server",
         specification=SPEC_API_SERVER,
+        scope="server",
+        scope_parent="root",
     )

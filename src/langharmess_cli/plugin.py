@@ -15,6 +15,8 @@ def cli_descriptors(locale: str) -> list[PluginDescriptor]:
             factory="cli-health-plugin-factory",
             instance="cli-health",
             specification=SPEC_CLI_COMMAND,
+            scope="ui",
+            scope_parent="root",
         ),
         PluginDescriptor(
             name="cli-model",
@@ -24,6 +26,8 @@ def cli_descriptors(locale: str) -> list[PluginDescriptor]:
             instance="cli-model",
             specification=SPEC_CLI_COMMAND,
             properties={"plugin.ui.locale": locale},
+            scope="ui",
+            scope_parent="root",
         ),
         PluginDescriptor(
             name="cli-rich-renderer",
@@ -33,6 +37,8 @@ def cli_descriptors(locale: str) -> list[PluginDescriptor]:
             instance="cli-rich-renderer",
             specification=SPEC_CLI_RENDERER,
             properties={"plugin.ui.locale": locale},
+            scope="ui",
+            scope_parent="root",
         ),
         PluginDescriptor(
             name="cli-session",
@@ -42,6 +48,8 @@ def cli_descriptors(locale: str) -> list[PluginDescriptor]:
             instance="cli-session",
             specification=SPEC_CLI_COMMAND,
             properties={"plugin.ui.locale": locale},
+            scope="ui",
+            scope_parent="root",
         ),
         PluginDescriptor(
             name="cli-plugins",
@@ -51,6 +59,8 @@ def cli_descriptors(locale: str) -> list[PluginDescriptor]:
             instance="cli-plugins",
             specification=SPEC_CLI_COMMAND,
             properties={"plugin.ui.locale": locale},
+            scope="ui",
+            scope_parent="root",
         ),
         PluginDescriptor(
             name="cli-shell",
@@ -60,5 +70,7 @@ def cli_descriptors(locale: str) -> list[PluginDescriptor]:
             instance="cli-shell",
             specification=SPEC_CLI_COMMAND,
             properties={"plugin.ui.locale": locale},
+            scope="ui",
+            scope_parent="root",
         ),
     ]

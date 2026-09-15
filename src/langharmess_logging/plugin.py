@@ -16,6 +16,7 @@ def log_descriptor(role: str, directory: str) -> PluginDescriptor:
         factory="file-log-plugin-factory",
         instance=f"{role}-log",
         specification=SPEC_LOG,
+        scope="root",
         properties={
             "plugin.log.directory": directory,
             "plugin.log.name": f"langharmess.{role}",

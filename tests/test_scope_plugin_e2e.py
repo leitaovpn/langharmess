@@ -54,6 +54,31 @@ def root_other() -> str:
     return "other"
 
 
+def ui_tool() -> str:
+    """Identify the UI scope."""
+    return "ui"
+
+
+def server_tool() -> str:
+    """Identify the server scope."""
+    return "server"
+
+
+def agent_tool() -> str:
+    """Identify the agent scope."""
+    return "agent"
+
+
+def agent_a_tool() -> str:
+    """Identify one agent instance scope."""
+    return "agent-a"
+
+
+def agent_b_tool() -> str:
+    """Identify a sibling agent instance scope."""
+    return "agent-b"
+
+
 def template(
     name: str, module: str, factory: str, specification: str
 ) -> PluginDescriptor:
@@ -219,5 +244,70 @@ def test_scope_and_plugin_full_lifecycle_with_best_and_aggregate_shadowing() -> 
             manager.uninstall_plugin(name)
         assert manager.installed_names() == set()
         assert manager.installed_modules() == set()
+    finally:
+        manager.stop()
+
+
+def test_runtime_scope_visibility_matrix_with_real_service_registry() -> None:
+    tools_template = template(
+        "visibility-tools-template",
+        "langharmess_core.plugins.tools.tools",
+        "tools-plugin-factory",
+        SPEC_TOOL,
+    )
+    manager = PluginManager(PluginRegistry([tools_template]))
+    manager.start()
+    try:
+        manager.install_plugin(tools_template)
+        manager.ensure_scope(ScopeId("ui"), name="UI")
+        manager.ensure_scope(ScopeId("server"), name="Server")
+        manager.ensure_scope(
+            ScopeId("agent"), name="Agent", parent_id=ScopeId("server")
+        )
+        manager.ensure_scope(
+            ScopeId("agent/a"), name="A", parent_id=ScopeId("agent")
+        )
+        manager.ensure_scope(
+            ScopeId("agent/b"), name="B", parent_id=ScopeId("agent")
+        )
+        registrations = [
+            ("root", root_other),
+            ("ui", ui_tool),
+            ("server", server_tool),
+            ("agent", agent_tool),
+            ("agent/a", agent_a_tool),
+            ("agent/b", agent_b_tool),
+        ]
+        for scope, function in registrations:
+            manager.instantiate_instance(
+                instance(
+                    f"visibility@{scope}",
+                    "langharmess_core.plugins.tools.tools",
+                    "tools-plugin-factory",
+                    SPEC_TOOL,
+                    properties={"plugin.tools.functions": [function]},
+                ),
+                scope_id=ScopeId(scope),
+                plugin_key=f"visibility-{scope}",
+            )
+
+        def visible(scope: str) -> set[str]:
+            providers = manager.find_services(
+                SPEC_TOOL, manager.scope_filter(ScopeId(scope))
+            )
+            return {provider.get_tools()[0].name for provider in providers}
+
+        assert visible("root") == {"root_other"}
+        assert visible("ui") == {"root_other", "ui_tool"}
+        assert visible("server") == {"root_other", "server_tool"}
+        assert visible("agent") == {"root_other", "server_tool", "agent_tool"}
+        assert visible("agent/a") == {
+            "root_other",
+            "server_tool",
+            "agent_tool",
+            "agent_a_tool",
+        }
+        assert "agent_b_tool" not in visible("agent/a")
+        assert "ui_tool" not in visible("agent/a")
     finally:
         manager.stop()

@@ -37,6 +37,10 @@ class ScopedPluginRegistrar(Protocol):
         self, specification: str, filter: str | None = None
     ) -> Any | None: ...
 
+    def find_services(
+        self, specification: str, filter: str | None = None
+    ) -> list[Any]: ...
+
     def installed_modules(self) -> set[str]: ...
 
     def ensure_scope(

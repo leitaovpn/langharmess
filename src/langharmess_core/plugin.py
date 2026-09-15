@@ -23,6 +23,7 @@ from langharmess_core.contracts import (
     SPEC_TOOL,
     SPEC_TRANSFORMERS,
 )
+from langharmess_core.scopes import agent_instance_scope_id
 from langharmess_plugin.registry import PluginDescriptor
 
 AGENT_PLUGIN_CATALOG: dict[str, tuple[str, str, str]] = {
@@ -98,6 +99,8 @@ def agent_plugin_descriptor(
         instance=f"{plugin}@{agent_id}",
         specification=specification,
         properties=merged,
+        scope=str(agent_instance_scope_id(agent_id)),
+        scope_parent="agent",
     )
 
 
@@ -112,6 +115,8 @@ def agent_plugin_template_descriptor(plugin: str) -> PluginDescriptor:
         instance=f"{plugin}-template",
         specification=specification,
         enabled=False,
+        scope="agent",
+        scope_parent="server",
     )
 
 
@@ -138,6 +143,8 @@ def agent_loop_descriptor(
         instance=f"agent-loop@{agent_id}",
         specification=SPEC_AGENT_LOOP,
         properties={"plugin.agent_id": agent_id, "requires.filters": filters},
+        scope=str(agent_instance_scope_id(agent_id)),
+        scope_parent="agent",
     )
 
 
@@ -151,6 +158,8 @@ def agent_loop_template_descriptor() -> PluginDescriptor:
         instance="agent-loop-template",
         specification=SPEC_AGENT_LOOP,
         enabled=False,
+        scope="agent",
+        scope_parent="server",
     )
 
 
@@ -167,6 +176,8 @@ def sqlite_checkpointer_descriptor(directory: str) -> PluginDescriptor:
                 Path(directory) / "langharmess_checkpoints.sqlite3"
             )
         },
+        scope="server",
+        scope_parent="root",
     )
 
 
@@ -179,6 +190,8 @@ def session_index_descriptor(directory: str) -> PluginDescriptor:
         instance="session-index",
         specification=SPEC_SESSION_INDEX,
         properties={"plugin.sessions.path": str(Path(directory) / "sessions.sqlite3")},
+        scope="server",
+        scope_parent="root",
     )
 
 
@@ -191,6 +204,8 @@ def agent_registry_descriptor(directory: str) -> PluginDescriptor:
         instance="agent-registry",
         specification=SPEC_AGENT_REGISTRY,
         properties={"plugin.agents.path": str(Path(directory) / "agents.json")},
+        scope="server",
+        scope_parent="root",
     )
 
 
@@ -202,4 +217,6 @@ def agent_directory_descriptor() -> PluginDescriptor:
         factory="agent-directory-plugin-factory",
         instance="agent-directory",
         specification=SPEC_AGENT_DIRECTORY,
+        scope="server",
+        scope_parent="root",
     )

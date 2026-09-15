@@ -19,6 +19,7 @@ PUBLIC_MODULES = [
     "langharmess_core.plugin",
     "langharmess_core.common.dependencies",
     "langharmess_core.common.ids",
+    "langharmess_core.scopes",
     "langharmess_plugin",
     "langharmess_plugin.config_store",
     "langharmess_plugin.contracts",

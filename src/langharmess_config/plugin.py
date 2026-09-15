@@ -23,6 +23,7 @@ def config_descriptors(directory: str | None = None) -> list[PluginDescriptor]:
             instance="config-toml",
             specification=SPEC_CONFIG_PROVIDER,
             properties=properties,
+            scope="root",
         ),
         PluginDescriptor(
             name="configs",
@@ -31,5 +32,6 @@ def config_descriptors(directory: str | None = None) -> list[PluginDescriptor]:
             factory="configs-plugin-factory",
             instance="configs",
             specification=SPEC_CONFIGS,
+            scope="root",
         ),
     ]

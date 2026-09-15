@@ -113,6 +113,7 @@ class PluginManager:
             raise ValueError(f"Plugin {descriptor.name!r} is already installed")
         if self.registry.get(descriptor.name) is None:
             self.registry.add(descriptor)
+        scope_id = self._ensure_descriptor_scope(descriptor)
 
         bundle = self._context.install_bundle(descriptor.module)
         bundle.start()
@@ -122,7 +123,14 @@ class PluginManager:
         self._baselines.setdefault(descriptor.name, descriptor)
         self._modules.add(descriptor.module)
         if descriptor.enabled:
-            self._instantiate(descriptor)
+            if scope_id is None:
+                self._instantiate(descriptor)
+            else:
+                self.instantiate_instance(
+                    descriptor, scope_id=scope_id, plugin_key=descriptor.name
+                )
+                self._scoped.pop(descriptor.instance)
+                self._bound.add(descriptor.name)
 
     def uninstall_plugin(self, name: str) -> None:
         if name not in self._bundles:
@@ -167,7 +175,15 @@ class PluginManager:
         if name not in self._bundles:
             raise KeyError(name)
         descriptor = self._get_descriptor(name)
-        self._instantiate(descriptor)
+        scope_id = self._ensure_descriptor_scope(descriptor)
+        if scope_id is None:
+            self._instantiate(descriptor)
+        else:
+            self.instantiate_instance(
+                descriptor, scope_id=scope_id, plugin_key=descriptor.name
+            )
+            self._scoped.pop(descriptor.instance)
+            self._bound.add(descriptor.name)
 
     def unbind_plugin(self, name: str) -> None:
         if name not in self._bundles:
@@ -188,6 +204,8 @@ class PluginManager:
             raise ValueError(f"Bundle {descriptor.module!r} is not installed")
         if descriptor.instance in self._scoped:
             raise ValueError(f"Instance {descriptor.instance!r} is already instantiated")
+        if scope_id is None:
+            scope_id = self._ensure_descriptor_scope(descriptor)
         properties = dict(descriptor.properties)
         key = plugin_key or descriptor.name.split("@", 1)[0]
         if scope_id is not None:
@@ -319,6 +337,17 @@ class PluginManager:
         )
         return self._context.get_service(reference)
 
+    def find_services(
+        self, specification: str, filter: str | None = None
+    ) -> list[Any]:
+        """Return every service matching a scoped visibility filter."""
+        if self._context is None:
+            raise RuntimeError("PluginManager is not started")
+        references: Any = self._context.get_all_service_references(
+            specification, filter
+        ) or []
+        return [self._context.get_service(reference) for reference in references]
+
     def installed_modules(self) -> set[str]:
         return set(self._modules)
 
@@ -351,6 +380,24 @@ class PluginManager:
             raise KeyError(name)
         return descriptor
 
+    def _ensure_descriptor_scope(
+        self, descriptor: PluginDescriptor
+    ) -> ScopeId | None:
+        if descriptor.scope is None:
+            return None
+        scope_id = ScopeId(descriptor.scope)
+        if self.scope_tree.get(scope_id) is not None:
+            return scope_id
+        parent_id = (
+            ScopeId(descriptor.scope_parent)
+            if descriptor.scope_parent is not None
+            else ROOT_SCOPE_ID
+        )
+        if self.scope_tree.get(parent_id) is None:
+            self.scope_tree.create(parent_id, str(parent_id), ROOT_SCOPE_ID)
+        self.scope_tree.create(scope_id, descriptor.scope, parent_id)
+        return scope_id
+
     def _instantiate(self, descriptor: PluginDescriptor) -> None:
         if descriptor.name in self._bound:
             raise ValueError(f"Plugin {descriptor.name!r} is already bound")
@@ -378,3 +425,6 @@ class PluginManager:
         descriptor = self._get_descriptor(name)
         self._ipopo.kill(descriptor.instance)
         self._bound.remove(name)
+        scope_id = self._instance_scopes.pop(descriptor.instance, None)
+        if scope_id is not None:
+            self._scope_keys.pop((scope_id, descriptor.name), None)
