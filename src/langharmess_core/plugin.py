@@ -47,6 +47,7 @@ AGENT_PLUGIN_CATALOG: dict[str, tuple[str, str, str]] = {
 DEFAULT_AGENT_PLUGINS: tuple[str, ...] = ("tools", "name")
 
 AGENT_LOOP_MODULE = "langharmess_core.plugins.loop.agent_loop"
+TOOL_EXPORT_ADAPTER_MODULE = "langharmess_core.plugins.tools.export_adapter"
 
 AGENT_PLUGIN_SETTINGS: dict[str, dict[str, Any]] = {
     "tools": {"plugin.tools.root_dir": "."},
@@ -157,6 +158,20 @@ def agent_loop_template_descriptor() -> PluginDescriptor:
         factory="agent-loop-factory",
         instance="agent-loop-template",
         specification=SPEC_AGENT_LOOP,
+        enabled=False,
+        scope="agent",
+        scope_parent="server",
+    )
+
+
+def tool_export_adapter_template_descriptor() -> PluginDescriptor:
+    return PluginDescriptor(
+        name="tool-export-adapter-template",
+        version="1.0.0",
+        module=TOOL_EXPORT_ADAPTER_MODULE,
+        factory="tool-export-adapter-factory",
+        instance="tool-export-adapter-template",
+        specification=SPEC_TOOL,
         enabled=False,
         scope="agent",
         scope_parent="server",

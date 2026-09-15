@@ -61,11 +61,77 @@ class FakeDirectory:
         return None
 
 
+class FakeContribution:
+    def __init__(self, id: str, target: str) -> None:
+        self.id = id
+        self.target = target
+
+
+class FakePackage:
+    def __init__(self, id: str, version: str) -> None:
+        self.id = id
+        self.version = version
+        self.contributions = (FakeContribution("echo", "server"),)
+
+
+class FakeRegistration:
+    def __init__(self, name: str) -> None:
+        self.descriptor = type("Descriptor", (), {"name": name})()
+        self.package_id = "example.package"
+        self.contribution_id = "echo"
+        self.package_version = "1"
+        self.scope_id = "server"
+        self.enabled = True
+        self.status = "installed"
+
+
+class FakeDiscoveryResult:
+    def __init__(self) -> None:
+        self.packages = (FakePackage("example.package", "1"),)
+        self.failures = ()
+
+
+class FakeDynamic:
+    def __init__(self) -> None:
+        self.packages = (FakePackage("example.package", "1"),)
+        self.failures = ()
+        self.registrations_list = (FakeRegistration("echo"),)
+        self.installs: list[tuple[str, str, str | None]] = []
+        self.enabled: list[tuple[str, bool]] = []
+        self.uninstalled: list[str] = []
+        self.upgraded: list[str] = []
+
+    def discovered(self):
+        return self.packages
+
+    def rescan(self):
+        return self
+
+    def registrations(self):
+        return self.registrations_list
+
+    def install(self, package_id, contribution_id, *, scope_id=None):
+        self.installs.append((package_id, contribution_id, scope_id))
+        return FakeRegistration(f"{contribution_id}@{scope_id or 'server'}")
+
+    def set_enabled(self, name, enabled):
+        self.enabled.append((name, enabled))
+        return FakeRegistration(name)
+
+    def uninstall(self, name):
+        self.uninstalled.append(name)
+
+    def upgrade(self, name):
+        self.upgraded.append(name)
+        return FakeRegistration(name)
+
+
 def make_plugin(tmp_path: Path) -> PluginsRoutePlugin:
     plugin = PluginsRoutePlugin()
     plugin._config_dir = str(tmp_path)
     plugin._scope = FakeScopeRegistrar()
     plugin._directory = FakeDirectory()
+    plugin._dynamic = FakeDynamic()
     return plugin
 
 
@@ -303,3 +369,99 @@ def test_route_bind_and_unbind_callbacks(tmp_path: Path) -> None:
     plugin._on_scope_bind("_scope", scope, None)
     plugin._on_directory_bind("_directory", directory, None)
     assert make_client(plugin).get("/plugins", params={"scope": "api"}).status_code == 200
+
+
+def test_dynamic_discovered_and_rescan(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    client = make_client(plugin)
+
+    discovered = client.get("/plugins/discovered")
+    assert discovered.status_code == 200
+    assert discovered.json()["packages"] == [
+        {
+            "id": "example.package",
+            "version": "1",
+            "contributions": [{"id": "echo", "target": "server"}],
+        }
+    ]
+
+    rescan = client.post("/plugins/rescan")
+    assert rescan.status_code == 200
+    assert rescan.json()["packages"][0]["id"] == "example.package"
+
+
+def test_dynamic_runtime_install_enable_upgrade_uninstall(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    client = make_client(plugin)
+
+    runtime = client.get("/plugins/runtime")
+    assert runtime.status_code == 200
+    assert runtime.json()["plugins"][0]["name"] == "echo"
+
+    install = client.post(
+        "/plugins/install",
+        json={
+            "package_id": "example.package",
+            "contribution_id": "echo",
+            "scope_id": "server",
+        },
+    )
+    assert install.status_code == 200
+    assert install.json()["name"] == "echo@server"
+    assert plugin._dynamic.installs == [("example.package", "echo", "server")]
+
+    enable = client.put(
+        "/plugins/runtime/echo/enabled", json={"enabled": False}
+    )
+    assert enable.status_code == 200
+    assert plugin._dynamic.enabled == [("echo", False)]
+
+    upgrade = client.post("/plugins/runtime/echo/upgrade")
+    assert upgrade.status_code == 200
+    assert plugin._dynamic.upgraded == ["echo"]
+
+    delete = client.delete("/plugins/runtime/echo")
+    assert delete.status_code == 200
+    assert delete.json() == {"removed": True}
+    assert plugin._dynamic.uninstalled == ["echo"]
+
+
+def test_dynamic_endpoints_require_dynamic_manager(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    plugin._dynamic = None
+    client = make_client(plugin)
+
+    for method, path, kwargs in [
+        ("get", "/plugins/discovered", {}),
+        ("post", "/plugins/rescan", {}),
+        ("get", "/plugins/runtime", {}),
+        ("post", "/plugins/install", {"json": {"package_id": "p", "contribution_id": "c"}}),
+        ("put", "/plugins/runtime/x/enabled", {"json": {"enabled": True}}),
+        ("delete", "/plugins/runtime/x", {}),
+        ("post", "/plugins/runtime/x/upgrade", {}),
+    ]:
+        response = getattr(client, method)(path, **kwargs)
+        assert response.status_code == 503
+
+
+def test_dynamic_endpoints_report_errors(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+
+    def fail(*args, **kwargs):
+        raise KeyError("missing")
+
+    plugin._dynamic.install = fail
+    plugin._dynamic.set_enabled = fail
+    plugin._dynamic.uninstall = fail
+    plugin._dynamic.upgrade = fail
+    client = make_client(plugin)
+
+    assert client.post(
+        "/plugins/install",
+        json={"package_id": "p", "contribution_id": "c"},
+    ).status_code == 400
+    assert client.put(
+        "/plugins/runtime/x/enabled", json={"enabled": True}
+    ).status_code == 400
+    assert client.delete("/plugins/runtime/x").status_code == 400
+    assert client.post("/plugins/runtime/x/upgrade").status_code == 400

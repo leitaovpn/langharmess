@@ -68,6 +68,7 @@ class PluginManager:
         self._baselines: dict[str, PluginDescriptor] = {}
         self._registration: Any = None
         self._scope_registration: Any = None
+        self._dynamic_registration: Any = None
 
     @property
     def started(self) -> bool:
@@ -98,6 +99,7 @@ class PluginManager:
         self._ipopo = None
         self._registration = None
         self._scope_registration = None
+        self._dynamic_registration = None
         self._bundles.clear()
         self._bound.clear()
         self._modules.clear()
@@ -295,6 +297,17 @@ class PluginManager:
 
     def scope_filter(self, scope_id: ScopeId) -> str:
         return self._scope_policy.visibility_filter(scope_id)
+
+    def register_runtime_service(self, specification: type[Any], service: Any) -> None:
+        if self._context is None:
+            raise RuntimeError("PluginManager is not started")
+        if self._dynamic_registration is not None:
+            raise RuntimeError("Dynamic plugin manager is already registered")
+        self._dynamic_registration = self._context.register_service(
+            specification,
+            service,
+            {PLUGIN_SCOPE_ID: str(ROOT_SCOPE_ID), PLUGIN_KEY: "dynamic-plugin-manager"},
+        )
 
     def apply_config(
         self, overrides: dict[str, dict[str, Any]]

@@ -30,6 +30,7 @@ from langharmess_core.plugin import (
     agent_registry_descriptor,
     session_index_descriptor,
     sqlite_checkpointer_descriptor,
+    tool_export_adapter_template_descriptor,
 )
 from langharmess_logging.plugin import log_descriptor
 from langharmess_plugin.config_store import (
@@ -37,8 +38,12 @@ from langharmess_plugin.config_store import (
     apply_overrides,
     load_overrides,
 )
+from langharmess_plugin.contracts import DynamicPluginManager
+from langharmess_plugin.coordinator import RuntimeMutationCoordinator
+from langharmess_plugin.discovery import PluginDiscovery
 from langharmess_plugin.plugin_manager import PluginManager
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
+from langharmess_plugin.state_store import SqliteRuntimeStateStore
 
 _MANAGER: PluginManager | None = None
 
@@ -54,6 +59,7 @@ def _api_descriptors(
         + agent_templates
         + [
             agent_loop_template_descriptor(),
+            tool_export_adapter_template_descriptor(),
             agent_registry_descriptor(directory),
             agent_directory_descriptor(),
             session_index_descriptor(directory),
@@ -104,8 +110,16 @@ def create_app() -> FastAPI:
         )
         manager = PluginManager(registry)
         manager.start()
+        coordinator = RuntimeMutationCoordinator(
+            manager,
+            SqliteRuntimeStateStore(Path(directory) / "runtime_state.sqlite3"),
+            PluginDiscovery(),
+        )
+        manager.register_runtime_service(DynamicPluginManager, coordinator)
         for descriptor in registry.list():
             manager.install_plugin(descriptor)
+        coordinator.rescan()
+        coordinator.restore()
         _apply_agent_configs(manager, directory)
         _MANAGER = manager
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from argparse import ArgumentParser
 from typing import Any
 
 import httpx
@@ -80,8 +81,171 @@ def handler_for(name: str) -> Any:
 def test_plugin_exposes_plugin_commands() -> None:
     plugin = make_plugin()
     assert [item.name for item in plugin.get_interactive_commands()] == ["plugins"]
-    assert plugin.get_commands() == []
+    assert [item.name for item in plugin.get_commands()] == ["plugins"]
     assert plugin.get_plugin_info() == {"name": "plugin-command", "version": "1.0.0"}
+
+
+def test_noninteractive_plugin_install_calls_runtime_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plugin = make_plugin()
+    command = plugin.get_commands()[0]
+    parser = ArgumentParser()
+    assert command.add_arguments is not None
+    command.add_arguments(parser)
+    args = parser.parse_args(
+        ["install", "example.package", "echo", "--scope", "agent/a"]
+    )
+    calls: list[tuple[str, dict[str, Any]]] = []
+    monkeypatch.setattr(
+        "langharmess_cli.plugins.commands.plugins.APIGuard.ensure_api_server",
+        lambda self: None,
+    )
+
+    def fake_post(url: str, **kwargs: Any) -> Response:
+        calls.append((url, kwargs))
+        return Response({"status": "installed"})
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    assert command.handler(args) == 0
+    assert calls[0][0].endswith("/plugins/install")
+    assert calls[0][1]["json"] == {
+        "package_id": "example.package",
+        "contribution_id": "echo",
+        "scope_id": "agent/a",
+    }
+
+
+def run_command(
+    monkeypatch: pytest.MonkeyPatch,
+    args: list[str],
+    *,
+    methods: dict[str, Any],
+) -> tuple[int, list[tuple[str, str, dict[str, Any]]]]:
+    plugin = make_plugin()
+    command = plugin.get_commands()[0]
+    parser = ArgumentParser()
+    assert command.add_arguments is not None
+    command.add_arguments(parser)
+    parsed = parser.parse_args(args)
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+    monkeypatch.setattr(
+        "langharmess_cli.plugins.commands.plugins.APIGuard.ensure_api_server",
+        lambda self: None,
+    )
+
+    def fake_request(method: str) -> Any:
+        def handler(url: str, **kwargs: Any) -> Response:
+            calls.append((method, url, kwargs))
+            return Response(methods.get(method, {"status": "ok"}))
+        return handler
+
+    monkeypatch.setattr(httpx, "get", fake_request("get"))
+    monkeypatch.setattr(httpx, "post", fake_request("post"))
+    monkeypatch.setattr(httpx, "put", fake_request("put"))
+    monkeypatch.setattr(httpx, "delete", fake_request("delete"))
+    return command.handler(parsed), calls
+
+
+def test_noninteractive_discover_and_list_runtime(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, calls = run_command(
+        monkeypatch,
+        ["discover"],
+        methods={"post": {"packages": []}},
+    )
+    assert code == 0
+    assert calls[0][0] == "post"
+    assert calls[0][1].endswith("/plugins/rescan")
+
+    capsys.readouterr()
+    code, calls = run_command(
+        monkeypatch,
+        ["list"],
+        methods={"get": {"plugins": []}},
+    )
+    assert code == 0
+    assert calls[0][0] == "get"
+    assert calls[0][1].endswith("/plugins/runtime")
+
+
+def test_noninteractive_enable_disable_upgrade_uninstall(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    code, calls = run_command(
+        monkeypatch,
+        ["enable", "api-rate-limit"],
+        methods={"put": {"enabled": True}},
+    )
+    assert code == 0
+    assert calls[0] == (
+        "put",
+        "http://127.0.0.1:8000/plugins/runtime/api-rate-limit/enabled",
+        {"json": {"enabled": True}, "headers": {"Authorization": "Bearer secret"}, "timeout": 10.0},
+    )
+
+    code, calls = run_command(
+        monkeypatch,
+        ["disable", "api-rate-limit"],
+        methods={"put": {"enabled": False}},
+    )
+    assert code == 0
+    assert calls[0][2]["json"] == {"enabled": False}
+
+    code, calls = run_command(
+        monkeypatch,
+        ["upgrade", "api-rate-limit"],
+        methods={"post": {"status": "upgraded"}},
+    )
+    assert code == 0
+    assert calls[0][0] == "post"
+    assert calls[0][1].endswith("/plugins/runtime/api-rate-limit/upgrade")
+
+    code, calls = run_command(
+        monkeypatch,
+        ["uninstall", "api-rate-limit"],
+        methods={"delete": {"removed": True}},
+    )
+    assert code == 0
+    assert calls[0][0] == "delete"
+    assert calls[0][1].endswith("/plugins/runtime/api-rate-limit")
+
+
+def test_noninteractive_mutation_rejects_wrong_arguments(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for args, message in [
+        (["install", "only-package"], "install requires"),
+        (["enable"], "enable requires"),
+        (["upgrade"], "upgrade requires"),
+        (["uninstall"], "uninstall requires"),
+    ]:
+        code, _ = run_command(monkeypatch, args, methods={})
+        assert code == 1
+        assert message in capsys.readouterr().out
+
+
+def test_noninteractive_mutation_reports_http_failures(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    plugin = make_plugin()
+    command = plugin.get_commands()[0]
+    parser = ArgumentParser()
+    assert command.add_arguments is not None
+    command.add_arguments(parser)
+    monkeypatch.setattr(
+        "langharmess_cli.plugins.commands.plugins.APIGuard.ensure_api_server",
+        lambda self: None,
+    )
+    monkeypatch.setattr(
+        httpx,
+        "post",
+        lambda *a, **k: Response({"detail": "boom"}, 500),
+    )
+    assert command.handler(parser.parse_args(["discover"])) == 1
+    assert "Plugin request failed" in capsys.readouterr().out
 
 
 def test_plugins_lists_scope_configuration(
