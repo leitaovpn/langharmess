@@ -116,14 +116,20 @@ def agent_plugin_template_descriptor(plugin: str) -> PluginDescriptor:
 
 
 def agent_loop_descriptor(
-    agent_id: str, scoped_specifications: Iterable[str]
+    agent_id: str,
+    scoped_specifications: Iterable[str],
+    *,
+    visibility_filter: str | None = None,
 ) -> PluginDescriptor:
     """Describe the loop instance scoped to one agent's plugin set."""
+    scoped_specifications = tuple(scoped_specifications)
     filters = {
-        AGENT_LOOP_FIELDS[specification]: agent_filter(agent_id)
+        AGENT_LOOP_FIELDS[specification]: visibility_filter or agent_filter(agent_id)
         for specification in scoped_specifications
         if specification in AGENT_LOOP_FIELDS
     }
+    if SPEC_LLM in scoped_specifications:
+        filters["_scoped_llm_providers"] = visibility_filter or agent_filter(agent_id)
     return PluginDescriptor(
         name=f"agent-loop@{agent_id}",
         version="1.0.0",

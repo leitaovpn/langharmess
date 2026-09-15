@@ -619,13 +619,13 @@ def test_all_agent_loop_guards_quarantine_raw_bad_services(tmp_path: Path) -> No
 
         fields = [field for field in loop._guards if field != "_llm_provider"]
         fields.append("_llm_provider")  # A rejected required LLM invalidates the loop; run last.
-        for field in fields:
+        for index, field in enumerate(fields):
             guard = loop._guards[field]
             bad_service = object()
             manager._context.register_service(
                 guard.protocol,
                 bad_service,
-                {"service.ranking": 10_000},
+                {"service.ranking": 10_000 + index},
             )
             assert id(bad_service) in guard.rejected(), field
     finally:

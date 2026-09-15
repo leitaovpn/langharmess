@@ -10,6 +10,7 @@ from langchain_core.messages import ToolMessage
 from pelix.ipopo.decorators import (
     BindField,
     ComponentFactory,
+    HiddenProperty,
     Invalidate,
     Provides,
     Requires,
@@ -35,6 +36,10 @@ from langharmess_core.contracts import (
     SystemPromptProvider,
     ToolProvider,
     TransformersProvider,
+)
+from langharmess_plugin.scope_policy import (
+    resolve_scoped_aggregate,
+    resolve_scoped_best,
 )
 from langharmess_plugin.validation import ContractGuard
 
@@ -95,7 +100,9 @@ def _strip_orphan_tool_use(message: Any) -> None:
 
 @ComponentFactory("agent-loop-factory")
 @Provides(AgentLoopProvider)
+@HiddenProperty("_scope_chain", "plugin.scope_chain", None)
 @RequiresBest("_llm_provider", LLMProvider, optional=False, immediate_rebind=True)
+@Requires("_scoped_llm_providers", LLMProvider, aggregate=True, optional=True)
 @Requires("_tool_providers", ToolProvider, aggregate=True, optional=True)
 @Requires("_middleware_providers", MiddlewareProvider, aggregate=True, optional=True)
 @Requires("_system_prompt_providers", SystemPromptProvider, aggregate=True, optional=True)
@@ -149,7 +156,10 @@ class PluginAgentLoop:
     """Rebuilds a LangChain agent graph when injected services change."""
 
     def __init__(self) -> None:
+        self._scope_chain: list[str] = []
+        self._service_metadata: dict[int, tuple[str, str, int]] = {}
         self._llm_provider: Any = None
+        self._scoped_llm_providers: list[Any] = []
         self._tool_providers: list[Any] = []
         self._middleware_providers: list[Any] = []
         self._system_prompt_providers: list[Any] = []
@@ -166,6 +176,9 @@ class PluginAgentLoop:
         self._transformers_providers: list[Any] = []
         self._guards: dict[str, ContractGuard] = {
             "_llm_provider": ContractGuard(self, "_llm_provider", LLMProvider),
+            "_scoped_llm_providers": ContractGuard(
+                self, "_scoped_llm_providers", LLMProvider
+            ),
             "_tool_providers": ContractGuard(self, "_tool_providers", ToolProvider),
             "_middleware_providers": ContractGuard(
                 self, "_middleware_providers", MiddlewareProvider
@@ -201,8 +214,40 @@ class PluginAgentLoop:
         }
         self._graph: Any = None
 
+    def _remember_service(self, service: Any, reference: Any) -> None:
+        if reference is None or not hasattr(reference, "get_property"):
+            return
+        scope_id = reference.get_property("plugin.scope_id")
+        plugin_key = reference.get_property("plugin.key")
+        if scope_id is None or plugin_key is None:
+            return
+        ranking = reference.get_property("plugin.ranking") or 0
+        self._service_metadata[id(service)] = (
+            str(scope_id),
+            str(plugin_key),
+            int(ranking),
+        )
+
+    def _forget_service(self, service: Any) -> None:
+        self._service_metadata.pop(id(service), None)
+
+    def _effective(self, providers: list[Any]) -> list[Any]:
+        return resolve_scoped_aggregate(
+            self._scope_chain or [], providers or [], self._service_metadata
+        )
+
+    def _resolve_scoped_llm(self) -> None:
+        selected = resolve_scoped_best(
+            self._scope_chain or [],
+            self._scoped_llm_providers or [],
+            self._service_metadata,
+        )
+        if selected is not None:
+            self._llm_provider = selected
+
     @Validate
     def _validate(self, bundle_context: Any) -> None:
+        self._resolve_scoped_llm()
         self._rebuild()
 
     @Invalidate
@@ -221,37 +266,60 @@ class PluginAgentLoop:
         self._guards[field].release(service)
         self._graph = None
 
+    @BindField("_scoped_llm_providers", if_valid=True)
+    def _on_scoped_llm_bind(self, field: str, service: Any, reference: Any) -> None:
+        if not self._guards[field].admit(service):
+            return
+        self._remember_service(service, reference)
+        self._resolve_scoped_llm()
+        self._rebuild()
+
+    @UnbindField("_scoped_llm_providers", if_valid=True)
+    def _on_scoped_llm_unbind(
+        self, field: str, service: Any, reference: Any
+    ) -> None:
+        self._guards[field].release(service)
+        self._forget_service(service)
+        self._resolve_scoped_llm()
+        self._rebuild()
+
     @BindField("_tool_providers", if_valid=True)
     def _on_tool_bind(self, field: str, service: Any, reference: Any) -> None:
         if not self._guards[field].admit(service):
             return
+        self._remember_service(service, reference)
         self._rebuild()
 
     @UnbindField("_tool_providers", if_valid=True)
     def _on_tool_unbind(self, field: str, service: Any, reference: Any) -> None:
         self._guards[field].release(service)
+        self._forget_service(service)
         self._rebuild()
 
     @BindField("_middleware_providers", if_valid=True)
     def _on_middleware_bind(self, field: str, service: Any, reference: Any) -> None:
         if not self._guards[field].admit(service):
             return
+        self._remember_service(service, reference)
         self._rebuild()
 
     @UnbindField("_middleware_providers", if_valid=True)
     def _on_middleware_unbind(self, field: str, service: Any, reference: Any) -> None:
         self._guards[field].release(service)
+        self._forget_service(service)
         self._rebuild()
 
     @BindField("_system_prompt_providers", if_valid=True)
     def _on_system_prompt_bind(self, field: str, service: Any, reference: Any) -> None:
         if not self._guards[field].admit(service):
             return
+        self._remember_service(service, reference)
         self._rebuild()
 
     @UnbindField("_system_prompt_providers", if_valid=True)
     def _on_system_prompt_unbind(self, field: str, service: Any, reference: Any) -> None:
         self._guards[field].release(service)
+        self._forget_service(service)
         self._rebuild()
 
     @BindField("_response_format_provider", if_valid=True)
@@ -313,6 +381,7 @@ class PluginAgentLoop:
     def _on_interrupt_before_bind(self, field: str, service: Any, reference: Any) -> None:
         if not self._guards[field].admit(service):
             return
+        self._remember_service(service, reference)
         self._rebuild()
 
     @UnbindField("_interrupt_before_providers", if_valid=True)
@@ -320,12 +389,14 @@ class PluginAgentLoop:
         self, field: str, service: Any, reference: Any
     ) -> None:
         self._guards[field].release(service)
+        self._forget_service(service)
         self._rebuild()
 
     @BindField("_interrupt_after_providers", if_valid=True)
     def _on_interrupt_after_bind(self, field: str, service: Any, reference: Any) -> None:
         if not self._guards[field].admit(service):
             return
+        self._remember_service(service, reference)
         self._rebuild()
 
     @UnbindField("_interrupt_after_providers", if_valid=True)
@@ -333,6 +404,7 @@ class PluginAgentLoop:
         self, field: str, service: Any, reference: Any
     ) -> None:
         self._guards[field].release(service)
+        self._forget_service(service)
         self._rebuild()
 
     @BindField("_debug_provider", if_valid=True)
@@ -372,6 +444,7 @@ class PluginAgentLoop:
     def _on_transformers_bind(self, field: str, service: Any, reference: Any) -> None:
         if not self._guards[field].admit(service):
             return
+        self._remember_service(service, reference)
         self._rebuild()
 
     @UnbindField("_transformers_providers", if_valid=True)
@@ -379,24 +452,25 @@ class PluginAgentLoop:
         self, field: str, service: Any, reference: Any
     ) -> None:
         self._guards[field].release(service)
+        self._forget_service(service)
         self._rebuild()
 
     def _collect_tools(self) -> list[Any]:
         tools: list[Any] = []
-        for provider in self._tool_providers or []:
+        for provider in self._effective(self._tool_providers):
             tools.extend(provider.get_tools())
         return tools
 
     def _collect_middlewares(self) -> list[Any]:
         middlewares: list[Any] = []
-        for provider in self._middleware_providers or []:
+        for provider in self._effective(self._middleware_providers):
             middlewares.extend(provider.get_middlewares())
         return middlewares
 
     def _collect_system_prompt(self) -> str | None:
         parts = [
             provider.get_system_prompt()
-            for provider in self._system_prompt_providers or []
+            for provider in self._effective(self._system_prompt_providers)
         ]
         parts = [part for part in parts if part]
         if not parts:
@@ -405,19 +479,19 @@ class PluginAgentLoop:
 
     def _collect_interrupt_before(self) -> list[str]:
         values: list[str] = []
-        for provider in self._interrupt_before_providers or []:
+        for provider in self._effective(self._interrupt_before_providers):
             values.extend(provider.get_interrupt_before())
         return values
 
     def _collect_interrupt_after(self) -> list[str]:
         values: list[str] = []
-        for provider in self._interrupt_after_providers or []:
+        for provider in self._effective(self._interrupt_after_providers):
             values.extend(provider.get_interrupt_after())
         return values
 
     def _collect_transformers(self) -> list[Any]:
         values: list[Any] = []
-        for provider in self._transformers_providers or []:
+        for provider in self._effective(self._transformers_providers):
             values.extend(provider.get_transformers())
         return values
 

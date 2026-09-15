@@ -6,6 +6,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from langharmess_plugin.registry import PluginDescriptor
 from langharmess_plugin.validation import service_contract
+from langharmess_scope import ScopeId
 
 SPEC_PLUGIN_REGISTRAR = "plugin.registrar"
 SPEC_PLUGIN_SCOPE = "plugin.scope"
@@ -22,7 +23,13 @@ class PluginRegistrar(Protocol):
 class ScopedPluginRegistrar(Protocol):
     """Creates extra component instances from already installed bundles."""
 
-    def instantiate_instance(self, descriptor: PluginDescriptor) -> None: ...
+    def instantiate_instance(
+        self,
+        descriptor: PluginDescriptor,
+        *,
+        scope_id: ScopeId | None = None,
+        plugin_key: str | None = None,
+    ) -> None: ...
 
     def kill_instance(self, instance: str) -> None: ...
 
@@ -31,6 +38,18 @@ class ScopedPluginRegistrar(Protocol):
     ) -> Any | None: ...
 
     def installed_modules(self) -> set[str]: ...
+
+    def ensure_scope(
+        self,
+        scope_id: ScopeId,
+        *,
+        name: str,
+        parent_id: ScopeId | None = None,
+    ) -> None: ...
+
+    def remove_scope(self, scope_id: ScopeId, *, recursive: bool = False) -> None: ...
+
+    def scope_filter(self, scope_id: ScopeId) -> str: ...
 
     def apply_config(
         self, overrides: dict[str, dict[str, Any]]

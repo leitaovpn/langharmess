@@ -72,6 +72,7 @@ def test_agent_loop_descriptor_only_filters_scoped_specifications() -> None:
     assert loop.properties["plugin.agent_id"] == "a1"
     assert loop.properties["requires.filters"] == {
         "_llm_provider": "(plugin.agent_id=a1)",
+        "_scoped_llm_providers": "(plugin.agent_id=a1)",
         "_tool_providers": "(plugin.agent_id=a1)",
     }
 

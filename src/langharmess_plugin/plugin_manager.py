@@ -14,13 +14,21 @@ from langharmess_plugin.contracts import (
     ScopedPluginRegistrar,
 )
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
+from langharmess_plugin.scope_policy import PluginScopePolicy
 from langharmess_plugin.validation import (
     ContractViolationError,
     contract_for,
     validate,
 )
+from langharmess_scope import ROOT_SCOPE_ID, ScopeId, ScopeTree
 
 FILTERS_PROPERTY = "requires.filters"
+SERVICE_RANKING = "service.ranking"
+SCOPE_RANKING_STRIDE = 1_000_000
+PLUGIN_SCOPE_ID = "plugin.scope_id"
+PLUGIN_SCOPE_CHAIN = "plugin.scope_chain"
+PLUGIN_KEY = "plugin.key"
+PLUGIN_RANKING = "plugin.ranking"
 
 
 def _validate_filters(properties: dict[str, Any]) -> None:
@@ -42,8 +50,12 @@ def _validate_filters(properties: dict[str, Any]) -> None:
 class PluginManager:
     """Installs, binds, unbinds, and uninstalls plugin components."""
 
-    def __init__(self, registry: PluginRegistry) -> None:
+    def __init__(
+        self, registry: PluginRegistry, *, scope_tree: ScopeTree | None = None
+    ) -> None:
         self.registry = registry
+        self.scope_tree = scope_tree if scope_tree is not None else ScopeTree()
+        self._scope_policy = PluginScopePolicy(self.scope_tree)
         self._framework: Framework | None = None
         self._context: BundleContext | None = None
         self._ipopo: Any = None
@@ -51,6 +63,8 @@ class PluginManager:
         self._bound: set[str] = set()
         self._modules: set[str] = set()
         self._scoped: dict[str, PluginDescriptor] = {}
+        self._instance_scopes: dict[str, ScopeId] = {}
+        self._scope_keys: dict[tuple[ScopeId, str], str] = {}
         self._baselines: dict[str, PluginDescriptor] = {}
         self._registration: Any = None
         self._scope_registration: Any = None
@@ -88,6 +102,8 @@ class PluginManager:
         self._bound.clear()
         self._modules.clear()
         self._scoped.clear()
+        self._instance_scopes.clear()
+        self._scope_keys.clear()
         self._baselines.clear()
 
     def install_plugin(self, descriptor: PluginDescriptor) -> None:
@@ -158,7 +174,13 @@ class PluginManager:
             raise KeyError(name)
         self._unbind(name)
 
-    def instantiate_instance(self, descriptor: PluginDescriptor) -> None:
+    def instantiate_instance(
+        self,
+        descriptor: PluginDescriptor,
+        *,
+        scope_id: ScopeId | None = None,
+        plugin_key: str | None = None,
+    ) -> None:
         """Instantiate a scoped component from an already installed bundle."""
         if not self.started or self._ipopo is None:
             raise RuntimeError("PluginManager is not started")
@@ -166,12 +188,38 @@ class PluginManager:
             raise ValueError(f"Bundle {descriptor.module!r} is not installed")
         if descriptor.instance in self._scoped:
             raise ValueError(f"Instance {descriptor.instance!r} is already instantiated")
-        _validate_filters(descriptor.properties)
+        properties = dict(descriptor.properties)
+        key = plugin_key or descriptor.name.split("@", 1)[0]
+        if scope_id is not None:
+            self.scope_tree.require(scope_id)
+            registration_key = (scope_id, key)
+            if registration_key in self._scope_keys:
+                raise ValueError(
+                    f"Plugin {key!r} is already registered in scope {scope_id!r}"
+                )
+            properties[PLUGIN_SCOPE_ID] = str(scope_id)
+            properties[PLUGIN_SCOPE_CHAIN] = [
+                str(item) for item in self._scope_policy.visible_scopes(scope_id)
+            ]
+            properties[PLUGIN_KEY] = key
+            properties[PLUGIN_RANKING] = descriptor.ranking
+            properties[SERVICE_RANKING] = (
+                self.scope_tree.depth(scope_id) * SCOPE_RANKING_STRIDE
+                + descriptor.ranking
+            )
+        _validate_filters(properties)
         instance = self._ipopo.instantiate(
             descriptor.factory,
             descriptor.instance,
-            dict(descriptor.properties) or None,
+            properties or None,
         )
+        if scope_id is not None:
+            # The attributes make scope metadata available during the initial
+            # validation of consumers. iPOPO does not invoke BindField callbacks
+            # for dependencies that were already present before instantiation.
+            setattr(instance, "_plugin_scope_id", str(scope_id))
+            setattr(instance, "_plugin_key", key)
+            setattr(instance, "_plugin_ranking", descriptor.ranking)
         protocol = contract_for(descriptor.specification)
         if protocol is not None:
             violations = validate(instance, protocol)
@@ -184,6 +232,9 @@ class PluginManager:
                     violations=violations,
                 )
         self._scoped[descriptor.instance] = descriptor
+        if scope_id is not None:
+            self._instance_scopes[descriptor.instance] = scope_id
+            self._scope_keys[(scope_id, key)] = descriptor.instance
 
     def kill_instance(self, instance: str) -> None:
         """Kill a scoped instance created by ``instantiate_instance``."""
@@ -191,9 +242,41 @@ class PluginManager:
             raise KeyError(instance)
         self._ipopo.kill(instance)
         self._scoped.pop(instance)
+        scope_id = self._instance_scopes.pop(instance, None)
+        if scope_id is not None:
+            for registration_key, registered_instance in tuple(self._scope_keys.items()):
+                if registered_instance == instance:
+                    self._scope_keys.pop(registration_key)
 
     def scoped_instances(self) -> dict[str, PluginDescriptor]:
         return dict(self._scoped)
+
+    def ensure_scope(
+        self,
+        scope_id: ScopeId,
+        *,
+        name: str,
+        parent_id: ScopeId | None = None,
+    ) -> None:
+        existing = self.scope_tree.get(scope_id)
+        wanted_parent = parent_id if parent_id is not None else ROOT_SCOPE_ID
+        if existing is None:
+            self.scope_tree.create(scope_id, name, wanted_parent)
+            return
+        if existing.parent_id != wanted_parent:
+            raise ValueError(f"Scope {scope_id!r} already has a different parent")
+
+    def remove_scope(self, scope_id: ScopeId, *, recursive: bool = False) -> None:
+        targets = {scope_id}
+        if recursive:
+            targets.update(item.id for item in self.scope_tree.descendants(scope_id))
+        for instance, instance_scope in reversed(tuple(self._instance_scopes.items())):
+            if instance_scope in targets:
+                self.kill_instance(instance)
+        self.scope_tree.remove(scope_id, recursive=recursive)
+
+    def scope_filter(self, scope_id: ScopeId) -> str:
+        return self._scope_policy.visibility_filter(scope_id)
 
     def apply_config(
         self, overrides: dict[str, dict[str, Any]]
@@ -222,12 +305,18 @@ class PluginManager:
     def find_service(
         self, specification: str, filter: str | None = None
     ) -> Any | None:
-        """Return the first service matching the specification and filter."""
+        """Return the highest-ranked service matching specification and filter."""
         if self._context is None:
             raise RuntimeError("PluginManager is not started")
-        reference: Any = self._context.get_service_reference(specification, filter)
-        if reference is None:
+        references: Any = self._context.get_all_service_references(
+            specification, filter
+        ) or []
+        if not references:
             return None
+        reference = max(
+            references,
+            key=lambda item: int(item.get_property(SERVICE_RANKING) or 0),
+        )
         return self._context.get_service(reference)
 
     def installed_modules(self) -> set[str]:

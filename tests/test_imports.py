@@ -9,6 +9,11 @@ from pathlib import Path
 
 SOURCE_DIR = Path(__file__).resolve().parents[1] / "src"
 PUBLIC_MODULES = [
+    "langharmess_scope",
+    "langharmess_scope.contracts",
+    "langharmess_scope.errors",
+    "langharmess_scope.model",
+    "langharmess_scope.tree",
     "langharmess_core",
     "langharmess_core.contracts",
     "langharmess_core.plugin",
@@ -19,6 +24,7 @@ PUBLIC_MODULES = [
     "langharmess_plugin.contracts",
     "langharmess_plugin.registry",
     "langharmess_plugin.plugin_manager",
+    "langharmess_plugin.scope_policy",
     "langharmess_plugin.validation",
     "langharmess_core.plugins",
     "langharmess_core.plugins.agents",
