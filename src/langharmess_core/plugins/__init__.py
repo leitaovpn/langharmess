@@ -1,5 +1,6 @@
 """Concrete plugin implementations."""
 
+from langharmess_core.plugins.agents.registry import AgentRegistryPlugin
 from langharmess_core.plugins.cache.template_cache import TemplateCachePlugin
 from langharmess_core.plugins.checkpointer.sqlite import SQLiteCheckpointerPlugin
 from langharmess_core.plugins.checkpointer.template_checkpointer import (
@@ -24,6 +25,7 @@ from langharmess_core.plugins.name.template_name import TemplateAgentNamePlugin
 from langharmess_core.plugins.response_format.template_response_format import (
     TemplateResponseFormatPlugin,
 )
+from langharmess_core.plugins.sessions.sqlite import SQLiteSessionIndexPlugin
 from langharmess_core.plugins.state_schema.template_state_schema import (
     TemplateStateSchemaPlugin,
 )
@@ -38,9 +40,11 @@ from langharmess_core.plugins.transformers.template_transformers import (
 )
 
 __all__ = [
+    "AgentRegistryPlugin",
     "LLMPlugin",
     "PluginAgentLoop",
     "SQLiteCheckpointerPlugin",
+    "SQLiteSessionIndexPlugin",
     "TemplateAgentNamePlugin",
     "TemplateCachePlugin",
     "TemplateCheckpointerPlugin",

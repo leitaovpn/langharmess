@@ -26,6 +26,8 @@ class PluginManager:
         self._ipopo: Any = None
         self._bundles: dict[str, Any] = {}
         self._bound: set[str] = set()
+        self._modules: set[str] = set()
+        self._scoped: dict[str, PluginDescriptor] = {}
         self._registration: Any = None
 
     @property
@@ -55,6 +57,8 @@ class PluginManager:
         self._registration = None
         self._bundles.clear()
         self._bound.clear()
+        self._modules.clear()
+        self._scoped.clear()
 
     def install_plugin(self, descriptor: PluginDescriptor) -> None:
         if not self.started or self._context is None or self._ipopo is None:
@@ -67,6 +71,7 @@ class PluginManager:
         bundle = self._context.install_bundle(descriptor.module)
         bundle.start()
         self._bundles[descriptor.name] = bundle
+        self._modules.add(descriptor.module)
         if descriptor.enabled:
             self._instantiate(descriptor)
 
@@ -78,6 +83,16 @@ class PluginManager:
         bundle = self._bundles.pop(name)
         bundle.stop()
         bundle.uninstall()
+        descriptor = self.registry.get(name)
+        if descriptor is not None and not self._module_in_use(descriptor.module):
+            self._modules.discard(descriptor.module)
+
+    def _module_in_use(self, module: str) -> bool:
+        for name in self._bundles:
+            other = self.registry.get(name)
+            if other is not None and other.module == module:
+                return True
+        return False
 
     def replace_plugin(self, descriptor: PluginDescriptor) -> None:
         """Replace a named runtime plugin descriptor and component."""
@@ -105,6 +120,45 @@ class PluginManager:
         if name not in self._bundles:
             raise KeyError(name)
         self._unbind(name)
+
+    def instantiate_instance(self, descriptor: PluginDescriptor) -> None:
+        """Instantiate a scoped component from an already installed bundle."""
+        if not self.started or self._ipopo is None:
+            raise RuntimeError("PluginManager is not started")
+        if descriptor.module not in self._modules:
+            raise ValueError(f"Bundle {descriptor.module!r} is not installed")
+        if descriptor.instance in self._scoped:
+            raise ValueError(f"Instance {descriptor.instance!r} is already instantiated")
+        instance = self._ipopo.instantiate(
+            descriptor.factory,
+            descriptor.instance,
+            dict(descriptor.properties) or None,
+        )
+        protocol = contract_for(descriptor.specification)
+        if protocol is not None:
+            violations = validate(instance, protocol)
+            if violations:
+                self._ipopo.kill(descriptor.instance)
+                raise ContractViolationError(
+                    plugin=descriptor.name,
+                    specification=descriptor.specification,
+                    protocol=protocol.__name__,
+                    violations=violations,
+                )
+        self._scoped[descriptor.instance] = descriptor
+
+    def kill_instance(self, instance: str) -> None:
+        """Kill a scoped instance created by ``instantiate_instance``."""
+        if instance not in self._scoped:
+            raise KeyError(instance)
+        self._ipopo.kill(instance)
+        self._scoped.pop(instance)
+
+    def scoped_instances(self) -> dict[str, PluginDescriptor]:
+        return dict(self._scoped)
+
+    def installed_modules(self) -> set[str]:
+        return set(self._modules)
 
     def installed_names(self) -> set[str]:
         return set(self._bundles)

@@ -10,16 +10,20 @@ from fastapi import FastAPI
 
 from langharmess_api.contracts import SPEC_API_SERVER
 from langharmess_api.plugin import (
+    api_agents_descriptor,
     api_auth_descriptor,
     api_db_descriptor,
     api_health_descriptor,
     api_rate_limit_descriptor,
     api_server_descriptor,
+    api_sessions_descriptor,
     api_stream_descriptor,
 )
 from langharmess_config.plugin import config_descriptors
 from langharmess_core.plugin import (
     agent_loop_descriptor,
+    agent_registry_descriptor,
+    session_index_descriptor,
     sqlite_checkpointer_descriptor,
     workspace_tools_descriptor,
 )
@@ -42,12 +46,16 @@ def create_app() -> FastAPI:
             + [log_descriptor("server", directory)]
             + [
                 agent_loop_descriptor(),
+                agent_registry_descriptor(directory),
+                session_index_descriptor(directory),
                 api_auth_descriptor(),
                 api_rate_limit_descriptor(),
                 api_db_descriptor(),
                 api_health_descriptor(),
-                sqlite_checkpointer_descriptor(),
+                sqlite_checkpointer_descriptor(directory),
                 workspace_tools_descriptor(),
+                api_agents_descriptor(),
+                api_sessions_descriptor(),
                 api_stream_descriptor(),
                 api_server_descriptor(),
             ]

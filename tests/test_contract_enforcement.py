@@ -109,6 +109,19 @@ def test_api_server_quarantines_bad_route_provider() -> None:
 def test_stream_route_reports_contract_violation_as_400() -> None:
     plugin = StreamRoutePlugin()
     plugin._agent_loop = object()
+    plugin._agent_registry = type(
+        "Registry",
+        (),
+        {
+            "get_agent": lambda self, agent_id: {
+                "id": agent_id,
+                "enabled": True,
+            }
+        },
+    )()
+    plugin._session_index = type(
+        "Index", (), {"touch": lambda self, *args: None}
+    )()
 
     class _BadRegistrar:
         def ensure_plugin(self, descriptor: PluginDescriptor) -> None:

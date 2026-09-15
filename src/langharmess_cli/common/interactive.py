@@ -8,7 +8,6 @@ import sys
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 import httpx
 from prompt_toolkit import PromptSession
@@ -19,6 +18,7 @@ from prompt_toolkit.shortcuts import CompleteStyle
 from prompt_toolkit.styles import Style
 
 from langharmess_cli.common.i18n import tr
+from langharmess_cli.common.session import DEFAULT_AGENT_ID, DEFAULT_USER_ID
 from langharmess_cli.contracts import InteractiveCommandSpec, InteractiveRenderer
 from langharmess_cli.plugins.rich_renderer import RichInteractiveRenderer
 
@@ -43,6 +43,9 @@ class InteractiveCLIRunner:
         history_file: str | None = None,
         session: Any = None,
         locale: str = "en",
+        user_id: str = DEFAULT_USER_ID,
+        agent_id: str = DEFAULT_AGENT_ID,
+        session_id: str | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
@@ -55,9 +58,10 @@ class InteractiveCLIRunner:
         self.log: Any = None
         self.renderer = renderer or RichInteractiveRenderer()
         self.locale = locale
-        if hasattr(self.renderer, "set_model"):
-            self._update_model_status()
-        self.session_id = uuid4().hex
+        self.user_id = user_id
+        self.agent_id = agent_id
+        self.session_id = session_id
+        self._update_model_status()
         self.commands: Mapping[str, InteractiveCommandSpec] = {
             command.name: command for command in commands
         }
@@ -124,8 +128,11 @@ class InteractiveCLIRunner:
             "protocol": self.model_protocol,
             "api_key": self.api_key,
             "base_url": self.model_base_url,
-            "session_id": self.session_id,
+            "user_id": self.user_id,
+            "agent_id": self.agent_id,
         }
+        if self.session_id is not None:
+            payload["session_id"] = self.session_id
         if self._stream_usage_disabled():
             payload["stream_usage"] = False
         try:
@@ -138,13 +145,31 @@ class InteractiveCLIRunner:
             ) as response:
                 response.raise_for_status()
                 for line_text in response.iter_lines():
-                    self.renderer.render_event(json.loads(line_text))
+                    event = json.loads(line_text)
+                    if self._apply_session_event(event):
+                        continue
+                    self.renderer.render_event(event)
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
             self.renderer.show_error(str(exc))
         except KeyboardInterrupt:
             self.renderer.show_error(tr(self.locale, "cancelled"))
         finally:
             self.renderer.finish_response()
+
+    def _apply_session_event(self, event: Mapping[str, Any]) -> bool:
+        if event.get("type") != "session":
+            return False
+        session_id = event.get("session_id")
+        if session_id:
+            self.session_id = str(session_id)
+        agent_id = event.get("agent_id")
+        if agent_id:
+            self.agent_id = str(agent_id)
+        user_id = event.get("user_id")
+        if user_id:
+            self.user_id = str(user_id)
+        self._update_model_status()
+        return True
 
     @staticmethod
     def _stream_usage_disabled() -> bool:
@@ -203,14 +228,11 @@ class InteractiveCLIRunner:
         if not provider:
             self.renderer.show_error(tr(self.locale, "model_unknown", name=name))
             return False
-        provider_changed = name != self.provider_name
         self.provider_name = name
         self.model = str(provider["model"])
         self.model_protocol = str(provider.get("protocol", "chat"))
         self.api_key = str(provider.get("api_key", ""))
         self.model_base_url = str(provider.get("base_url", "")).rstrip("/")
-        if provider_changed:
-            self.session_id = uuid4().hex
         self._update_model_status()
         print(
             tr(
@@ -223,7 +245,19 @@ class InteractiveCLIRunner:
         )
         return True
 
+    def refresh_status(self) -> None:
+        """Re-render the status toolbar after identity changes."""
+        self._update_model_status()
+
     def _update_model_status(self) -> None:
+        if not hasattr(self.renderer, "set_model"):
+            return
+        session = (
+            self.session_id[:8]
+            if self.session_id
+            else tr(self.locale, "session_new")
+        )
         self.renderer.set_model(
-            f"{self.provider_name} · {self.model} · {self.model_protocol}"
+            f"{self.user_id}@{self.agent_id} · {session}"
+            f" · {self.provider_name} · {self.model} · {self.model_protocol}"
         )

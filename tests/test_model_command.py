@@ -37,7 +37,7 @@ def test_model_command_lists_and_switches_providers(
     assert runner.model_protocol == "responses"
     assert runner.api_key == "beta-key"
     assert runner.model_base_url == "https://beta.example/v1"
-    assert runner.session_id != original_session_id
+    assert runner.session_id == original_session_id
     assert "beta · shared-model · responses" in runner.renderer.get_status_text()
 
 

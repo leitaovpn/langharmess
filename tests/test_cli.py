@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import sys
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -241,33 +242,17 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     captured = {}
 
     class FakeInteractive:
-        def __init__(
-            self,
-            *,
-            base_url,
-            token,
-            model,
-            provider_name,
-            model_protocol,
-            api_key,
-            model_base_url,
-            commands,
-            renderer,
-            history_file,
-            locale,
-        ):
-            self.base_url = base_url
-            self.token = token
-            self.model = model
-            self.api_key = api_key
-            self.model_base_url = model_base_url
-            self.commands = commands
+        def __init__(self, **kwargs):
+            self.commands = kwargs["commands"]
             captured.update(
-                model=model,
-                provider_name=provider_name,
-                model_protocol=model_protocol,
-                api_key=api_key,
-                model_base_url=model_base_url,
+                model=kwargs["model"],
+                provider_name=kwargs["provider_name"],
+                model_protocol=kwargs["model_protocol"],
+                api_key=kwargs["api_key"],
+                model_base_url=kwargs["model_base_url"],
+                user_id=kwargs["user_id"],
+                agent_id=kwargs["agent_id"],
+                session_id=kwargs["session_id"],
             )
 
         def cmdloop(self):
@@ -281,6 +266,9 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(main_module, "APIGuard", FakeGuard)
     monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
+    monkeypatch.setattr(
+        main_module, "resolve_identity", lambda *a, **k: ("resumed-session", "researcher")
+    )
 
     assert main_module.main() == 0
     assert captured == {
@@ -289,7 +277,116 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         "model_protocol": "chat",
         "api_key": "env-key",
         "model_base_url": "https://models.example/v1",
+        "user_id": "local_user",
+        "agent_id": "researcher",
+        "session_id": "resumed-session",
     }
+
+
+def test_interactive_options_parse_identity_flags() -> None:
+    options = main_module._interactive_options(
+        [
+            "--user-id",
+            "alice",
+            "--agent-id=researcher",
+            "--session-id",
+            "s1",
+            "--new-session",
+            "--base-url=http://api:9000",
+            "--token",
+            "tok",
+        ]
+    )
+    assert options == {
+        "base_url": "http://api:9000",
+        "token": "tok",
+        "user_id": "alice",
+        "agent_id": "researcher",
+        "session_id": "s1",
+        "new_session": True,
+    }
+
+
+def test_interactive_options_default_to_local_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("LANG_HARMESS_USER_ID", raising=False)
+    options = main_module._interactive_options([])
+    assert options["user_id"] == "local_user"
+    assert options["agent_id"] is None
+    assert options["session_id"] is None
+    assert options["new_session"] is False
+
+
+def test_interactive_options_read_user_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LANG_HARMESS_USER_ID", "env_user")
+    assert main_module._interactive_options([])["user_id"] == "env_user"
+
+
+def test_main_forwards_identity_flags_to_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "langharmess",
+            "interactive",
+            "--user-id",
+            "alice",
+            "--agent-id",
+            "researcher",
+            "--session-id",
+            "pinned",
+            "--new-session",
+        ],
+    )
+    manager = SimpleNamespace(
+        start=lambda: None,
+        stop=lambda: None,
+        install_plugin=lambda descriptor: None,
+        get_services=lambda spec: [],
+    )
+    monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
+    monkeypatch.setattr(
+        main_module,
+        "APIGuard",
+        lambda base_url: SimpleNamespace(ensure_api_server=lambda: None),
+    )
+    captured: dict[str, Any] = {}
+
+    def fake_resolve(base_url, token, user_id, **kwargs):
+        captured.update(
+            base_url=base_url, user_id=user_id, token=token, **kwargs
+        )
+        return "pinned", "researcher"
+
+    monkeypatch.setattr(main_module, "resolve_identity", fake_resolve)
+    runner_kwargs: dict[str, Any] = {}
+
+    class FakeInteractive:
+        def __init__(self, **kwargs):
+            runner_kwargs.update(kwargs)
+
+        def cmdloop(self):
+            return None
+
+    monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
+
+    assert main_module.main() == 0
+    assert captured == {
+        "base_url": "http://127.0.0.1:8000",
+        "token": "secret",
+        "user_id": "alice",
+        "agent_id": "researcher",
+        "session_id": "pinned",
+        "new_session": True,
+    }
+    assert runner_kwargs["user_id"] == "alice"
+    assert runner_kwargs["agent_id"] == "researcher"
+    assert runner_kwargs["session_id"] == "pinned"
 
 
 def test_main_passes_locale_flag_to_plugins_and_runner(
@@ -351,6 +448,7 @@ def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> 
         "cli-log",
         "cli-model",
         "cli-rich-renderer",
+        "cli-session",
         "cli-shell",
         "config-toml",
         "configs",

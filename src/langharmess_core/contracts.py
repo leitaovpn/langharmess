@@ -25,6 +25,8 @@ SPEC_NAME = "agent.plugin.name"
 SPEC_CACHE = "agent.plugin.cache"
 SPEC_TRANSFORMERS = "agent.plugin.transformers"
 SPEC_AGENT_LOOP = "agent.loop"
+SPEC_SESSION_INDEX = "session.index"
+SPEC_AGENT_REGISTRY = "agent.registry"
 ModelProtocol = Literal["anthropic", "chat", "responses"]
 
 ALL_PLUGIN_SPECS = (
@@ -44,6 +46,8 @@ ALL_PLUGIN_SPECS = (
     SPEC_CACHE,
     SPEC_TRANSFORMERS,
     SPEC_AGENT_LOOP,
+    SPEC_SESSION_INDEX,
+    SPEC_AGENT_REGISTRY,
 )
 
 
@@ -167,3 +171,31 @@ class AgentLoopProvider(Protocol):
     ) -> AsyncIterator[dict[str, Any]]: ...
 
     def describe(self) -> dict[str, Any]: ...
+
+
+@service_contract(SPEC_SESSION_INDEX)
+@runtime_checkable
+class SessionIndexProvider(Protocol):
+    """Contract implemented by every ``session.index`` service."""
+
+    async def new_session(self, user_id: str) -> str: ...
+
+    async def touch(self, user_id: str, session_id: str, agent_id: str) -> None: ...
+
+    async def get_session(
+        self, user_id: str, session_id: str
+    ) -> dict[str, Any] | None: ...
+
+    async def list_sessions(
+        self, user_id: str, limit: int = 50
+    ) -> list[dict[str, Any]]: ...
+
+
+@service_contract(SPEC_AGENT_REGISTRY)
+@runtime_checkable
+class AgentRegistryProvider(Protocol):
+    """Contract implemented by every ``agent.registry`` service."""
+
+    def list_agents(self) -> list[dict[str, Any]]: ...
+
+    def get_agent(self, agent_id: str) -> dict[str, Any] | None: ...

@@ -16,7 +16,6 @@ from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from rich.console import Console
 
-import langharmess_core.plugins.loop.agent_loop as agent_loop_module
 from langharmess_api.contracts import (
     SPEC_API_SERVER,
     SPEC_AUTH,
@@ -307,7 +306,12 @@ def test_plugin_lifecycle_and_agent_invocation(
             captured_kwargs.update(kwargs)
             return object()
 
-        monkeypatch.setattr(agent_loop_module, "create_agent", fake_create_agent)
+        # Pelix drops a bundle's module from sys.modules on uninstall and
+        # re-executes it when another framework installs it again, so patch the
+        # module of the class actually in use instead of the imported one.
+        monkeypatch.setitem(
+            loop._rebuild.__globals__, "create_agent", fake_create_agent
+        )
 
         response_format = object()
         state_schema = object()

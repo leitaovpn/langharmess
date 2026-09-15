@@ -69,6 +69,28 @@ def api_stream_descriptor() -> PluginDescriptor:
     )
 
 
+def api_sessions_descriptor() -> PluginDescriptor:
+    return PluginDescriptor(
+        name="api-sessions",
+        version="1.0.0",
+        module="langharmess_api.plugins.routes.sessions",
+        factory="api-sessions-route-factory",
+        instance="api-sessions",
+        specification=SPEC_ROUTE,
+    )
+
+
+def api_agents_descriptor() -> PluginDescriptor:
+    return PluginDescriptor(
+        name="api-agents",
+        version="1.0.0",
+        module="langharmess_api.plugins.routes.agents",
+        factory="api-agents-route-factory",
+        instance="api-agents",
+        specification=SPEC_ROUTE,
+    )
+
+
 def api_server_descriptor() -> PluginDescriptor:
     return PluginDescriptor(
         name="api-server",

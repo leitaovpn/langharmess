@@ -14,6 +14,8 @@ Current milestone:
 - `agent.plugin.tools`
 - `agent.plugin.middleware`
 - `agent.loop`
+- `session.index`
+- `agent.registry`
 - `api.server`
 - `api.plugin.auth`
 - `api.plugin.rate_limit`
@@ -146,9 +148,13 @@ the real path (real provider, real agent loop, real tools) use this workflow:
    ```
 2. Call `POST /stream` with `{input, model, api_key, base_url, session_id,
    protocol}` where `protocol` is `chat`, `anthropic`, or `responses`;
-   authenticate with `Authorization: Bearer <plugin.token>` (default
-   `secret`). The server binds the workspace tools to its cwd, so start it
-   in the workspace that holds the test data.
+   `user_id` (default `local_user`) and `agent_id` (default `simple_agent`)
+   are optional, and omitting `session_id` makes the server create one and
+   announce it in a leading `{"type": "session", ...}` event. Authenticate
+   with `Authorization: Bearer <plugin.token>` (default `secret`). The server
+   binds the workspace tools to its cwd, so start it in the workspace that
+   holds the test data; conversation checkpoints live in `LANG_HARMESS_DIR`
+   (`~/.langharmess/langharmess_checkpoints.sqlite3` by default).
 3. Read the raw NDJSON events: `assistant` (text deltas), `tool_call`,
    `tool_output`, `usage`, and `error`. Runtime failures arrive as an
    `error` event inside an HTTP 200 stream — always scan for it instead of
@@ -192,8 +198,8 @@ Pitfalls learned from real runs:
   in a separate `tool_calls` field while `anthropic` embeds them in content,
   so protocol-specific breakage only shows up on that protocol.
 - One server per port per pass; kill leftover servers before restarting, and
-  never `rm -rf` a directory a server is still running from. Sessions are
-  isolated only by `session_id`, so give every pass its own id.
+  never `rm -rf` a directory a server is still running from. Memory is keyed
+  by `user_id::session_id`, so give every pass its own user or session id.
 
 ### CodeGraph index
 
@@ -248,6 +254,15 @@ Once indexed, prefer the MCP tools over grep/read for structural questions:
   substring counts in raw output cannot distinguish correct redraws from
   duplicated output. `tests/test_rich_renderer.py` ships a minimal VT100
   emulator (`_TerminalEmulator` / `terminal_lines`) for these assertions.
+
+- Pelix drops a bundle's module from `sys.modules` when the bundle is
+  uninstalled and re-executes the module when another framework installs it
+  again (`pelix/framework.py`, bundle uninstall path). Module identity is not
+  stable across framework lifecycles: a component can come from a freshly
+  executed copy of its module. Tests that patch module-level names must patch
+  the live class (`type(component)._rebuild.__globals__`), and per-agent
+  components must be created with `PluginManager.instantiate_instance` from an
+  already installed bundle instead of installing the same module twice.
 
 ## File ownership
 

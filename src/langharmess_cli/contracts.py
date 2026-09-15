@@ -35,10 +35,15 @@ class InteractiveCommandContext(Protocol):
     base_url: str
     token: str
     commands: Mapping[str, InteractiveCommandSpec]
+    user_id: str
+    agent_id: str
+    session_id: str | None
 
     def list_providers(self) -> list[str]: ...
 
     def switch_provider(self, name: str) -> bool: ...
+
+    def refresh_status(self) -> None: ...
 
 
 @service_contract(SPEC_CLI_COMMAND)

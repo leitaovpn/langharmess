@@ -7,10 +7,12 @@ from typing import Any
 import pytest
 
 from langharmess_core import contracts
+from langharmess_core.plugins.agents.registry import AgentRegistryPlugin
 from langharmess_core.plugins.llm.llm import LLMPlugin
 from langharmess_core.plugins.middleware.template_middleware import (
     TemplateMiddlewarePlugin,
 )
+from langharmess_core.plugins.sessions.sqlite import SQLiteSessionIndexPlugin
 from langharmess_core.plugins.system_prompt.template_system_prompt import (
     TemplateSystemPromptPlugin,
 )
@@ -29,6 +31,16 @@ PROTOCOLS = (
         contracts.SPEC_SYSTEM_PROMPT,
         contracts.SystemPromptProvider,
         TemplateSystemPromptPlugin,
+    ),
+    (
+        contracts.SPEC_SESSION_INDEX,
+        contracts.SessionIndexProvider,
+        SQLiteSessionIndexPlugin,
+    ),
+    (
+        contracts.SPEC_AGENT_REGISTRY,
+        contracts.AgentRegistryProvider,
+        AgentRegistryPlugin,
     ),
 )
 

@@ -7,11 +7,13 @@ import random
 import sys
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
+from typing import Any
 
 from langharmess_cli.common.api_guard import APIGuard
 from langharmess_cli.common.i18n import get_locale
 from langharmess_cli.common.interactive import InteractiveCLIRunner
 from langharmess_cli.common.runner import CLIRunner
+from langharmess_cli.common.session import DEFAULT_USER_ID, resolve_identity
 from langharmess_cli.contracts import SPEC_CLI_COMMAND, SPEC_CLI_RENDERER
 from langharmess_cli.plugin import cli_descriptors
 from langharmess_config.contracts import SPEC_CONFIGS
@@ -27,6 +29,35 @@ def _global_options(argv: list[str]) -> tuple[Namespace, list[str]]:
     parser.add_argument("--provider")
     parser.add_argument("--dir", default=str(Path.home() / ".langharmess"))
     return parser.parse_known_args(argv)
+
+
+def _interactive_options(argv: list[str]) -> dict[str, Any]:
+    """Extract interactive-mode flags from argv, mirroring the global scan."""
+    values: dict[str, Any] = {
+        "base_url": "http://127.0.0.1:8000",
+        "token": "secret",
+        "user_id": os.environ.get("LANG_HARMESS_USER_ID") or DEFAULT_USER_ID,
+        "agent_id": None,
+        "session_id": None,
+        "new_session": False,
+    }
+    flags = {
+        "--base-url": "base_url",
+        "--token": "token",
+        "--user-id": "user_id",
+        "--agent-id": "agent_id",
+        "--session-id": "session_id",
+    }
+    for index, arg in enumerate(argv):
+        if arg == "--new-session":
+            values["new_session"] = True
+            continue
+        for flag, key in flags.items():
+            if arg == flag and index + 1 < len(argv):
+                values[key] = argv[index + 1]
+            elif arg.startswith(f"{flag}="):
+                values[key] = arg.split("=", 1)[1]
+    return values
 
 
 def _locale_option(argv: list[str], *, default: str) -> str:
@@ -69,19 +100,20 @@ def main() -> int:
         ]
 
         if not argv or argv[0] == "interactive":
-            base_url = "http://127.0.0.1:8000"
-            token = "secret"
             interactive_args = argv[1:] if argv and argv[0] == "interactive" else argv
-            for index, arg in enumerate(interactive_args):
-                if arg == "--base-url" and index + 1 < len(interactive_args):
-                    base_url = interactive_args[index + 1]
-                elif arg.startswith("--base-url="):
-                    base_url = arg.split("=", 1)[1]
-                elif arg == "--token" and index + 1 < len(interactive_args):
-                    token = interactive_args[index + 1]
-                elif arg.startswith("--token="):
-                    token = arg.split("=", 1)[1]
+            interactive_options = _interactive_options(interactive_args)
+            base_url = str(interactive_options["base_url"])
+            token = str(interactive_options["token"])
+            user_id = str(interactive_options["user_id"])
             APIGuard(base_url).ensure_api_server()
+            session_id, agent_id = resolve_identity(
+                base_url,
+                token,
+                user_id,
+                agent_id=interactive_options["agent_id"],
+                session_id=interactive_options["session_id"],
+                new_session=bool(interactive_options["new_session"]),
+            )
             interactive_commands = [
                 command
                 for provider in providers
@@ -118,6 +150,9 @@ def main() -> int:
                 renderer=renderer,
                 history_file=str(Path(directory) / "history"),
                 locale=locale,
+                user_id=user_id,
+                agent_id=agent_id,
+                session_id=session_id,
             )
             interactive_runner.configs = configs
             interactive_runner.log = log_provider

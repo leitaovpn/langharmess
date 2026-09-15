@@ -35,6 +35,15 @@ def cli_descriptors(locale: str) -> list[PluginDescriptor]:
             properties={"plugin.ui.locale": locale},
         ),
         PluginDescriptor(
+            name="cli-session",
+            version="1.0.0",
+            module="langharmess_cli.plugins.commands.session",
+            factory="cli-session-command-factory",
+            instance="cli-session",
+            specification=SPEC_CLI_COMMAND,
+            properties={"plugin.ui.locale": locale},
+        ),
+        PluginDescriptor(
             name="cli-shell",
             version="1.0.0",
             module="langharmess_cli.plugins.commands.shell",

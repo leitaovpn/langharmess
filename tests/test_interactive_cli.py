@@ -97,6 +97,7 @@ def test_interactive_runner_stream_request(
         api_key="model-secret",
         model_base_url="https://models.example/v1/",
         commands=[],
+        session_id="cli-session",
     )
     runner.do_stream("hello")
     output = capsys.readouterr().out
@@ -110,8 +111,117 @@ def test_interactive_runner_stream_request(
         "protocol": "chat",
         "api_key": "model-secret",
         "base_url": "https://models.example/v1",
-        "session_id": runner.session_id,
+        "session_id": "cli-session",
+        "user_id": "local_user",
+        "agent_id": "simple_agent",
     }
+
+
+def stream_response(lines: list[dict]) -> object:
+    class FakeStreamResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def raise_for_status(self):
+            return None
+
+        def iter_lines(self):
+            return [json.dumps(line) for line in lines]
+
+    return FakeStreamResponse()
+
+
+def test_interactive_runner_sends_explicit_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    def fake_stream(*args, **kwargs):
+        captured.update(kwargs)
+        return stream_response([])
+
+    monkeypatch.setattr("langharmess_cli.common.interactive.httpx.stream", fake_stream)
+    runner = InteractiveCLIRunner(
+        base_url="http://api",
+        token="secret",
+        commands=[],
+        user_id="alice",
+        agent_id="researcher",
+        session_id="pinned-session",
+    )
+    runner.do_stream("hi")
+    assert captured["json"]["user_id"] == "alice"
+    assert captured["json"]["agent_id"] == "researcher"
+    assert captured["json"]["session_id"] == "pinned-session"
+
+
+def test_interactive_runner_omits_session_id_until_server_assigns_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    def fake_stream(*args, **kwargs):
+        captured.update(kwargs)
+        return stream_response([])
+
+    monkeypatch.setattr("langharmess_cli.common.interactive.httpx.stream", fake_stream)
+    runner = InteractiveCLIRunner(
+        base_url="http://api", token="secret", commands=[], session_id=None
+    )
+    runner.do_stream("hi")
+    assert "session_id" not in captured["json"]
+
+
+def test_interactive_runner_adopts_session_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "langharmess_cli.common.interactive.httpx.stream",
+        lambda *a, **k: stream_response(
+            [
+                {
+                    "type": "session",
+                    "session_id": "server-session",
+                    "agent_id": "researcher",
+                    "user_id": "local_user",
+                },
+                {"type": "assistant", "content": "done"},
+            ]
+        ),
+    )
+    renderer = RecordingRenderer()
+    runner = InteractiveCLIRunner(
+        base_url="http://api",
+        token="secret",
+        commands=[],
+        renderer=renderer,
+        session_id=None,
+    )
+    runner.do_stream("hello")
+
+    assert runner.session_id == "server-session"
+    assert runner.agent_id == "researcher"
+    assert {"type": "assistant", "content": "done"} in renderer.events
+    assert all(event.get("type") != "session" for event in renderer.events)
+
+
+def test_interactive_runner_forwards_identity_to_real_renderer_status() -> None:
+    runner = InteractiveCLIRunner(
+        base_url="http://api",
+        token="secret",
+        commands=[],
+        renderer=RichInteractiveRenderer(),
+        user_id="alice",
+        agent_id="researcher",
+        session_id="abcdef1234567890",
+    )
+    status = runner.renderer.get_status_text()
+    assert "alice@researcher" in status
+    assert "abcdef12" in status
+    assert "gpt-4o-mini" in status
 
 
 def test_health_provides_interactive_command() -> None:
@@ -355,7 +465,9 @@ def test_cmdloop_uses_dynamic_status_toolbar_with_real_renderer() -> None:
     runner.cmdloop()
     toolbar = prompts[0][1]["bottom_toolbar"]
     assert callable(toolbar)
-    assert toolbar().startswith(" environment · gpt-4o-mini · chat")
+    assert toolbar().startswith(
+        " local_user@simple_agent · new session · environment · gpt-4o-mini · chat"
+    )
 
 
 def test_runner_localizes_welcome_and_unknown_command_in_zh() -> None:
