@@ -23,13 +23,10 @@ from pydantic import BaseModel
 from langharmess_api.contracts import RouteProvider
 from langharmess_core.common.ids import thread_key, validate_id
 from langharmess_core.contracts import (
-    AgentLoopProvider,
-    AgentRegistryProvider,
+    AgentDirectoryProvider,
     ModelProtocol,
     SessionIndexProvider,
 )
-from langharmess_core.plugin import runtime_llm_descriptor
-from langharmess_plugin.contracts import PluginRegistrar
 from langharmess_plugin.validation import ContractGuard, ContractViolationError
 
 LOGGER = logging.getLogger("langharmess.server")
@@ -62,52 +59,38 @@ class StreamRequest(BaseModel):
 @Provides(RouteProvider)
 @Property("_plugin_name", "plugin.name", "stream")
 @Property("_plugin_version", "plugin.version", "1.0.0")
-@RequiresBest("_agent_loop", AgentLoopProvider, optional=True, immediate_rebind=True)
 @RequiresBest(
-    "_agent_registry", AgentRegistryProvider, optional=True, immediate_rebind=True
+    "_agent_directory", AgentDirectoryProvider, optional=True, immediate_rebind=True
 )
 @RequiresBest(
     "_session_index", SessionIndexProvider, optional=True, immediate_rebind=True
 )
-@RequiresBest(
-    "_plugin_registrar", PluginRegistrar, optional=True, immediate_rebind=True
-)
 class StreamRoutePlugin:
+    """Streams one agent turn; configuration changes, streaming stays unlocked."""
+
     def __init__(self) -> None:
         self._plugin_name = "stream"
         self._plugin_version = "1.0.0"
-        self._agent_loop: Any = None
-        self._agent_registry: Any = None
+        self._agent_directory: Any = None
         self._session_index: Any = None
-        self._plugin_registrar: Any = None
         self._guards: dict[str, ContractGuard] = {
-            "_agent_loop": ContractGuard(self, "_agent_loop", AgentLoopProvider),
-            "_agent_registry": ContractGuard(
-                self, "_agent_registry", AgentRegistryProvider
+            "_agent_directory": ContractGuard(
+                self, "_agent_directory", AgentDirectoryProvider
             ),
             "_session_index": ContractGuard(
                 self, "_session_index", SessionIndexProvider
             ),
-            "_plugin_registrar": ContractGuard(
-                self, "_plugin_registrar", PluginRegistrar
-            ),
         }
-        self._runtime_lock = asyncio.Lock()
+        self._configuration_lock = asyncio.Lock()
 
-    @BindField("_agent_loop", if_valid=True)
-    def _on_agent_loop_bind(self, field: str, service: Any, reference: Any) -> None:
+    @BindField("_agent_directory", if_valid=True)
+    def _on_agent_directory_bind(
+        self, field: str, service: Any, reference: Any
+    ) -> None:
         self._guards[field].admit(service)
 
-    @UnbindField("_agent_loop", if_valid=True)
-    def _on_agent_loop_unbind(self, field: str, service: Any, reference: Any) -> None:
-        self._guards[field].release(service)
-
-    @BindField("_agent_registry", if_valid=True)
-    def _on_agent_registry_bind(self, field: str, service: Any, reference: Any) -> None:
-        self._guards[field].admit(service)
-
-    @UnbindField("_agent_registry", if_valid=True)
-    def _on_agent_registry_unbind(
+    @UnbindField("_agent_directory", if_valid=True)
+    def _on_agent_directory_unbind(
         self, field: str, service: Any, reference: Any
     ) -> None:
         self._guards[field].release(service)
@@ -122,58 +105,32 @@ class StreamRoutePlugin:
     ) -> None:
         self._guards[field].release(service)
 
-    @BindField("_plugin_registrar", if_valid=True)
-    def _on_plugin_registrar_bind(
-        self, field: str, service: Any, reference: Any
-    ) -> None:
-        self._guards[field].admit(service)
-
-    @UnbindField("_plugin_registrar", if_valid=True)
-    def _on_plugin_registrar_unbind(
-        self, field: str, service: Any, reference: Any
-    ) -> None:
-        self._guards[field].release(service)
-
     def get_router(self) -> APIRouter:
         router = APIRouter()
 
         @router.post("/stream")
         async def stream(payload: StreamRequest = Body(...)) -> StreamingResponse:
-            if self._plugin_registrar is None:
+            if self._agent_directory is None:
                 raise HTTPException(
-                    status_code=503, detail="Plugin registrar unavailable"
+                    status_code=503, detail="Agent directory unavailable"
                 )
 
-            await self._runtime_lock.acquire()
-            try:
-                user_id, agent_id, session_id = self._resolve_identity(payload)
-                self._require_agent(agent_id)
-                if payload.model is None:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="model is required until agents own their llm",
-                    )
-                properties: dict[str, Any] = {
-                    "plugin.model.name": payload.model,
-                    "plugin.model.api_key": payload.api_key,
-                    "plugin.model.base_url": payload.base_url,
-                    "plugin.model.protocol": payload.protocol,
-                }
-                if payload.stream_usage is not None:
-                    properties["plugin.model.stream_usage"] = payload.stream_usage
-                try:
-                    self._plugin_registrar.ensure_plugin(
-                        runtime_llm_descriptor(properties)
-                    )
-                except ContractViolationError as exc:
-                    raise HTTPException(status_code=400, detail=str(exc)) from exc
-                if self._agent_loop is None:
-                    raise HTTPException(status_code=503, detail="Agent loop unavailable")
-                session_id = await self._ensure_session(user_id, session_id)
-                await self._session_index.touch(user_id, session_id, agent_id)
-            except BaseException:
-                self._runtime_lock.release()
-                raise
+            user_id, agent_id, session_id = self._resolve_identity(payload)
+            if payload.model is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="model is required until agents own their llm",
+                )
+
+            async with self._configuration_lock:
+                self._apply_agent_configuration(agent_id, payload)
+
+            loop = self._agent_directory.get_loop(agent_id)
+            if loop is None:
+                raise HTTPException(status_code=503, detail="Agent loop unavailable")
+
+            session_id = await self._ensure_session(user_id, session_id)
+            await self._session_index.touch(user_id, session_id, agent_id)
 
             async def generate() -> AsyncIterator[str]:
                 try:
@@ -185,7 +142,7 @@ class StreamRoutePlugin:
                             "user_id": user_id,
                         }
                     )
-                    async for event in self._agent_loop.astream(
+                    async for event in loop.astream(
                         payload.input, thread_id=thread_key(user_id, session_id)
                     ):
                         yield _encode(event)
@@ -198,12 +155,28 @@ class StreamRoutePlugin:
                             "message": _safe_error_message(exc, payload.api_key),
                         }
                     )
-                finally:
-                    self._runtime_lock.release()
 
             return StreamingResponse(generate(), media_type="application/x-ndjson")
 
         return router
+
+    def _apply_agent_configuration(self, agent_id: str, payload: StreamRequest) -> None:
+        properties: dict[str, Any] = {
+            "plugin.model.name": payload.model,
+            "plugin.model.api_key": payload.api_key,
+            "plugin.model.base_url": payload.base_url,
+            "plugin.model.protocol": payload.protocol,
+        }
+        if payload.stream_usage is not None:
+            properties["plugin.model.stream_usage"] = payload.stream_usage
+        try:
+            self._agent_directory.ensure_plugin_instance(agent_id, "llm", properties)
+        except ContractViolationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     def _resolve_identity(self, payload: StreamRequest) -> tuple[str, str, str | None]:
         try:
@@ -217,15 +190,6 @@ class StreamRoutePlugin:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return user_id, agent_id, session_id
-
-    def _require_agent(self, agent_id: str) -> None:
-        if self._agent_registry is None:
-            raise HTTPException(status_code=503, detail="Agent registry unavailable")
-        agent = self._agent_registry.get_agent(agent_id)
-        if agent is None:
-            raise HTTPException(status_code=400, detail=f"Unknown agent: {agent_id}")
-        if not agent.get("enabled", False):
-            raise HTTPException(status_code=400, detail=f"Agent is disabled: {agent_id}")
 
     async def _ensure_session(self, user_id: str, session_id: str | None) -> str:
         if self._session_index is None:

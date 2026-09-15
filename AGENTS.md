@@ -16,6 +16,7 @@ Current milestone:
 - `agent.loop`
 - `session.index`
 - `agent.registry`
+- `agent.directory`
 - `api.server`
 - `api.plugin.auth`
 - `api.plugin.rate_limit`
@@ -33,6 +34,12 @@ Current milestone:
   `create_agent` graph when injected services change.
 - Keep runtime plugin registration deterministic: production plugins must not
   use `@Instantiate`; the `PluginManager` controls instantiation and teardown.
+- Every agent has its own plugin set: the agent directory materializes one
+  instance per agent from the installed template bundles (catalog in
+  `langharmess_core/plugin.py`), tagging instances with `plugin.agent_id` and
+  scoping the agent loop through iPOPO `requires.filters`. Never install the
+  same module twice; instantiate extra instances through
+  `PluginManager.instantiate_instance`.
 
 ### Service contracts
 

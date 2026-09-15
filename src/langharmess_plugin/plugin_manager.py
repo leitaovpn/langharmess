@@ -4,16 +4,38 @@ from __future__ import annotations
 
 from typing import Any
 
+from pelix import ldapfilter
 from pelix.framework import BundleContext, Framework, FrameworkFactory, create_framework
 from pelix.ipopo.constants import SERVICE_IPOPO
 
-from langharmess_plugin.contracts import PluginRegistrar
+from langharmess_plugin.contracts import (
+    PluginRegistrar,
+    ScopedPluginRegistrar,
+)
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 from langharmess_plugin.validation import (
     ContractViolationError,
     contract_for,
     validate,
 )
+
+FILTERS_PROPERTY = "requires.filters"
+
+
+def _validate_filters(properties: dict[str, Any]) -> None:
+    """Reject malformed requires.filters: iPOPO silently ignores them."""
+    filters = properties.get(FILTERS_PROPERTY)
+    if filters is None:
+        return
+    if not isinstance(filters, dict):
+        raise ValueError(f"{FILTERS_PROPERTY} must be a mapping of field to filter")
+    for field, value in filters.items():
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"Invalid filter for {field}: {value!r}")
+        try:
+            ldapfilter.get_ldap_filter(value)
+        except ValueError as exc:
+            raise ValueError(f"Invalid filter for {field}: {value!r}") from exc
 
 
 class PluginManager:
@@ -29,6 +51,7 @@ class PluginManager:
         self._modules: set[str] = set()
         self._scoped: dict[str, PluginDescriptor] = {}
         self._registration: Any = None
+        self._scope_registration: Any = None
 
     @property
     def started(self) -> bool:
@@ -46,6 +69,9 @@ class PluginManager:
         self._registration = self._context.register_service(
             PluginRegistrar, self, {}
         )
+        self._scope_registration = self._context.register_service(
+            ScopedPluginRegistrar, self, {}
+        )
 
     def stop(self) -> None:
         if self._framework is None:
@@ -55,6 +81,7 @@ class PluginManager:
         self._context = None
         self._ipopo = None
         self._registration = None
+        self._scope_registration = None
         self._bundles.clear()
         self._bound.clear()
         self._modules.clear()
@@ -129,6 +156,7 @@ class PluginManager:
             raise ValueError(f"Bundle {descriptor.module!r} is not installed")
         if descriptor.instance in self._scoped:
             raise ValueError(f"Instance {descriptor.instance!r} is already instantiated")
+        _validate_filters(descriptor.properties)
         instance = self._ipopo.instantiate(
             descriptor.factory,
             descriptor.instance,
@@ -156,6 +184,17 @@ class PluginManager:
 
     def scoped_instances(self) -> dict[str, PluginDescriptor]:
         return dict(self._scoped)
+
+    def find_service(
+        self, specification: str, filter: str | None = None
+    ) -> Any | None:
+        """Return the first service matching the specification and filter."""
+        if self._context is None:
+            raise RuntimeError("PluginManager is not started")
+        reference: Any = self._context.get_service_reference(specification, filter)
+        if reference is None:
+            return None
+        return self._context.get_service(reference)
 
     def installed_modules(self) -> set[str]:
         return set(self._modules)

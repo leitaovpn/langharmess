@@ -21,11 +21,13 @@ from langharmess_api.plugin import (
 )
 from langharmess_config.plugin import config_descriptors
 from langharmess_core.plugin import (
-    agent_loop_descriptor,
+    DEFAULT_AGENT_PLUGINS,
+    agent_directory_descriptor,
+    agent_loop_template_descriptor,
+    agent_plugin_template_descriptor,
     agent_registry_descriptor,
     session_index_descriptor,
     sqlite_checkpointer_descriptor,
-    workspace_tools_descriptor,
 )
 from langharmess_logging.plugin import log_descriptor
 from langharmess_plugin.plugin_manager import PluginManager
@@ -41,19 +43,24 @@ def create_app() -> FastAPI:
         directory = os.environ.get(
             "LANG_HARMESS_DIR", str(Path.home() / ".langharmess")
         )
+        agent_templates = [
+            agent_plugin_template_descriptor(plugin)
+            for plugin in dict.fromkeys(("llm", *DEFAULT_AGENT_PLUGINS))
+        ]
         registry = PluginRegistry(
             config_descriptors(directory)
             + [log_descriptor("server", directory)]
+            + agent_templates
             + [
-                agent_loop_descriptor(),
+                agent_loop_template_descriptor(),
                 agent_registry_descriptor(directory),
+                agent_directory_descriptor(),
                 session_index_descriptor(directory),
                 api_auth_descriptor(),
                 api_rate_limit_descriptor(),
                 api_db_descriptor(),
                 api_health_descriptor(),
                 sqlite_checkpointer_descriptor(directory),
-                workspace_tools_descriptor(),
                 api_agents_descriptor(),
                 api_sessions_descriptor(),
                 api_stream_descriptor(),

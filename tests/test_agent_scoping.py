@@ -14,13 +14,25 @@ again after an uninstall.
 
 from __future__ import annotations
 
+import asyncio
+import json
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_LLM
+from langharmess_core.contracts import (
+    SPEC_AGENT_DIRECTORY,
+    SPEC_AGENT_LOOP,
+    SPEC_LLM,
+)
+from langharmess_core.plugin import (
+    agent_directory_descriptor,
+    agent_loop_template_descriptor,
+    agent_plugin_template_descriptor,
+    agent_registry_descriptor,
+)
 from langharmess_plugin.plugin_manager import PluginManager
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 
@@ -150,5 +162,77 @@ def test_malformed_filter_falls_back_to_unfiltered_binding() -> None:
         loops = manager.get_services(SPEC_AGENT_LOOP)
         assert len(loops) == 1
         assert loops[0]._llm_provider is not None
+    finally:
+        manager.stop()
+
+
+def test_directory_materializes_isolated_plugin_sets(tmp_path: Any) -> None:
+    registry_path = tmp_path / "agents.json"
+    registry_path.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "agents": [
+                    {
+                        "id": "alpha",
+                        "name": "Alpha",
+                        "description": "first agent",
+                        "enabled": True,
+                        "created_at": "2026-09-15T00:00:00+00:00",
+                        "updated_at": "2026-09-15T00:00:00+00:00",
+                    },
+                    {
+                        "id": "beta",
+                        "name": "Beta",
+                        "description": "second agent",
+                        "enabled": True,
+                        "created_at": "2026-09-15T00:00:00+00:00",
+                        "updated_at": "2026-09-15T00:00:00+00:00",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    model_a = StaticModel()
+    model_b = StaticModel()
+    registry = PluginRegistry(
+        [
+            agent_plugin_template_descriptor("llm"),
+            agent_plugin_template_descriptor("tools"),
+            agent_plugin_template_descriptor("name"),
+            agent_loop_template_descriptor(),
+            agent_registry_descriptor(str(tmp_path)),
+            agent_directory_descriptor(),
+        ]
+    )
+    manager = PluginManager(registry)
+    manager.start()
+    try:
+        for item in registry.list():
+            manager.install_plugin(item)
+        directory = manager.get_service(SPEC_AGENT_DIRECTORY)
+        assert directory is not None
+
+        async def scenario() -> tuple[Any, Any]:
+            directory.ensure_plugin_instance(
+                "alpha", "llm", {"plugin.model.instance": model_a}
+            )
+            directory.ensure_plugin_instance(
+                "beta", "llm", {"plugin.model.instance": model_b}
+            )
+            return directory.get_loop("alpha"), directory.get_loop("beta")
+
+        loop_a, loop_b = asyncio.run(scenario())
+
+        assert loop_a is not None
+        assert loop_b is not None
+        assert loop_a is not loop_b
+        assert loop_a._llm_provider.get_model() is model_a
+        assert loop_b._llm_provider.get_model() is model_b
+        assert loop_a._name_provider.get_name() == "Alpha"
+        assert loop_b._name_provider.get_name() == "Beta"
+        assert "bash" in [tool.name for tool in loop_a._collect_tools()]
+        assert directory.list_agents()[0]["materialized"] is True
     finally:
         manager.stop()

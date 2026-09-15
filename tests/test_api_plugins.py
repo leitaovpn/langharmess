@@ -25,7 +25,9 @@ from langharmess_core.common.dependencies import get_db_session
 from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop
 
 
-def agent_record(agent_id: str = "simple_agent", enabled: bool = True) -> dict[str, Any]:
+def agent_record(
+    agent_id: str = "simple_agent", enabled: bool = True
+) -> dict[str, Any]:
     return {
         "id": agent_id,
         "name": agent_id,
@@ -34,20 +36,6 @@ def agent_record(agent_id: str = "simple_agent", enabled: bool = True) -> dict[s
         "created_at": "2026-09-15T00:00:00+00:00",
         "updated_at": "2026-09-15T00:00:00+00:00",
     }
-
-
-class FakeAgentRegistry:
-    def __init__(self, agents: list[dict[str, Any]] | None = None) -> None:
-        self._agents = agents if agents is not None else [agent_record()]
-
-    def list_agents(self) -> list[dict[str, Any]]:
-        return [dict(agent) for agent in self._agents]
-
-    def get_agent(self, agent_id: str) -> dict[str, Any] | None:
-        for agent in self._agents:
-            if agent["id"] == agent_id:
-                return dict(agent)
-        return None
 
 
 class FakeSessionIndex:
@@ -77,18 +65,46 @@ class FakeAgentLoop:
         yield {"type": "assistant", "content": self.reply}
 
 
+class FakeDirectory:
+    """Stands in for the agent directory: per-agent loops and plugin sets."""
+
+    def __init__(self, agents: dict[str, bool] | None = None) -> None:
+        self.agents = agents if agents is not None else {"simple_agent": True}
+        self.llm_calls: list[tuple[str, str, dict[str, Any]]] = []
+        self.loops: dict[str, Any] = {}
+
+    def list_agents(self) -> list[dict[str, Any]]:
+        return [
+            agent_record(agent_id, enabled)
+            for agent_id, enabled in self.agents.items()
+        ]
+
+    def get_loop(self, agent_id: str) -> Any:
+        return self.loops.get(agent_id)
+
+    def ensure_plugin_instance(
+        self, agent_id: str, plugin: str, properties: dict[str, Any]
+    ) -> None:
+        if agent_id not in self.agents:
+            raise ValueError(f"Unknown agent: {agent_id}")
+        if not self.agents[agent_id]:
+            raise ValueError(f"Agent is disabled: {agent_id}")
+        self.llm_calls.append((agent_id, plugin, properties))
+        self.loops.setdefault(agent_id, FakeAgentLoop())
+
+    def reload(self, agent_id: str | None = None) -> None:
+        return None
+
+
 def make_stream_plugin(
-    loop: Any = None, *, registry: Any = None, index: Any = None
+    loop: Any = None, *, directory: Any = None, index: Any = None
 ) -> Any:
     plugin = StreamRoutePlugin()
-    plugin._agent_loop = loop if loop is not None else FakeAgentLoop()
-    descriptors: list[Any] = []
-    plugin._plugin_registrar = type(
-        "Registrar", (), {"ensure_plugin": lambda self, item: descriptors.append(item)}
-    )()
+    fake_directory = directory if directory is not None else FakeDirectory()
+    if loop is not None:
+        fake_directory.loops["simple_agent"] = loop
+    plugin._agent_directory = fake_directory
     plugin._session_index = index if index is not None else FakeSessionIndex()
-    plugin._agent_registry = registry if registry is not None else FakeAgentRegistry()
-    plugin._runtime_llm_descriptors = descriptors
     return plugin
 
 
@@ -287,13 +303,13 @@ def test_agent_loop_astream_extracts_responses_api_text_blocks() -> None:
 
 
 def test_stream_route_plugin_streams_agent_output() -> None:
-    class FakeAgentLoop:
+    class FakeLoop:
         async def astream(self, message, *, thread_id=None):
             assert thread_id == "local_user::session-1"
             yield {"type": "assistant", "content": "hello"}
             yield {"type": "assistant", "content": "world"}
 
-    plugin = make_stream_plugin(FakeAgentLoop())
+    plugin = make_stream_plugin(FakeLoop())
     response = TestClient(make_stream_app(plugin)).post(
         "/stream", json=stream_payload()
     )
@@ -313,9 +329,9 @@ def test_stream_route_plugin_streams_agent_output() -> None:
     assert plugin._session_index.touched == [
         ("local_user", "session-1", "simple_agent")
     ]
-    descriptor = plugin._runtime_llm_descriptors[0]
-    assert descriptor.name == "runtime-llm"
-    assert descriptor.properties == {
+    agent_id, plugin_key, properties = plugin._agent_directory.llm_calls[0]
+    assert (agent_id, plugin_key) == ("simple_agent", "llm")
+    assert properties == {
         "plugin.model.name": "test-model",
         "plugin.model.api_key": "test-key",
         "plugin.model.base_url": "https://models.example/v1",
@@ -323,13 +339,28 @@ def test_stream_route_plugin_streams_agent_output() -> None:
     }
 
 
+def test_stream_route_scopes_llm_configuration_per_agent() -> None:
+    plugin = make_stream_plugin(
+        directory=FakeDirectory({"simple_agent": True, "researcher": True})
+    )
+    client = TestClient(make_stream_app(plugin))
+
+    client.post("/stream", json=stream_payload(agent_id="researcher"))
+    client.post("/stream", json=stream_payload(agent_id="simple_agent"))
+
+    assert [call[0] for call in plugin._agent_directory.llm_calls] == [
+        "researcher",
+        "simple_agent",
+    ]
+
+
 def test_stream_route_creates_session_when_absent() -> None:
-    class FakeAgentLoop:
+    class FakeLoop:
         async def astream(self, message, *, thread_id=None):
             assert thread_id == "local_user::generated-session"
             yield {"type": "assistant", "content": "ok"}
 
-    plugin = make_stream_plugin(FakeAgentLoop())
+    plugin = make_stream_plugin(FakeLoop())
     response = TestClient(make_stream_app(plugin)).post(
         "/stream", json=stream_payload(session_id=None)
     )
@@ -348,13 +379,13 @@ def test_stream_route_creates_session_when_absent() -> None:
 
 
 def test_stream_route_honours_explicit_user_and_agent() -> None:
-    class FakeAgentLoop:
+    class FakeLoop:
         async def astream(self, message, *, thread_id=None):
             assert thread_id == "alice::session-1"
             yield {"type": "assistant", "content": "ok"}
 
     plugin = make_stream_plugin(
-        FakeAgentLoop(), registry=FakeAgentRegistry([agent_record("researcher")])
+        FakeLoop(), directory=FakeDirectory({"researcher": True})
     )
     response = TestClient(make_stream_app(plugin)).post(
         "/stream", json=stream_payload(user_id="alice", agent_id="researcher")
@@ -371,7 +402,7 @@ def test_stream_route_honours_explicit_user_and_agent() -> None:
 
 
 def test_stream_route_rejects_unknown_agent() -> None:
-    plugin = make_stream_plugin(registry=FakeAgentRegistry())
+    plugin = make_stream_plugin()
     response = TestClient(make_stream_app(plugin)).post(
         "/stream", json=stream_payload(agent_id="missing_agent")
     )
@@ -382,7 +413,7 @@ def test_stream_route_rejects_unknown_agent() -> None:
 
 def test_stream_route_rejects_disabled_agent() -> None:
     plugin = make_stream_plugin(
-        registry=FakeAgentRegistry([agent_record("simple_agent", enabled=False)])
+        directory=FakeDirectory({"simple_agent": False})
     )
     response = TestClient(make_stream_app(plugin)).post(
         "/stream", json=stream_payload()
@@ -400,7 +431,7 @@ def test_stream_route_rejects_disabled_agent() -> None:
     ],
 )
 def test_stream_route_rejects_invalid_identifiers(field: str, value: str) -> None:
-    plugin = make_stream_plugin(registry=FakeAgentRegistry())
+    plugin = make_stream_plugin()
     response = TestClient(make_stream_app(plugin)).post(
         "/stream", json=stream_payload(**{field: value})
     )
@@ -409,7 +440,7 @@ def test_stream_route_rejects_invalid_identifiers(field: str, value: str) -> Non
 
 
 def test_stream_route_reports_missing_session_index() -> None:
-    plugin = make_stream_plugin(registry=FakeAgentRegistry())
+    plugin = make_stream_plugin()
     plugin._session_index = None
     response = TestClient(make_stream_app(plugin)).post(
         "/stream", json=stream_payload()
@@ -417,9 +448,25 @@ def test_stream_route_reports_missing_session_index() -> None:
     assert response.status_code == 503
 
 
-def test_stream_route_reports_missing_agent_registry() -> None:
-    plugin = make_stream_plugin(registry=FakeAgentRegistry())
-    plugin._agent_registry = None
+def test_stream_route_reports_missing_directory() -> None:
+    plugin = make_stream_plugin()
+    plugin._agent_directory = None
+    response = TestClient(make_stream_app(plugin)).post(
+        "/stream", json=stream_payload()
+    )
+    assert response.status_code == 503
+
+
+def test_stream_route_reports_missing_loop() -> None:
+    plugin = make_stream_plugin()
+    plugin._agent_directory.loops.clear()
+    original = plugin._agent_directory.ensure_plugin_instance
+
+    def ensure_without_loop(agent_id: str, plugin_key: str, properties: Any) -> None:
+        original(agent_id, plugin_key, properties)
+        plugin._agent_directory.loops.clear()
+
+    plugin._agent_directory.ensure_plugin_instance = ensure_without_loop
     response = TestClient(make_stream_app(plugin)).post(
         "/stream", json=stream_payload()
     )
@@ -427,7 +474,7 @@ def test_stream_route_reports_missing_agent_registry() -> None:
 
 
 def test_stream_route_requires_model_until_agents_own_llms() -> None:
-    plugin = make_stream_plugin(registry=FakeAgentRegistry())
+    plugin = make_stream_plugin()
     response = TestClient(make_stream_app(plugin)).post(
         "/stream", json=stream_payload(model=None)
     )
@@ -437,12 +484,12 @@ def test_stream_route_requires_model_until_agents_own_llms() -> None:
 
 
 def test_stream_route_serializes_agent_errors_as_complete_ndjson() -> None:
-    class FailingAgentLoop:
+    class FailingLoop:
         async def astream(self, message, *, thread_id=None):
             yield {"type": "assistant", "content": "partial"}
             raise RuntimeError("upstream failed with test-key")
 
-    plugin = make_stream_plugin(FailingAgentLoop())
+    plugin = make_stream_plugin(FailingLoop())
     response = TestClient(make_stream_app(plugin)).post(
         "/stream", json=stream_payload()
     )
@@ -464,27 +511,26 @@ def test_stream_route_serializes_agent_errors_as_complete_ndjson() -> None:
     ]
 
 
-def test_stream_route_passes_optional_stream_usage_to_runtime_llm() -> None:
-    class FakeAgentLoop:
+def test_stream_route_passes_optional_stream_usage_to_the_agent_llm() -> None:
+    class FakeLoop:
         async def astream(self, message, *, thread_id=None):
             if False:
                 yield None
 
-    plugin = make_stream_plugin(FakeAgentLoop())
+    plugin = make_stream_plugin(FakeLoop())
     response = TestClient(make_stream_app(plugin)).post(
         "/stream", json=stream_payload(stream_usage=False)
     )
     assert response.status_code == 200
     assert (
-        plugin._runtime_llm_descriptors[0].properties["plugin.model.stream_usage"]
-        is False
+        plugin._agent_directory.llm_calls[0][2]["plugin.model.stream_usage"] is False
     )
 
 
-def test_stream_route_serializes_runtime_model_replacement() -> None:
+def test_stream_route_streams_concurrently_after_configuration() -> None:
     state = {"active": 0, "maximum": 0}
 
-    class FakeAgentLoop:
+    class SlowLoop:
         async def astream(self, message, *, thread_id=None):
             state["active"] += 1
             state["maximum"] = max(state["maximum"], state["active"])
@@ -492,7 +538,7 @@ def test_stream_route_serializes_runtime_model_replacement() -> None:
             yield {"type": "assistant", "content": message}
             state["active"] -= 1
 
-    plugin = make_stream_plugin(FakeAgentLoop())
+    plugin = make_stream_plugin(SlowLoop())
     app = make_stream_app(plugin)
 
     async def invoke_both() -> None:
@@ -512,4 +558,4 @@ def test_stream_route_serializes_runtime_model_replacement() -> None:
             )
 
     asyncio.run(invoke_both())
-    assert state["maximum"] == 1
+    assert state["maximum"] == 2

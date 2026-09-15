@@ -129,6 +129,36 @@ def test_agents_route_lists_agents() -> None:
     assert agents[0]["description"]
 
 
+class FakeDirectory:
+    def list_agents(self) -> list[dict[str, Any]]:
+        entry = FakeAgentRegistry().list_agents()[0]
+        entry["materialized"] = True
+        entry["plugins"] = ["name", "tools"]
+        return [entry]
+
+    def get_loop(self, agent_id: str) -> Any:
+        return None
+
+    def ensure_plugin_instance(
+        self, agent_id: str, plugin: str, properties: dict[str, Any]
+    ) -> None:
+        return None
+
+    def reload(self, agent_id: str | None = None) -> None:
+        return None
+
+
+def test_agents_route_prefers_directory_when_available() -> None:
+    plugin = AgentsRoutePlugin()
+    plugin._agent_registry = FakeAgentRegistry()
+    plugin._agent_directory = FakeDirectory()
+
+    agents = make_client(plugin).get("/agents").json()["agents"]
+
+    assert agents[0]["materialized"] is True
+    assert agents[0]["plugins"] == ["name", "tools"]
+
+
 def test_agents_route_reports_missing_registry() -> None:
     assert make_client(AgentsRoutePlugin()).get("/agents").status_code == 503
 

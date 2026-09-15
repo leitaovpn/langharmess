@@ -27,6 +27,7 @@ SPEC_TRANSFORMERS = "agent.plugin.transformers"
 SPEC_AGENT_LOOP = "agent.loop"
 SPEC_SESSION_INDEX = "session.index"
 SPEC_AGENT_REGISTRY = "agent.registry"
+SPEC_AGENT_DIRECTORY = "agent.directory"
 ModelProtocol = Literal["anthropic", "chat", "responses"]
 
 ALL_PLUGIN_SPECS = (
@@ -48,6 +49,7 @@ ALL_PLUGIN_SPECS = (
     SPEC_AGENT_LOOP,
     SPEC_SESSION_INDEX,
     SPEC_AGENT_REGISTRY,
+    SPEC_AGENT_DIRECTORY,
 )
 
 
@@ -199,3 +201,19 @@ class AgentRegistryProvider(Protocol):
     def list_agents(self) -> list[dict[str, Any]]: ...
 
     def get_agent(self, agent_id: str) -> dict[str, Any] | None: ...
+
+
+@service_contract(SPEC_AGENT_DIRECTORY)
+@runtime_checkable
+class AgentDirectoryProvider(Protocol):
+    """Contract implemented by every ``agent.directory`` service."""
+
+    def list_agents(self) -> list[dict[str, Any]]: ...
+
+    def get_loop(self, agent_id: str) -> Any | None: ...
+
+    def ensure_plugin_instance(
+        self, agent_id: str, plugin: str, properties: dict[str, Any]
+    ) -> None: ...
+
+    def reload(self, agent_id: str | None = None) -> None: ...

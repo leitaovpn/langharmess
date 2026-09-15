@@ -107,40 +107,41 @@ def test_api_server_quarantines_bad_route_provider() -> None:
 
 
 def test_stream_route_reports_contract_violation_as_400() -> None:
+    violation = ContractViolationError(
+        plugin="llm@simple_agent",
+        specification="agent.plugin.llm",
+        protocol="LLMProvider",
+        violations=(
+            Violation(
+                "agent.plugin.llm",
+                "LLMProvider",
+                "get_model",
+                "MISSING_METHOD",
+                "LLMPlugin.get_model is not implemented",
+            ),
+        ),
+    )
+
+    class _BadDirectory:
+        def list_agents(self) -> list[Any]:
+            return []
+
+        def get_loop(self, agent_id: str) -> Any:
+            return None
+
+        def ensure_plugin_instance(
+            self, agent_id: str, plugin: str, properties: dict[str, Any]
+        ) -> None:
+            raise violation
+
+        def reload(self, agent_id: str | None = None) -> None:
+            return None
+
     plugin = StreamRoutePlugin()
-    plugin._agent_loop = object()
-    plugin._agent_registry = type(
-        "Registry",
-        (),
-        {
-            "get_agent": lambda self, agent_id: {
-                "id": agent_id,
-                "enabled": True,
-            }
-        },
-    )()
+    plugin._agent_directory = _BadDirectory()
     plugin._session_index = type(
         "Index", (), {"touch": lambda self, *args: None}
     )()
-
-    class _BadRegistrar:
-        def ensure_plugin(self, descriptor: PluginDescriptor) -> None:
-            raise ContractViolationError(
-                plugin=descriptor.name,
-                specification=descriptor.specification,
-                protocol="LLMProvider",
-                violations=(
-                    Violation(
-                        "agent.plugin.llm",
-                        "LLMProvider",
-                        "get_model",
-                        "MISSING_METHOD",
-                        "LLMPlugin.get_model is not implemented",
-                    ),
-                ),
-            )
-
-    plugin._plugin_registrar = _BadRegistrar()
     app = FastAPI()
     app.include_router(plugin.get_router())
 
