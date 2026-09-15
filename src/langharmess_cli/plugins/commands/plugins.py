@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+from argparse import ArgumentParser, Namespace
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
+from langharmess_cli.common.api_guard import APIGuard
 from langharmess_cli.contracts import (
     CLICommandProvider,
     CommandSpec,
@@ -40,7 +43,71 @@ class PluginCommandPlugin:
         self._locale = "en"
 
     def get_commands(self) -> list[CommandSpec]:
-        return []
+        return [
+            CommandSpec(
+                name="plugins",
+                help="Discover and manage runtime plugins",
+                handler=self._command_handler,
+                add_arguments=self._add_arguments,
+            )
+        ]
+
+    @staticmethod
+    def _add_arguments(parser: ArgumentParser) -> None:
+        parser.add_argument(
+            "action",
+            choices=("discover", "list", "install", "enable", "disable", "upgrade", "uninstall"),
+        )
+        parser.add_argument("values", nargs="*")
+        parser.add_argument("--scope")
+        parser.add_argument("--base-url", default="http://127.0.0.1:8000")
+        parser.add_argument("--token", default="secret")
+
+    def _command_handler(self, args: Namespace) -> int:
+        APIGuard(args.base_url).ensure_api_server()
+        context = SimpleNamespace(base_url=args.base_url, token=args.token)
+        try:
+            if args.action == "discover":
+                payload = self._post_raw(context, "/plugins/rescan", {})
+            elif args.action == "list":
+                payload = self._get_raw(context, "/plugins/runtime")
+            elif args.action == "install":
+                if len(args.values) != 2:
+                    raise ValueError("install requires PACKAGE_ID CONTRIBUTION_ID")
+                payload = self._post_raw(
+                    context,
+                    "/plugins/install",
+                    {
+                        "package_id": args.values[0],
+                        "contribution_id": args.values[1],
+                        "scope_id": args.scope,
+                    },
+                )
+            elif args.action in {"enable", "disable"}:
+                if len(args.values) != 1:
+                    raise ValueError(f"{args.action} requires PLUGIN_NAME")
+                payload = self._put_raw(
+                    context,
+                    f"/plugins/runtime/{args.values[0]}/enabled",
+                    {"enabled": args.action == "enable"},
+                )
+            elif args.action == "upgrade":
+                if len(args.values) != 1:
+                    raise ValueError("upgrade requires PLUGIN_NAME")
+                payload = self._post_raw(
+                    context, f"/plugins/runtime/{args.values[0]}/upgrade", {}
+                )
+            else:
+                if len(args.values) != 1:
+                    raise ValueError("uninstall requires PLUGIN_NAME")
+                payload = self._delete_raw(
+                    context, f"/plugins/runtime/{args.values[0]}"
+                )
+        except (httpx.HTTPError, ValueError) as exc:
+            print(f"Plugin request failed: {exc}")
+            return 1
+        print(json.dumps(payload, ensure_ascii=False))
+        return 0
 
     def get_interactive_commands(self) -> list[InteractiveCommandSpec]:
         return [
@@ -239,6 +306,48 @@ class PluginCommandPlugin:
             f"{context.base_url.rstrip('/')}{path}",
             params={"scope": scope},
             json={**body, "actor": "cli"},
+            headers=self._headers(context),
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
+    def _get_raw(self, context: Any, path: str) -> dict[str, Any]:
+        response = httpx.get(
+            f"{context.base_url.rstrip('/')}{path}",
+            headers=self._headers(context),
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
+    def _post_raw(
+        self, context: Any, path: str, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        response = httpx.post(
+            f"{context.base_url.rstrip('/')}{path}",
+            json=body,
+            headers=self._headers(context),
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
+    def _put_raw(
+        self, context: Any, path: str, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        response = httpx.put(
+            f"{context.base_url.rstrip('/')}{path}",
+            json=body,
+            headers=self._headers(context),
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
+    def _delete_raw(self, context: Any, path: str) -> dict[str, Any]:
+        response = httpx.delete(
+            f"{context.base_url.rstrip('/')}{path}",
             headers=self._headers(context),
             timeout=10.0,
         )

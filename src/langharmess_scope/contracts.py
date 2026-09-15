@@ -20,6 +20,8 @@ class ScopeTreeProvider(Protocol):
 
     def get(self, scope_id: ScopeId) -> Scope | None: ...
 
+    def snapshot(self) -> ScopeSnapshot: ...
+
     def require(self, scope_id: ScopeId) -> Scope: ...
 
     def ancestors(
@@ -35,4 +37,3 @@ class ScopeTreeProvider(Protocol):
         *,
         include_self: bool = False,
     ) -> bool: ...
-

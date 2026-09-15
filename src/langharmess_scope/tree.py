@@ -58,6 +58,10 @@ class ScopeTree:
         with self._lock:
             return self._scopes.get(scope_id)
 
+    def snapshot(self) -> ScopeSnapshot:
+        with self._lock:
+            return ScopeSnapshot(self._version, tuple(self._scopes.values()))
+
     def require(self, scope_id: ScopeId) -> Scope:
         scope = self.get(scope_id)
         if scope is None:
@@ -170,4 +174,3 @@ class ScopeTree:
                     raise ValueError(f"Scope snapshot contains a cycle: {scope.id}")
                 seen.add(current.id)
                 current = self._scopes[current.parent_id]
-

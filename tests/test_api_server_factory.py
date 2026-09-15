@@ -12,14 +12,16 @@ import langharmess_api.common.server as server_module
 
 
 def test_create_app_uses_plugin_manager_once(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path,
 ) -> None:
     monkeypatch.setattr(server_module, "_MANAGER", None)
+    monkeypatch.setenv("LANG_HARMESS_DIR", str(tmp_path))
 
     configs = SimpleNamespace(get=lambda section, key: None)
     api_server = SimpleNamespace(build_app=lambda: SimpleNamespace(title="ok"))
     manager = SimpleNamespace(
-        get_service=lambda spec: configs if spec == "configs" else api_server
+        get_service=lambda spec: configs if spec == "configs" else api_server,
+        register_runtime_service=lambda specification, service: None,
     )
 
     def fake_manager(registry):

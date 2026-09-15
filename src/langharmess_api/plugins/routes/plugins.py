@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from langharmess_api.contracts import RouteProvider
 from langharmess_core.contracts import AgentDirectoryProvider
 from langharmess_plugin.config_store import PluginConfigStore, scope_path
-from langharmess_plugin.contracts import ScopedPluginRegistrar
+from langharmess_plugin.contracts import DynamicPluginManager, ScopedPluginRegistrar
 from langharmess_plugin.validation import ContractGuard
 
 KNOWN_SCOPES = ("api", "cli")
@@ -34,12 +34,19 @@ class RollbackRequest(BaseModel):
     actor: str = "api"
 
 
+class DynamicInstallRequest(BaseModel):
+    package_id: str
+    contribution_id: str
+    scope_id: str | None = None
+
+
 @ComponentFactory("api-plugins-route-factory")
 @Provides(RouteProvider)
 @Property("_plugin_name", "plugin.name", "plugins")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_config_dir", "plugin.config_dir", "~/.langharmess")
 @RequiresBest("_scope", ScopedPluginRegistrar, optional=True, immediate_rebind=True)
+@RequiresBest("_dynamic", DynamicPluginManager, optional=True, immediate_rebind=True)
 @RequiresBest(
     "_directory", AgentDirectoryProvider, optional=True, immediate_rebind=True
 )
@@ -51,9 +58,11 @@ class PluginsRoutePlugin:
         self._plugin_version = "1.0.0"
         self._config_dir = "~/.langharmess"
         self._scope: Any = None
+        self._dynamic: Any = None
         self._directory: Any = None
         self._guards: dict[str, ContractGuard] = {
             "_scope": ContractGuard(self, "_scope", ScopedPluginRegistrar),
+            "_dynamic": ContractGuard(self, "_dynamic", DynamicPluginManager),
             "_directory": ContractGuard(self, "_directory", AgentDirectoryProvider),
         }
 
@@ -63,6 +72,14 @@ class PluginsRoutePlugin:
 
     @UnbindField("_scope", if_valid=True)
     def _on_scope_unbind(self, field: str, service: Any, reference: Any) -> None:
+        self._guards[field].release(service)
+
+    @BindField("_dynamic", if_valid=True)
+    def _on_dynamic_bind(self, field: str, service: Any, reference: Any) -> None:
+        self._guards[field].admit(service)
+
+    @UnbindField("_dynamic", if_valid=True)
+    def _on_dynamic_unbind(self, field: str, service: Any, reference: Any) -> None:
         self._guards[field].release(service)
 
     @BindField("_directory", if_valid=True)
@@ -124,7 +141,102 @@ class PluginsRoutePlugin:
             version = store.rollback(payload.seq, actor=payload.actor)
             return {"scope": scope, "version": version, **result}
 
+        @router.get("/plugins/discovered")
+        def discovered_plugins() -> dict[str, Any]:
+            dynamic = self._require_dynamic()
+            return {
+                "packages": [self._package_payload(item) for item in dynamic.discovered()]
+            }
+
+        @router.post("/plugins/rescan")
+        def rescan_plugins() -> dict[str, Any]:
+            result = self._require_dynamic().rescan()
+            return {
+                "packages": [self._package_payload(item) for item in result.packages],
+                "failures": [
+                    {
+                        "entry_point": item.entry_point,
+                        "value": item.value,
+                        "detail": item.detail,
+                    }
+                    for item in result.failures
+                ],
+            }
+
+        @router.get("/plugins/runtime")
+        def runtime_plugins() -> dict[str, Any]:
+            return {
+                "plugins": [
+                    self._registration_payload(item)
+                    for item in self._require_dynamic().registrations()
+                ]
+            }
+
+        @router.post("/plugins/install")
+        def install_plugin(payload: DynamicInstallRequest) -> dict[str, Any]:
+            try:
+                registration = self._require_dynamic().install(
+                    payload.package_id,
+                    payload.contribution_id,
+                    scope_id=payload.scope_id,
+                )
+            except (KeyError, ValueError, RuntimeError) as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return self._registration_payload(registration)
+
+        @router.put("/plugins/runtime/{name}/enabled")
+        def enable_plugin(name: str, enabled: bool = Body(..., embed=True)) -> dict[str, Any]:
+            try:
+                registration = self._require_dynamic().set_enabled(name, enabled)
+            except (KeyError, ValueError, RuntimeError) as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return self._registration_payload(registration)
+
+        @router.delete("/plugins/runtime/{name}")
+        def uninstall_plugin(name: str) -> dict[str, bool]:
+            try:
+                self._require_dynamic().uninstall(name)
+            except (KeyError, ValueError, RuntimeError) as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return {"removed": True}
+
+        @router.post("/plugins/runtime/{name}/upgrade")
+        def upgrade_plugin(name: str) -> dict[str, Any]:
+            try:
+                registration = self._require_dynamic().upgrade(name)
+            except (KeyError, ValueError, RuntimeError) as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return self._registration_payload(registration)
+
         return router
+
+    def _require_dynamic(self) -> Any:
+        if self._dynamic is None:
+            raise HTTPException(status_code=503, detail="Dynamic plugin manager unavailable")
+        return self._dynamic
+
+    @staticmethod
+    def _package_payload(package: Any) -> dict[str, Any]:
+        return {
+            "id": package.id,
+            "version": package.version,
+            "contributions": [
+                {"id": item.id, "target": item.target}
+                for item in package.contributions
+            ],
+        }
+
+    @staticmethod
+    def _registration_payload(registration: Any) -> dict[str, Any]:
+        return {
+            "name": registration.descriptor.name,
+            "package_id": registration.package_id,
+            "contribution_id": registration.contribution_id,
+            "version": registration.package_version,
+            "scope_id": registration.scope_id,
+            "enabled": registration.enabled,
+            "status": registration.status,
+        }
 
     def _store(self, scope: str) -> PluginConfigStore:
         self._validate_scope(scope)
