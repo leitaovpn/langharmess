@@ -79,6 +79,7 @@ pythonpath = ["src"]
 
 [tool.coverage.run]
 source = [
+    "langharmess_scope",
     "langharmess_config",
     "langharmess_logging",
     "langharmess_core",

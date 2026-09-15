@@ -87,18 +87,19 @@ def test_manager_registers_itself_under_both_specifications(
 
 def test_find_service_returns_none_without_match() -> None:
     manager = make_manager()
-    manager._context.get_service_reference.return_value = None
+    manager._context.get_all_service_references.return_value = None
     assert manager.find_service("agent.plugin.llm") is None
 
 
 def test_find_service_passes_the_filter_to_pelix() -> None:
     manager = make_manager()
     reference = Mock()
-    manager._context.get_service_reference.return_value = reference
+    reference.get_property.return_value = 0
+    manager._context.get_all_service_references.return_value = [reference]
 
     manager.find_service("agent.plugin.llm", filter="(plugin.agent_id=ag1)")
 
-    manager._context.get_service_reference.assert_called_once_with(
+    manager._context.get_all_service_references.assert_called_once_with(
         "agent.plugin.llm", "(plugin.agent_id=ag1)"
     )
     manager._context.get_service.assert_called_once_with(reference)

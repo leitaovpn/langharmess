@@ -20,6 +20,7 @@ from langharmess_core.plugins.agents.directory import AgentDirectoryPlugin
 from langharmess_plugin.contracts import SPEC_PLUGIN_SCOPE, ScopedPluginRegistrar
 from langharmess_plugin.registry import PluginDescriptor
 from langharmess_plugin.validation import contract_for, validate
+from langharmess_scope import ScopeId, ScopeTree
 
 
 def agent_record(
@@ -51,16 +52,42 @@ class FakeScope:
         self.services: dict[tuple[str, str | None], Any] = {}
         self.fail_on = fail_on
         self.modules = REQUIRED_MODULES if modules is None else modules
+        self.tree = ScopeTree()
 
     def installed_modules(self) -> set[str]:
         return set(self.modules)
 
-    def instantiate_instance(self, descriptor: PluginDescriptor) -> None:
+    def instantiate_instance(
+        self,
+        descriptor: PluginDescriptor,
+        *,
+        scope_id: ScopeId | None = None,
+        plugin_key: str | None = None,
+    ) -> None:
         if self.fail_on is not None and descriptor.instance == self.fail_on:
             raise ValueError(f"cannot instantiate {descriptor.instance}")
         if descriptor.instance in self.instances:
             raise ValueError(f"Instance {descriptor.instance!r} is already instantiated")
         self.instances[descriptor.instance] = descriptor
+
+    def ensure_scope(
+        self,
+        scope_id: ScopeId,
+        *,
+        name: str,
+        parent_id: ScopeId | None = None,
+    ) -> None:
+        if self.tree.get(scope_id) is None:
+            self.tree.create(scope_id, name)
+
+    def scope_filter(self, scope_id: ScopeId) -> str:
+        visible = self.tree.ancestors(scope_id, include_self=True)
+        return "(|" + "".join(
+            f"(plugin.scope_id={scope.id})" for scope in visible
+        ) + ")"
+
+    def remove_scope(self, scope_id: ScopeId, *, recursive: bool = False) -> None:
+        self.tree.remove(scope_id, recursive=recursive)
 
     def kill_instance(self, instance: str) -> None:
         if instance not in self.instances:
@@ -147,9 +174,10 @@ def test_validate_materializes_default_plugins_and_loop() -> None:
     assert loop.specification == SPEC_AGENT_LOOP
     assert loop.properties["plugin.agent_id"] == "simple_agent"
     assert loop.properties["requires.filters"] == {
-        "_llm_provider": "(plugin.agent_id=simple_agent)",
-        "_tool_providers": "(plugin.agent_id=simple_agent)",
-        "_name_provider": "(plugin.agent_id=simple_agent)",
+        "_llm_provider": "(|(plugin.scope_id=simple_agent)(plugin.scope_id=root))",
+        "_scoped_llm_providers": "(|(plugin.scope_id=simple_agent)(plugin.scope_id=root))",
+        "_tool_providers": "(|(plugin.scope_id=simple_agent)(plugin.scope_id=root))",
+        "_name_provider": "(|(plugin.scope_id=simple_agent)(plugin.scope_id=root))",
     }
 
 
@@ -243,6 +271,15 @@ def test_ensure_plugin_instance_rejects_unknown_plugin() -> None:
     plugin = make_directory()
     with pytest.raises(ValueError, match="Unknown agent plugin: warp"):
         plugin.ensure_plugin_instance("simple_agent", "warp", {})
+
+
+def test_remove_agent_removes_its_scope_after_instances() -> None:
+    plugin = make_directory()
+
+    plugin.remove_agent("simple_agent")
+
+    assert plugin._scope.tree.get(ScopeId("simple_agent")) is None
+    assert plugin._scope.instances == {}
 
 
 def test_reload_tears_down_and_materializes_again() -> None:

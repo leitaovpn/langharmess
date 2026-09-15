@@ -33,6 +33,7 @@ from langharmess_core.plugin import (
 from langharmess_plugin.contracts import ScopedPluginRegistrar
 from langharmess_plugin.registry import PluginDescriptor
 from langharmess_plugin.validation import ContractGuard
+from langharmess_scope import ScopeId
 
 LOGGER = logging.getLogger("langharmess.agent")
 
@@ -133,6 +134,11 @@ class AgentDirectoryPlugin:
         self._configs.pop(wanted, None)
         self._failed.discard(wanted)
         self._teardown(wanted)
+        if self._scope is not None:
+            try:
+                self._scope.remove_scope(ScopeId(wanted))
+            except KeyError:
+                LOGGER.debug("Scope %s was already gone", wanted)
 
     def ensure_plugin_instance(
         self, agent_id: str, plugin: str, properties: dict[str, Any]
@@ -148,7 +154,10 @@ class AgentDirectoryPlugin:
             return
         if current is not None:
             self._safe_kill(current.instance)
-        self._scope.instantiate_instance(descriptor)
+        scope_id = ScopeId(agent["id"])
+        self._scope.instantiate_instance(
+            descriptor, scope_id=scope_id, plugin_key=plugin
+        )
         self._instances.setdefault(agent["id"], {})[plugin] = descriptor
 
     def reload(self, agent_id: str | None = None) -> None:
@@ -201,6 +210,8 @@ class AgentDirectoryPlugin:
             return
         created: dict[str, PluginDescriptor] = {}
         try:
+            scope_id = ScopeId(agent_id)
+            self._scope.ensure_scope(scope_id, name=agent.get("name") or agent_id)
             for plugin in self._bindings(agent_id):
                 if plugin not in AGENT_PLUGIN_CATALOG:
                     LOGGER.warning(
@@ -208,14 +219,26 @@ class AgentDirectoryPlugin:
                     )
                     continue
                 descriptor = self._binding_descriptor(agent, plugin)
-                self._scope.instantiate_instance(descriptor)
+                self._scope.instantiate_instance(
+                    descriptor, scope_id=scope_id, plugin_key=plugin
+                )
                 created[plugin] = descriptor
-            loop = agent_loop_descriptor(agent_id, agent_scoped_specifications())
-            self._scope.instantiate_instance(loop)
+            loop = agent_loop_descriptor(
+                agent_id,
+                agent_scoped_specifications(),
+                visibility_filter=self._scope.scope_filter(scope_id),
+            )
+            self._scope.instantiate_instance(
+                loop, scope_id=scope_id, plugin_key="agent-loop"
+            )
         except Exception as exc:
             LOGGER.warning("Could not materialize agent %s: %s", agent_id, exc)
             for descriptor in created.values():
                 self._safe_kill(descriptor.instance)
+            try:
+                self._scope.remove_scope(ScopeId(agent_id))
+            except (KeyError, ValueError):
+                LOGGER.debug("Could not roll back scope %s", agent_id)
             self._failed.add(agent_id)
             return
         self._failed.discard(agent_id)

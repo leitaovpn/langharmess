@@ -15,6 +15,7 @@ from langharmess_plugin.validation import (
     ContractViolationError,
     service_contract,
 )
+from langharmess_scope import ScopeId
 
 INSTALLED_MODULE = "module.scoped"
 
@@ -104,6 +105,24 @@ def test_instantiate_instance_rejects_duplicate_instance() -> None:
         manager.instantiate_instance(scoped_descriptor("ag1"))
 
 
+def test_scope_rejects_duplicate_plugin_key_but_allows_child_override() -> None:
+    manager = make_manager()
+    manager.ensure_scope(ScopeId("agent"), name="Agent")
+    root = scoped_descriptor("root")
+    agent = scoped_descriptor("agent")
+    duplicate = scoped_descriptor("duplicate")
+
+    manager.instantiate_instance(root, scope_id=ScopeId("root"), plugin_key="tools")
+    manager.instantiate_instance(
+        agent, scope_id=ScopeId("agent"), plugin_key="tools"
+    )
+
+    with pytest.raises(ValueError, match="already registered in scope"):
+        manager.instantiate_instance(
+            duplicate, scope_id=ScopeId("agent"), plugin_key="tools"
+        )
+
+
 def test_instantiate_instance_kills_contract_violators() -> None:
     manager = make_manager()
     manager._ipopo.instantiate.return_value = NonConforming()
@@ -146,3 +165,32 @@ def test_stop_clears_scoped_instances() -> None:
 
     assert manager.scoped_instances() == {}
     assert manager.installed_modules() == set()
+
+
+def test_scope_lifecycle_injects_visibility_and_effective_ranking() -> None:
+    manager = make_manager()
+    manager.ensure_scope(ScopeId("agent"), name="Agent")
+    manager.ensure_scope(
+        ScopeId("session"), name="Session", parent_id=ScopeId("agent")
+    )
+    descriptor = scoped_descriptor("session")
+    descriptor.ranking = 7
+
+    manager.instantiate_instance(
+        descriptor, scope_id=ScopeId("session"), plugin_key="tools"
+    )
+
+    properties = manager._ipopo.instantiate.call_args.args[2]
+    assert properties["plugin.scope_id"] == "session"
+    assert properties["plugin.scope_chain"] == ["session", "agent", "root"]
+    assert properties["plugin.key"] == "tools"
+    assert properties["service.ranking"] == 2_000_007
+    assert manager.scope_filter(ScopeId("session")) == (
+        "(|(plugin.scope_id=session)(plugin.scope_id=agent)(plugin.scope_id=root))"
+    )
+
+    manager.remove_scope(ScopeId("agent"), recursive=True)
+
+    manager._ipopo.kill.assert_called_once_with("scoped@session")
+    assert manager.scope_tree.get(ScopeId("agent")) is None
+    assert manager.scoped_instances() == {}
