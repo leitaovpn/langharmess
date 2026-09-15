@@ -22,6 +22,7 @@ Current milestone:
 - `api.plugin.rate_limit`
 - `api.plugin.db`
 - `api.plugin.route`
+- `config.plugins`
 - `cli.plugin.command`
 
 ## Architecture constraints
@@ -270,6 +271,20 @@ Once indexed, prefer the MCP tools over grep/read for structural questions:
   the live class (`type(component)._rebuild.__globals__`), and per-agent
   components must be created with `PluginManager.instantiate_instance` from an
   already installed bundle instead of installing the same module twice.
+
+### Plugin configuration
+
+- Plugin configuration lives in `<dir>/plugin_config/` (`cli.json`, `api.json`,
+  `agents/<agent_id>.json`). Every write appends a full snapshot to an
+  append-only history; rolling back appends a new version pointing at the older
+  snapshot, so nothing is ever removed.
+- Credential-like properties (`api_key`, `token`, `*secret*`) are stripped
+  before writing: the store is not a secret store.
+- Stored overrides are merged into the code-built descriptors at startup
+  (`apply_overrides`). Runtime edits apply immediately for plugins with
+  `swap_policy="hot"` and are reported as `restart_required` otherwise.
+- `/plugins` (`GET`, `PUT`, `/plugins/history`, `/plugins/rollback`) is the only
+  entry point; the CLI edits all scopes through it.
 
 ## File ownership
 

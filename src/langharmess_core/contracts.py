@@ -202,6 +202,21 @@ class AgentRegistryProvider(Protocol):
 
     def get_agent(self, agent_id: str) -> dict[str, Any] | None: ...
 
+    def create_agent(
+        self, agent_id: str, name: str, description: str
+    ) -> dict[str, Any]: ...
+
+    def update_agent(
+        self,
+        agent_id: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        enabled: bool | None = None,
+    ) -> dict[str, Any]: ...
+
+    def delete_agent(self, agent_id: str) -> None: ...
+
 
 @service_contract(SPEC_AGENT_DIRECTORY)
 @runtime_checkable
@@ -215,5 +230,13 @@ class AgentDirectoryProvider(Protocol):
     def ensure_plugin_instance(
         self, agent_id: str, plugin: str, properties: dict[str, Any]
     ) -> None: ...
+
+    def binding_properties(self, agent_id: str, plugin: str) -> dict[str, Any]: ...
+
+    def apply_agent_config(
+        self, agent_id: str, plugins: dict[str, Any]
+    ) -> None: ...
+
+    def remove_agent(self, agent_id: str) -> None: ...
 
     def reload(self, agent_id: str | None = None) -> None: ...

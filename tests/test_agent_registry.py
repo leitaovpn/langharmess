@@ -112,3 +112,62 @@ def test_validate_seeds_registry_file(tmp_path: Path) -> None:
 def test_plugin_info(tmp_path: Path) -> None:
     plugin = make_plugin(tmp_path)
     assert plugin.get_plugin_info() == {"name": "agent-registry", "version": "1.0.0"}
+
+
+def test_create_agent_appends_entry(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    plugin.list_agents()
+
+    created = plugin.create_agent("researcher", "Researcher", "Reads a lot")
+
+    assert created["id"] == "researcher"
+    assert created["enabled"] is True
+    assert [agent["id"] for agent in plugin.list_agents()] == [
+        "simple_agent",
+        "researcher",
+    ]
+
+
+def test_create_agent_rejects_duplicates(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    plugin.list_agents()
+    with pytest.raises(ValueError, match="already exists"):
+        plugin.create_agent("simple_agent", "Again", "dup")
+
+
+def test_update_agent_changes_fields(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    plugin.create_agent("researcher", "Researcher", "Reads a lot")
+
+    updated = plugin.update_agent(
+        "researcher", name="Deep Researcher", enabled=False
+    )
+
+    assert updated["name"] == "Deep Researcher"
+    assert updated["enabled"] is False
+    stored = plugin.get_agent("researcher")
+    assert stored is not None
+    assert stored["enabled"] is False
+
+
+def test_update_agent_rejects_unknown(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    with pytest.raises(KeyError):
+        plugin.update_agent("ghost", name="Ghost")
+
+
+def test_delete_agent_removes_entry(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    plugin.create_agent("researcher", "Researcher", "Reads a lot")
+
+    plugin.delete_agent("researcher")
+
+    assert plugin.get_agent("researcher") is None
+    with pytest.raises(KeyError):
+        plugin.delete_agent("researcher")
+
+
+def test_create_agent_rejects_invalid_id(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    with pytest.raises(ValueError):
+        plugin.create_agent("bad id", "Bad", "nope")

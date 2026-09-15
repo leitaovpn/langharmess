@@ -58,6 +58,7 @@ class AgentDirectoryPlugin:
         self._instances: dict[str, dict[str, PluginDescriptor]] = {}
         self._loops: dict[str, PluginDescriptor] = {}
         self._failed: set[str] = set()
+        self._configs: dict[str, dict[str, Any]] = {}
 
     @Validate
     def _validate(self, bundle_context: Any) -> None:
@@ -108,6 +109,31 @@ class AgentDirectoryPlugin:
             return None
         return self._scope.find_service(SPEC_AGENT_LOOP, filter=agent_filter(wanted))
 
+    def binding_properties(self, agent_id: str, plugin: str) -> dict[str, Any]:
+        """Stored properties of one agent binding, empty when unconfigured."""
+        stored = self._configs.get(agent_id, {}).get(plugin, {})
+        properties = stored.get("properties")
+        return dict(properties) if isinstance(properties, dict) else {}
+
+    def apply_agent_config(self, agent_id: str, plugins: dict[str, Any]) -> None:
+        """Replace one agent's plugin bindings with the given configuration."""
+        wanted = validate_id(agent_id, field="agent_id")
+        self._configs[wanted] = {
+            str(name): dict(entry) for name, entry in plugins.items()
+        }
+        self._failed.discard(wanted)
+        self._teardown(wanted)
+        agent = self._lookup(wanted)
+        if agent is not None and agent.get("enabled", False):
+            self._materialize(agent)
+
+    def remove_agent(self, agent_id: str) -> None:
+        """Tear down one agent's plugin set and forget its configuration."""
+        wanted = validate_id(agent_id, field="agent_id")
+        self._configs.pop(wanted, None)
+        self._failed.discard(wanted)
+        self._teardown(wanted)
+
     def ensure_plugin_instance(
         self, agent_id: str, plugin: str, properties: dict[str, Any]
     ) -> None:
@@ -115,7 +141,8 @@ class AgentDirectoryPlugin:
         self._materialize_all()
         if plugin not in AGENT_PLUGIN_CATALOG:
             raise ValueError(f"Unknown agent plugin: {plugin}")
-        descriptor = agent_plugin_descriptor(agent["id"], plugin, properties)
+        merged = {**self.binding_properties(agent["id"], plugin), **properties}
+        descriptor = agent_plugin_descriptor(agent["id"], plugin, merged)
         current = self._instances.get(agent["id"], {}).get(plugin)
         if current == descriptor:
             return
@@ -150,6 +177,16 @@ class AgentDirectoryPlugin:
                 continue
             self._materialize(agent)
 
+    def _bindings(self, agent_id: str) -> dict[str, dict[str, Any]]:
+        stored = self._configs.get(agent_id)
+        if stored is None:
+            return {plugin: {"enabled": True} for plugin in DEFAULT_AGENT_PLUGINS}
+        return {
+            name: dict(entry)
+            for name, entry in stored.items()
+            if entry.get("enabled", True)
+        }
+
     def _materialize(self, agent: dict[str, Any]) -> None:
         agent_id = agent["id"]
         if self._scope is None:
@@ -164,7 +201,12 @@ class AgentDirectoryPlugin:
             return
         created: dict[str, PluginDescriptor] = {}
         try:
-            for plugin in DEFAULT_AGENT_PLUGINS:
+            for plugin in self._bindings(agent_id):
+                if plugin not in AGENT_PLUGIN_CATALOG:
+                    LOGGER.warning(
+                        "Ignoring unknown agent plugin %s for %s", plugin, agent_id
+                    )
+                    continue
                 descriptor = self._binding_descriptor(agent, plugin)
                 self._scope.instantiate_instance(descriptor)
                 created[plugin] = descriptor
@@ -183,9 +225,9 @@ class AgentDirectoryPlugin:
     def _binding_descriptor(
         self, agent: dict[str, Any], plugin: str
     ) -> PluginDescriptor:
-        properties: dict[str, Any] = {}
+        properties = dict(self.binding_properties(agent["id"], plugin))
         if plugin == "name":
-            properties["plugin.agent_name"] = agent.get("name") or agent["id"]
+            properties.setdefault("plugin.agent_name", agent.get("name") or agent["id"])
         return agent_plugin_descriptor(agent["id"], plugin, properties)
 
     def _teardown(self, agent_id: str) -> None:

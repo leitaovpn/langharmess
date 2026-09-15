@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+SWAP_POLICIES = ("hot", "restart")
+
 
 @dataclass
 class PluginDescriptor:
@@ -21,6 +23,7 @@ class PluginDescriptor:
     enabled: bool = True
     ranking: int = 0
     properties: dict[str, Any] = field(default_factory=dict)
+    swap_policy: str = "restart"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -33,6 +36,7 @@ class PluginDescriptor:
             "enabled": self.enabled,
             "ranking": self.ranking,
             "properties": self.properties,
+            "swap_policy": self.swap_policy,
         }
 
     @classmethod
@@ -47,6 +51,7 @@ class PluginDescriptor:
             "enabled",
             "ranking",
             "properties",
+            "swap_policy",
         }
         unknown = set(data) - allowed
         if unknown:
@@ -74,6 +79,7 @@ class PluginDescriptor:
             enabled=data.get("enabled", True),
             ranking=data.get("ranking", 0),
             properties=data.get("properties", {}),
+            swap_policy=data.get("swap_policy", "restart"),
         )
 
 
@@ -146,3 +152,7 @@ class PluginRegistry:
             raise ValueError("Plugin descriptor 'enabled' must be a bool")
         if not isinstance(descriptor.ranking, int):
             raise ValueError("Plugin descriptor 'ranking' must be an int")
+        if descriptor.swap_policy not in SWAP_POLICIES:
+            raise ValueError(
+                f"Plugin descriptor 'swap_policy' must be one of {SWAP_POLICIES}"
+            )

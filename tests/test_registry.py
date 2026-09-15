@@ -147,3 +147,23 @@ def test_registry_rejects_invalid_descriptor_values() -> None:
         bad = make_descriptor("bad-ranking")
         bad.ranking = "high"  # type: ignore[assignment]
         registry.add(bad)
+
+
+def test_descriptor_swap_policy_defaults_to_restart() -> None:
+    descriptor = make_descriptor("llm")
+    assert descriptor.swap_policy == "restart"
+    assert PluginDescriptor.from_dict(descriptor.to_dict()).swap_policy == "restart"
+
+
+def test_descriptor_swap_policy_roundtrip() -> None:
+    descriptor = make_descriptor("llm")
+    descriptor.swap_policy = "hot"
+    assert PluginDescriptor.from_dict(descriptor.to_dict()).swap_policy == "hot"
+
+
+def test_registry_rejects_invalid_swap_policy() -> None:
+    registry = PluginRegistry()
+    bad = make_descriptor("bad-swap")
+    bad.swap_policy = "sometimes"  # type: ignore[assignment]
+    with pytest.raises(ValueError, match="swap_policy"):
+        registry.add(bad)

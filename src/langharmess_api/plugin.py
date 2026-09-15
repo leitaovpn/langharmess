@@ -21,6 +21,7 @@ def api_auth_descriptor() -> PluginDescriptor:
         instance="api-auth",
         specification=SPEC_AUTH,
         properties={"plugin.token": "secret"},
+        swap_policy="hot",
     )
 
 
@@ -33,6 +34,7 @@ def api_rate_limit_descriptor() -> PluginDescriptor:
         instance="api-rate-limit",
         specification=SPEC_RATE_LIMIT,
         properties={"plugin.limit": 100},
+        swap_policy="hot",
     )
 
 
@@ -66,6 +68,18 @@ def api_stream_descriptor() -> PluginDescriptor:
         factory="api-stream-route-factory",
         instance="api-stream",
         specification=SPEC_ROUTE,
+    )
+
+
+def api_plugins_descriptor(directory: str) -> PluginDescriptor:
+    return PluginDescriptor(
+        name="api-plugins",
+        version="1.0.0",
+        module="langharmess_api.plugins.routes.plugins",
+        factory="api-plugins-route-factory",
+        instance="api-plugins",
+        specification=SPEC_ROUTE,
+        properties={"plugin.config_dir": directory},
     )
 
 

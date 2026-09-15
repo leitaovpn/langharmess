@@ -57,6 +57,67 @@ class AgentRegistryPlugin:
                 return dict(agent)
         return None
 
+    def create_agent(self, agent_id: str, name: str, description: str) -> dict[str, Any]:
+        wanted = validate_id(agent_id, field="agent_id")
+        payload = self._read()
+        agents: list[dict[str, Any]] = payload["agents"]
+        if any(agent.get("id") == wanted for agent in agents):
+            raise ValueError(f"Agent already exists: {wanted}")
+        timestamp = datetime.now(UTC).isoformat()
+        agent = {
+            "id": wanted,
+            "name": name or wanted,
+            "description": description,
+            "enabled": True,
+            "created_at": timestamp,
+            "updated_at": timestamp,
+        }
+        agents.append(agent)
+        self._write(payload)
+        return dict(agent)
+
+    def update_agent(
+        self,
+        agent_id: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        wanted = validate_id(agent_id, field="agent_id")
+        payload = self._read()
+        agent = self._find(payload, wanted)
+        if name is not None:
+            agent["name"] = name
+        if description is not None:
+            agent["description"] = description
+        if enabled is not None:
+            agent["enabled"] = bool(enabled)
+        agent["updated_at"] = datetime.now(UTC).isoformat()
+        self._write(payload)
+        return dict(agent)
+
+    def delete_agent(self, agent_id: str) -> None:
+        wanted = validate_id(agent_id, field="agent_id")
+        payload = self._read()
+        self._find(payload, wanted)
+        payload["agents"] = [
+            agent for agent in payload["agents"] if agent.get("id") != wanted
+        ]
+        self._write(payload)
+
+    def _find(self, payload: dict[str, Any], agent_id: str) -> dict[str, Any]:
+        agents: list[dict[str, Any]] = payload["agents"]
+        for agent in agents:
+            if agent.get("id") == agent_id:
+                return agent
+        raise KeyError(f"Unknown agent: {agent_id}")
+
+    def _write(self, payload: dict[str, Any]) -> None:
+        path = Path(self._path).expanduser()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
     def _read(self) -> dict[str, Any]:
         path = self._ensure_file()
         try:

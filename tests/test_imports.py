@@ -15,6 +15,7 @@ PUBLIC_MODULES = [
     "langharmess_core.common.dependencies",
     "langharmess_core.common.ids",
     "langharmess_plugin",
+    "langharmess_plugin.config_store",
     "langharmess_plugin.contracts",
     "langharmess_plugin.registry",
     "langharmess_plugin.plugin_manager",
@@ -52,6 +53,7 @@ PUBLIC_MODULES = [
     "langharmess_api.common.server",
     "langharmess_api.plugins",
     "langharmess_api.plugins.routes.agents",
+    "langharmess_api.plugins.routes.plugins",
     "langharmess_api.plugins.routes.sessions",
     "langharmess_api.plugins.server.app",
     "langharmess_cli",
@@ -64,6 +66,7 @@ PUBLIC_MODULES = [
     "langharmess_cli.common.session",
     "langharmess_cli.plugins",
     "langharmess_cli.plugins.commands.health",
+    "langharmess_cli.plugins.commands.plugins",
     "langharmess_cli.plugins.commands.session",
 ]
 

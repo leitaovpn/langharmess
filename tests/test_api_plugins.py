@@ -72,6 +72,7 @@ class FakeDirectory:
         self.agents = agents if agents is not None else {"simple_agent": True}
         self.llm_calls: list[tuple[str, str, dict[str, Any]]] = []
         self.loops: dict[str, Any] = {}
+        self.stored: dict[str, dict[str, dict[str, Any]]] = {}
 
     def list_agents(self) -> list[dict[str, Any]]:
         return [
@@ -81,6 +82,12 @@ class FakeDirectory:
 
     def get_loop(self, agent_id: str) -> Any:
         return self.loops.get(agent_id)
+
+    def binding_properties(self, agent_id: str, plugin: str) -> dict[str, Any]:
+        return dict(self.stored.get(agent_id, {}).get(plugin, {}))
+
+    def apply_agent_config(self, agent_id: str, plugins: dict[str, Any]) -> None:
+        return None
 
     def ensure_plugin_instance(
         self, agent_id: str, plugin: str, properties: dict[str, Any]
@@ -481,6 +488,21 @@ def test_stream_route_requires_model_until_agents_own_llms() -> None:
     assert response.status_code == 400
     assert "model" in response.json()["detail"]
     assert plugin._session_index.touched == []
+
+
+def test_stream_route_accepts_agent_configured_llm_without_request_model() -> None:
+    plugin = make_stream_plugin()
+    plugin._agent_directory.stored = {
+        "simple_agent": {"llm": {"plugin.model.name": "stored-model"}}
+    }
+
+    response = TestClient(make_stream_app(plugin)).post(
+        "/stream", json=stream_payload(model=None)
+    )
+
+    assert response.status_code == 200
+    properties = plugin._agent_directory.llm_calls[0][2]
+    assert "plugin.model.name" not in properties
 
 
 def test_stream_route_serializes_agent_errors_as_complete_ndjson() -> None:

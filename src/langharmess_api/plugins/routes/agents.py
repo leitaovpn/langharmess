@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from pelix.ipopo.decorators import (
     BindField,
     ComponentFactory,
@@ -13,6 +13,7 @@ from pelix.ipopo.decorators import (
     RequiresBest,
     UnbindField,
 )
+from pydantic import BaseModel
 
 from langharmess_api.contracts import RouteProvider
 from langharmess_core.contracts import (
@@ -20,6 +21,18 @@ from langharmess_core.contracts import (
     AgentRegistryProvider,
 )
 from langharmess_plugin.validation import ContractGuard
+
+
+class AgentCreateRequest(BaseModel):
+    id: str
+    name: str = ""
+    description: str = ""
+
+
+class AgentUpdateRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    enabled: bool | None = None
 
 
 @ComponentFactory("api-agents-route-factory")
@@ -82,7 +95,60 @@ class AgentsRoutePlugin:
                 )
             return {"agents": self._agent_registry.list_agents()}
 
+        @router.post("/agents")
+        def create_agent(payload: AgentCreateRequest = Body(...)) -> dict[str, Any]:
+            registry = self._require_registry()
+            try:
+                agent = registry.create_agent(
+                    payload.id, payload.name or payload.id, payload.description
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            self._reload(payload.id)
+            return {"agent": agent}
+
+        @router.put("/agents/{agent_id}")
+        def update_agent(
+            agent_id: str, payload: AgentUpdateRequest = Body(...)
+        ) -> dict[str, Any]:
+            registry = self._require_registry()
+            try:
+                agent = registry.update_agent(
+                    agent_id,
+                    name=payload.name,
+                    description=payload.description,
+                    enabled=payload.enabled,
+                )
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            self._reload(agent_id)
+            return {"agent": agent}
+
+        @router.delete("/agents/{agent_id}")
+        def delete_agent(agent_id: str) -> dict[str, Any]:
+            registry = self._require_registry()
+            try:
+                registry.delete_agent(agent_id)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            if self._agent_directory is not None:
+                self._agent_directory.remove_agent(agent_id)
+            return {"agent_id": agent_id, "deleted": True}
+
         return router
+
+    def _require_registry(self) -> Any:
+        if self._agent_registry is None:
+            raise HTTPException(status_code=503, detail="Agent registry unavailable")
+        return self._agent_registry
+
+    def _reload(self, agent_id: str) -> None:
+        if self._agent_directory is not None:
+            self._agent_directory.reload(agent_id)
 
     def get_plugin_info(self) -> dict[str, str]:
         return {"name": self._plugin_name, "version": self._plugin_version}

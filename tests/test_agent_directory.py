@@ -71,6 +71,9 @@ class FakeScope:
     def find_service(self, specification: str, filter: str | None = None) -> Any:
         return self.services.get((specification, filter))
 
+    def apply_config(self, overrides: dict[str, Any]) -> dict[str, list[str]]:
+        return {"applied": sorted(overrides), "restart_required": []}
+
 
 class FakeRegistry:
     def __init__(self, agents: list[dict[str, Any]] | None = None) -> None:
@@ -83,6 +86,24 @@ class FakeRegistry:
         for agent in self._agents:
             if agent["id"] == agent_id:
                 return dict(agent)
+        return None
+
+    def create_agent(
+        self, agent_id: str, name: str, description: str
+    ) -> dict[str, Any]:
+        return agent_record(agent_id, name=name)
+
+    def update_agent(
+        self,
+        agent_id: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        return agent_record(agent_id)
+
+    def delete_agent(self, agent_id: str) -> None:
         return None
 
 
@@ -278,3 +299,141 @@ def test_bind_callbacks_materialize_and_release() -> None:
     assert plugin._instances == {}
     assert plugin._loops == {}
     assert plugin.list_agents()[0]["materialized"] is False
+
+
+def test_apply_agent_config_honours_stored_bindings() -> None:
+    plugin = make_directory()
+
+    plugin.apply_agent_config(
+        "simple_agent",
+        {"tools": {"enabled": True, "properties": {"plugin.tools.root_dir": "/work"}}},
+    )
+
+    assert set(plugin._scope.instances) == {"tools@simple_agent", "agent-loop@simple_agent"}
+    tools = plugin._scope.instances["tools@simple_agent"]
+    assert tools.properties["plugin.tools.root_dir"] == "/work"
+    assert plugin.list_agents()[0]["plugins"] == ["tools"]
+    assert "name@simple_agent" in plugin._scope.killed
+
+
+def test_apply_agent_config_skips_disabled_bindings() -> None:
+    plugin = make_directory()
+    plugin.apply_agent_config(
+        "simple_agent",
+        {
+            "tools": {"enabled": False},
+            "name": {"enabled": True, "properties": {"plugin.agent_name": "Custom"}},
+        },
+    )
+    assert set(plugin._scope.instances) == {"name@simple_agent", "agent-loop@simple_agent"}
+    assert (
+        plugin._scope.instances["name@simple_agent"].properties["plugin.agent_name"]
+        == "Custom"
+    )
+
+
+def test_apply_agent_config_ignores_unknown_plugins() -> None:
+    plugin = make_directory()
+    plugin.apply_agent_config("simple_agent", {"warp": {"enabled": True}})
+    assert set(plugin._scope.instances) == {"agent-loop@simple_agent"}
+    assert plugin.list_agents()[0]["plugins"] == []
+
+
+def test_ensure_plugin_instance_merges_stored_binding_properties() -> None:
+    plugin = make_directory()
+    plugin.apply_agent_config(
+        "simple_agent",
+        {"llm": {"properties": {"plugin.model.name": "stored-model"}}},
+    )
+
+    plugin.ensure_plugin_instance("simple_agent", "llm", {})
+
+    descriptor = plugin._scope.instances["llm@simple_agent"]
+    assert descriptor.properties["plugin.model.name"] == "stored-model"
+    assert plugin.binding_properties("simple_agent", "llm") == {
+        "plugin.model.name": "stored-model"
+    }
+
+
+def test_ensure_plugin_instance_request_overrides_stored_defaults() -> None:
+    plugin = make_directory()
+    plugin.apply_agent_config(
+        "simple_agent",
+        {"llm": {"properties": {"plugin.model.name": "stored", "plugin.model.base_url": "u"}}},
+    )
+
+    plugin.ensure_plugin_instance("simple_agent", "llm", {"plugin.model.name": "asked"})
+
+    descriptor = plugin._scope.instances["llm@simple_agent"]
+    assert descriptor.properties == {
+        "plugin.model.name": "asked",
+        "plugin.model.base_url": "u",
+        "plugin.agent_id": "simple_agent",
+    }
+
+
+def test_binding_properties_empty_for_unconfigured_agent() -> None:
+    plugin = make_directory()
+    assert plugin.binding_properties("simple_agent", "llm") == {}
+
+
+def test_remove_agent_tears_down_instances() -> None:
+    plugin = make_directory()
+    plugin.ensure_plugin_instance("simple_agent", "llm", {"plugin.model.name": "m"})
+
+    plugin.remove_agent("simple_agent")
+
+    assert plugin._scope.instances == {}
+    assert "agent-loop@simple_agent" in plugin._scope.killed
+    assert plugin.get_loop("simple_agent") is None
+    assert plugin._configs == {}
+
+
+def test_plugin_info_and_reload_without_materialization() -> None:
+    plugin = make_directory([agent_record(enabled=False)])
+    assert plugin.get_plugin_info() == {
+        "name": "agent-directory",
+        "version": "1.0.0",
+    }
+    plugin.reload()
+    assert plugin._scope.instances == {}
+
+
+def test_ensure_plugin_instance_without_scope_raises() -> None:
+    plugin = AgentDirectoryPlugin()
+    plugin._registry = FakeRegistry()
+    with pytest.raises(RuntimeError, match="dependencies"):
+        plugin.ensure_plugin_instance("simple_agent", "llm", {})
+
+
+def test_bind_and_unbind_callbacks_guard_services() -> None:
+    plugin = AgentDirectoryPlugin()
+    registry = FakeRegistry()
+    scope = FakeScope()
+    plugin._registry = registry
+    plugin._scope = scope
+
+    plugin._on_registry_bind("_registry", registry, None)
+    plugin._on_scope_bind("_scope", scope, None)
+    assert "agent-loop@simple_agent" in scope.instances
+
+    plugin._on_registry_unbind("_registry", registry, None)
+    plugin._on_scope_unbind("_scope", scope, None)
+    assert plugin._instances == {}
+
+
+def test_remove_agent_without_configuration_is_safe() -> None:
+    plugin = make_directory()
+    plugin.remove_agent("simple_agent")
+    plugin.remove_agent("unmaterialized_agent")
+    assert plugin._scope.instances == {}
+
+
+def test_reload_of_unknown_agent_is_a_noop() -> None:
+    plugin = make_directory()
+    plugin.reload("ghost")
+    assert set(plugin._scope.instances) == {
+        "tools@simple_agent",
+        "name@simple_agent",
+        "agent-loop@simple_agent",
+    }

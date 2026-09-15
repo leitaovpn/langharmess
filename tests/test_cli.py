@@ -447,6 +447,7 @@ def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> 
         "cli-health",
         "cli-log",
         "cli-model",
+        "cli-plugins",
         "cli-rich-renderer",
         "cli-session",
         "cli-shell",

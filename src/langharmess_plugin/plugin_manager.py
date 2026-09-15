@@ -8,6 +8,7 @@ from pelix import ldapfilter
 from pelix.framework import BundleContext, Framework, FrameworkFactory, create_framework
 from pelix.ipopo.constants import SERVICE_IPOPO
 
+from langharmess_plugin.config_store import apply_overrides
 from langharmess_plugin.contracts import (
     PluginRegistrar,
     ScopedPluginRegistrar,
@@ -50,6 +51,7 @@ class PluginManager:
         self._bound: set[str] = set()
         self._modules: set[str] = set()
         self._scoped: dict[str, PluginDescriptor] = {}
+        self._baselines: dict[str, PluginDescriptor] = {}
         self._registration: Any = None
         self._scope_registration: Any = None
 
@@ -86,6 +88,7 @@ class PluginManager:
         self._bound.clear()
         self._modules.clear()
         self._scoped.clear()
+        self._baselines.clear()
 
     def install_plugin(self, descriptor: PluginDescriptor) -> None:
         if not self.started or self._context is None or self._ipopo is None:
@@ -98,6 +101,9 @@ class PluginManager:
         bundle = self._context.install_bundle(descriptor.module)
         bundle.start()
         self._bundles[descriptor.name] = bundle
+        # The first descriptor installed is the baseline runtime config applies
+        # overrides to; runtime replacements must not move it.
+        self._baselines.setdefault(descriptor.name, descriptor)
         self._modules.add(descriptor.module)
         if descriptor.enabled:
             self._instantiate(descriptor)
@@ -110,6 +116,7 @@ class PluginManager:
         bundle = self._bundles.pop(name)
         bundle.stop()
         bundle.uninstall()
+        self._baselines.pop(name, None)
         descriptor = self.registry.get(name)
         if descriptor is not None and not self._module_in_use(descriptor.module):
             self._modules.discard(descriptor.module)
@@ -123,12 +130,15 @@ class PluginManager:
 
     def replace_plugin(self, descriptor: PluginDescriptor) -> None:
         """Replace a named runtime plugin descriptor and component."""
+        baseline = self._baselines.get(descriptor.name)
         if descriptor.name in self._bundles:
             self.uninstall_plugin(descriptor.name)
         if self.registry.get(descriptor.name) is not None:
             self.registry.remove(descriptor.name)
         self.registry.add(descriptor)
         self.install_plugin(descriptor)
+        if baseline is not None:
+            self._baselines[descriptor.name] = baseline
 
     def ensure_plugin(self, descriptor: PluginDescriptor) -> None:
         """Install a runtime plugin, replacing it only when configuration changes."""
@@ -184,6 +194,30 @@ class PluginManager:
 
     def scoped_instances(self) -> dict[str, PluginDescriptor]:
         return dict(self._scoped)
+
+    def apply_config(
+        self, overrides: dict[str, dict[str, Any]]
+    ) -> dict[str, list[str]]:
+        """Apply stored overrides; hot plugins swap now, the rest need a restart."""
+        unknown = [name for name in overrides if self.registry.get(name) is None]
+        if unknown:
+            raise ValueError(f"Unknown plugin: {sorted(unknown)[0]}")
+        applied: list[str] = []
+        restart_required: list[str] = []
+        # Recompute from the baseline so removing an override reverts the plugin.
+        for name in list(self._bundles):
+            baseline = self._baselines.get(name)
+            if baseline is None:
+                continue
+            effective = apply_overrides(baseline, overrides.get(name, {}))
+            if effective == self.registry.get(name):
+                continue
+            if effective.swap_policy == "hot":
+                self.ensure_plugin(effective)
+                applied.append(name)
+            else:
+                restart_required.append(name)
+        return {"applied": applied, "restart_required": restart_required}
 
     def find_service(
         self, specification: str, filter: str | None = None

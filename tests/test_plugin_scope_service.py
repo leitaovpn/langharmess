@@ -155,3 +155,61 @@ def test_instantiate_instance_accepts_valid_filters() -> None:
     manager.instantiate_instance(item)
 
     manager._ipopo.instantiate.assert_called_once()
+
+
+def test_apply_config_marks_hot_plugins_as_applied() -> None:
+    manager = make_manager()
+    manager.registry.get("scoped").swap_policy = "hot"
+
+    result = manager.apply_config(
+        {"scoped": {"enabled": True, "properties": {"plugin.mode": "fast"}}}
+    )
+
+    assert result == {"applied": ["scoped"], "restart_required": []}
+    assert manager.registry.get("scoped").properties["plugin.mode"] == "fast"
+
+
+def test_apply_config_requires_restart_for_restart_plugins() -> None:
+    manager = make_manager()
+    before = manager.registry.get("scoped")
+
+    result = manager.apply_config(
+        {"scoped": {"enabled": True, "properties": {"plugin.mode": "slow"}}}
+    )
+
+    assert result == {"applied": [], "restart_required": ["scoped"]}
+    assert manager.registry.get("scoped").properties == before.properties
+
+
+def test_apply_config_reports_unchanged_plugins_as_applied() -> None:
+    manager = make_manager()
+    result = manager.apply_config({"scoped": {"enabled": True}})
+    assert result == {"applied": [], "restart_required": []}
+
+
+def test_apply_config_reverts_removed_overrides() -> None:
+    manager = make_manager()
+    manager.registry.get("scoped").swap_policy = "hot"
+    manager.apply_config({"scoped": {"properties": {"plugin.mode": "fast"}}})
+    assert manager.registry.get("scoped").properties["plugin.mode"] == "fast"
+
+    result = manager.apply_config({})
+
+    assert result == {"applied": ["scoped"], "restart_required": []}
+    assert "plugin.mode" not in manager.registry.get("scoped").properties
+
+
+def test_apply_config_rejects_unknown_plugins() -> None:
+    manager = make_manager()
+    with pytest.raises(ValueError, match="Unknown plugin: ghost"):
+        manager.apply_config({"ghost": {"enabled": True}})
+
+
+def test_apply_config_disables_hot_plugins() -> None:
+    manager = make_manager()
+    manager.registry.get("scoped").swap_policy = "hot"
+
+    result = manager.apply_config({"scoped": {"enabled": False}})
+
+    assert result == {"applied": ["scoped"], "restart_required": []}
+    assert manager.registry.get("scoped").enabled is False

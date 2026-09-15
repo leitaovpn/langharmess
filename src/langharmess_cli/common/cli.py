@@ -20,8 +20,9 @@ from langharmess_config.contracts import SPEC_CONFIGS
 from langharmess_config.plugin import config_descriptors
 from langharmess_logging.contracts import SPEC_LOG
 from langharmess_logging.plugin import log_descriptor
+from langharmess_plugin.config_store import apply_overrides, load_overrides
 from langharmess_plugin.plugin_manager import PluginManager
-from langharmess_plugin.registry import PluginRegistry
+from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 
 
 def _global_options(argv: list[str]) -> tuple[Namespace, list[str]]:
@@ -76,10 +77,19 @@ def main() -> int:
     directory = str(Path(options.dir).expanduser().resolve())
     inherited_directory = os.environ.get("LANG_HARMESS_DIR")
     os.environ["LANG_HARMESS_DIR"] = directory
-    registry = PluginRegistry(
+    overrides = load_overrides(directory, "cli")
+    descriptors: list[PluginDescriptor] = (
         config_descriptors(directory)
         + [log_descriptor("cli", directory)]
         + cli_descriptors(locale)
+    )
+    registry = PluginRegistry(
+        [
+            apply_overrides(descriptor, overrides[descriptor.name])
+            if descriptor.name in overrides
+            else descriptor
+            for descriptor in descriptors
+        ]
     )
     manager = PluginManager(registry)
     manager.start()

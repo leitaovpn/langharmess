@@ -116,10 +116,12 @@ class StreamRoutePlugin:
                 )
 
             user_id, agent_id, session_id = self._resolve_identity(payload)
-            if payload.model is None:
+            if payload.model is None and not self._agent_directory.binding_properties(
+                agent_id, "llm"
+            ):
                 raise HTTPException(
                     status_code=400,
-                    detail="model is required until agents own their llm",
+                    detail="model is required until the agent configures its llm",
                 )
 
             async with self._configuration_lock:
@@ -161,12 +163,14 @@ class StreamRoutePlugin:
         return router
 
     def _apply_agent_configuration(self, agent_id: str, payload: StreamRequest) -> None:
-        properties: dict[str, Any] = {
-            "plugin.model.name": payload.model,
-            "plugin.model.api_key": payload.api_key,
-            "plugin.model.base_url": payload.base_url,
-            "plugin.model.protocol": payload.protocol,
-        }
+        properties: dict[str, Any] = {}
+        if payload.model is not None:
+            properties["plugin.model.name"] = payload.model
+            properties["plugin.model.protocol"] = payload.protocol
+        if payload.api_key:
+            properties["plugin.model.api_key"] = payload.api_key
+        if payload.base_url:
+            properties["plugin.model.base_url"] = payload.base_url
         if payload.stream_usage is not None:
             properties["plugin.model.stream_usage"] = payload.stream_usage
         try:

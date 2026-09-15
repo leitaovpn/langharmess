@@ -101,6 +101,11 @@ def test_sessions_route_plugin_info() -> None:
 
 
 class FakeAgentRegistry:
+    def __init__(self) -> None:
+        self.created: list[tuple[str, str, str]] = []
+        self.updated: list[tuple[str, dict[str, Any]]] = []
+        self.deleted: list[str] = []
+
     def list_agents(self) -> list[dict[str, Any]]:
         return [
             {
@@ -116,6 +121,23 @@ class FakeAgentRegistry:
     def get_agent(self, agent_id: str) -> dict[str, Any] | None:
         return self.list_agents()[0] if agent_id == "simple_agent" else None
 
+    def create_agent(self, agent_id: str, name: str, description: str) -> dict[str, Any]:
+        if agent_id == "simple_agent":
+            raise ValueError(f"Agent already exists: {agent_id}")
+        self.created.append((agent_id, name, description))
+        return {"id": agent_id, "name": name, "description": description}
+
+    def update_agent(self, agent_id: str, **fields: Any) -> dict[str, Any]:
+        if agent_id != "simple_agent":
+            raise KeyError(f"Unknown agent: {agent_id}")
+        self.updated.append((agent_id, fields))
+        return {"id": agent_id, **fields}
+
+    def delete_agent(self, agent_id: str) -> None:
+        if agent_id != "simple_agent":
+            raise KeyError(f"Unknown agent: {agent_id}")
+        self.deleted.append(agent_id)
+
 
 def test_agents_route_lists_agents() -> None:
     plugin = AgentsRoutePlugin()
@@ -130,6 +152,10 @@ def test_agents_route_lists_agents() -> None:
 
 
 class FakeDirectory:
+    def __init__(self) -> None:
+        self.reloaded: list[str] = []
+        self.removed: list[str] = []
+
     def list_agents(self) -> list[dict[str, Any]]:
         entry = FakeAgentRegistry().list_agents()[0]
         entry["materialized"] = True
@@ -145,7 +171,17 @@ class FakeDirectory:
         return None
 
     def reload(self, agent_id: str | None = None) -> None:
+        if agent_id is not None:
+            self.reloaded.append(agent_id)
+
+    def apply_agent_config(self, agent_id: str, plugins: dict[str, Any]) -> None:
         return None
+
+    def binding_properties(self, agent_id: str, plugin: str) -> dict[str, Any]:
+        return {}
+
+    def remove_agent(self, agent_id: str) -> None:
+        self.removed.append(agent_id)
 
 
 def test_agents_route_prefers_directory_when_available() -> None:
@@ -157,6 +193,87 @@ def test_agents_route_prefers_directory_when_available() -> None:
 
     assert agents[0]["materialized"] is True
     assert agents[0]["plugins"] == ["name", "tools"]
+
+
+def test_agents_route_creates_and_reloads_agent() -> None:
+    plugin = AgentsRoutePlugin()
+    registry = FakeAgentRegistry()
+    directory = FakeDirectory()
+    plugin._agent_registry = registry
+    plugin._agent_directory = directory
+
+    response = make_client(plugin).post(
+        "/agents",
+        json={"id": "researcher", "name": "Researcher", "description": "Reads"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["agent"]["id"] == "researcher"
+    assert registry.created == [("researcher", "Researcher", "Reads")]
+    assert directory.reloaded == ["researcher"]
+
+
+def test_agents_route_rejects_duplicate_agent() -> None:
+    plugin = AgentsRoutePlugin()
+    plugin._agent_registry = FakeAgentRegistry()
+    plugin._agent_directory = FakeDirectory()
+
+    response = make_client(plugin).post(
+        "/agents", json={"id": "simple_agent", "name": "Again", "description": ""}
+    )
+
+    assert response.status_code == 400
+    assert "already exists" in response.json()["detail"]
+
+
+def test_agents_route_updates_agent() -> None:
+    plugin = AgentsRoutePlugin()
+    registry = FakeAgentRegistry()
+    directory = FakeDirectory()
+    plugin._agent_registry = registry
+    plugin._agent_directory = directory
+
+    response = make_client(plugin).put(
+        "/agents/simple_agent", json={"enabled": False}
+    )
+
+    assert response.status_code == 200
+    assert registry.updated == [
+        ("simple_agent", {"name": None, "description": None, "enabled": False})
+    ]
+    assert directory.reloaded == ["simple_agent"]
+
+
+def test_agents_route_update_reports_unknown_agent() -> None:
+    plugin = AgentsRoutePlugin()
+    plugin._agent_registry = FakeAgentRegistry()
+    plugin._agent_directory = FakeDirectory()
+    response = make_client(plugin).put("/agents/ghost", json={"enabled": False})
+    assert response.status_code == 404
+
+
+def test_agents_route_deletes_agent() -> None:
+    plugin = AgentsRoutePlugin()
+    registry = FakeAgentRegistry()
+    directory = FakeDirectory()
+    plugin._agent_registry = registry
+    plugin._agent_directory = directory
+
+    response = make_client(plugin).delete("/agents/simple_agent")
+
+    assert response.status_code == 200
+    assert registry.deleted == ["simple_agent"]
+    assert directory.removed == ["simple_agent"]
+
+
+def test_agents_route_requires_registry_for_crud() -> None:
+    plugin = AgentsRoutePlugin()
+    assert (
+        make_client(plugin).post(
+            "/agents", json={"id": "x", "name": "x", "description": ""}
+        ).status_code
+        == 503
+    )
 
 
 def test_agents_route_reports_missing_registry() -> None:
