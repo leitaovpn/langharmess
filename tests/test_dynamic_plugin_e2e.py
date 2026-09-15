@@ -94,7 +94,7 @@ def tool_names(manager: PluginManager, scope: str) -> list[str]:
     return names
 
 
-def test_dynamic_discovery_install_visibility_and_ranking() -> None:
+def make_manager() -> PluginManager:
     manager = PluginManager(
         PluginRegistry(
             [
@@ -112,24 +112,33 @@ def test_dynamic_discovery_install_visibility_and_ranking() -> None:
         )
     )
     manager.start()
-    try:
-        for descriptor in manager.registry.list():
-            manager.install_plugin(descriptor)
-        manager.ensure_scope(ScopeId("ui"), name="UI")
-        manager.ensure_scope(ScopeId("server"), name="Server")
-        manager.ensure_scope(ScopeId("agent"), name="Agent", parent_id=ScopeId("server"))
-        manager.ensure_scope(
-            ScopeId("agent/a"), name="A", parent_id=ScopeId("agent")
-        )
+    return manager
 
+
+def install_templates(manager: PluginManager) -> None:
+    for descriptor in manager.registry.list():
+        manager.install_plugin(descriptor)
+    manager.ensure_scope(ScopeId("ui"), name="UI")
+    manager.ensure_scope(ScopeId("server"), name="Server")
+    manager.ensure_scope(ScopeId("agent"), name="Agent", parent_id=ScopeId("server"))
+    manager.ensure_scope(ScopeId("agent/a"), name="A", parent_id=ScopeId("agent"))
+
+
+def make_discovery() -> PluginDiscovery:
+    return PluginDiscovery(
+        lambda: [
+            EntryPoint(server_echo_package(), "echo"),
+            EntryPoint(agent_echo_package(), "agent-echo"),
+        ]
+    )
+
+
+def test_dynamic_discovery_install_visibility_and_restore() -> None:
+    manager = make_manager()
+    try:
+        install_templates(manager)
         store = InMemoryRuntimeStateStore()
-        discovery = PluginDiscovery(
-            lambda: [
-                EntryPoint(server_echo_package(), "echo"),
-                EntryPoint(agent_echo_package(), "agent-echo"),
-            ]
-        )
-        coordinator = RuntimeMutationCoordinator(manager, store, discovery)
+        coordinator = RuntimeMutationCoordinator(manager, store, make_discovery())
         coordinator.rescan()
 
         coordinator.install("example.echo", "echo")
@@ -164,3 +173,18 @@ def test_dynamic_discovery_install_visibility_and_ranking() -> None:
         assert tools.count("server_echo") == 2
     finally:
         manager.stop()
+
+    restored = make_manager()
+    try:
+        install_templates(restored)
+        restarted = RuntimeMutationCoordinator(restored, store, make_discovery())
+        restarted.rescan()
+        registrations = restarted.restore()
+        assert {item.scope_id for item in registrations} == {
+            ScopeId("server"),
+            ScopeId("agent/a"),
+        }
+        for scope_id in ("ui", "server", "agent", "agent/a"):
+            assert restored.scope_tree.get(ScopeId(scope_id)) is not None
+    finally:
+        restored.stop()
