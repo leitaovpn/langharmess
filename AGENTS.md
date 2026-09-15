@@ -131,6 +131,12 @@ The same gate is enforced locally by `.githooks/pre-commit` and in CI by
   `.venv/bin/python -m langharmess_api` (API server). The package is
   installed editable into `.venv`, so no `PYTHONPATH` setup is needed.
   Ready-made configurations live in `.vscode/launch.json`.
+- Verify that editable install before trusting a manual run:
+  `.venv/bin/python -c "import langharmess_api; print(langharmess_api.__file__)"`
+  must point inside `src/`. A copy under `site-packages` means a plain
+  `pip install .` replaced the editable links — repair with
+  `.venv/bin/python -m pip install -e .`, otherwise `python -m langharmess_api`
+  (including the server the CLI auto-starts) silently runs old code.
 - Interactive mode uses prompt_toolkit and needs a real TTY: debug it with
   `"console": "integratedTerminal"`.
 - The interactive CLI auto-starts the API server as a subprocess
