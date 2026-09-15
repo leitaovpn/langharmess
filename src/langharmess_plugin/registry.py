@@ -24,6 +24,8 @@ class PluginDescriptor:
     ranking: int = 0
     properties: dict[str, Any] = field(default_factory=dict)
     swap_policy: str = "restart"
+    scope: str | None = None
+    scope_parent: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -37,6 +39,8 @@ class PluginDescriptor:
             "ranking": self.ranking,
             "properties": self.properties,
             "swap_policy": self.swap_policy,
+            "scope": self.scope,
+            "scope_parent": self.scope_parent,
         }
 
     @classmethod
@@ -52,6 +56,8 @@ class PluginDescriptor:
             "ranking",
             "properties",
             "swap_policy",
+            "scope",
+            "scope_parent",
         }
         unknown = set(data) - allowed
         if unknown:
@@ -80,6 +86,8 @@ class PluginDescriptor:
             ranking=data.get("ranking", 0),
             properties=data.get("properties", {}),
             swap_policy=data.get("swap_policy", "restart"),
+            scope=data.get("scope"),
+            scope_parent=data.get("scope_parent"),
         )
 
 
@@ -156,3 +164,13 @@ class PluginRegistry:
             raise ValueError(
                 f"Plugin descriptor 'swap_policy' must be one of {SWAP_POLICIES}"
             )
+        if descriptor.scope is not None and not descriptor.scope.strip():
+            raise ValueError("Plugin descriptor 'scope' must be a non-empty string")
+        if descriptor.scope_parent is not None and not descriptor.scope_parent.strip():
+            raise ValueError(
+                "Plugin descriptor 'scope_parent' must be a non-empty string"
+            )
+        if descriptor.scope == "root" and descriptor.scope_parent is not None:
+            raise ValueError("The root plugin scope cannot have a parent")
+        if descriptor.scope not in {None, "root"} and descriptor.scope_parent is None:
+            raise ValueError("A non-root plugin scope requires 'scope_parent'")

@@ -30,10 +30,10 @@ from langharmess_core.plugin import (
     agent_required_modules,
     agent_scoped_specifications,
 )
+from langharmess_core.scopes import AGENT_SCOPE_ID, agent_instance_scope_id
 from langharmess_plugin.contracts import ScopedPluginRegistrar
 from langharmess_plugin.registry import PluginDescriptor
 from langharmess_plugin.validation import ContractGuard
-from langharmess_scope import ScopeId
 
 LOGGER = logging.getLogger("langharmess.agent")
 
@@ -136,7 +136,7 @@ class AgentDirectoryPlugin:
         self._teardown(wanted)
         if self._scope is not None:
             try:
-                self._scope.remove_scope(ScopeId(wanted))
+                self._scope.remove_scope(agent_instance_scope_id(wanted))
             except KeyError:
                 LOGGER.debug("Scope %s was already gone", wanted)
 
@@ -154,7 +154,7 @@ class AgentDirectoryPlugin:
             return
         if current is not None:
             self._safe_kill(current.instance)
-        scope_id = ScopeId(agent["id"])
+        scope_id = agent_instance_scope_id(agent["id"])
         self._scope.instantiate_instance(
             descriptor, scope_id=scope_id, plugin_key=plugin
         )
@@ -210,8 +210,12 @@ class AgentDirectoryPlugin:
             return
         created: dict[str, PluginDescriptor] = {}
         try:
-            scope_id = ScopeId(agent_id)
-            self._scope.ensure_scope(scope_id, name=agent.get("name") or agent_id)
+            scope_id = agent_instance_scope_id(agent_id)
+            self._scope.ensure_scope(
+                scope_id,
+                name=agent.get("name") or agent_id,
+                parent_id=AGENT_SCOPE_ID,
+            )
             for plugin in self._bindings(agent_id):
                 if plugin not in AGENT_PLUGIN_CATALOG:
                     LOGGER.warning(
@@ -236,7 +240,7 @@ class AgentDirectoryPlugin:
             for descriptor in created.values():
                 self._safe_kill(descriptor.instance)
             try:
-                self._scope.remove_scope(ScopeId(agent_id))
+                self._scope.remove_scope(agent_instance_scope_id(agent_id))
             except (KeyError, ValueError):
                 LOGGER.debug("Could not roll back scope %s", agent_id)
             self._failed.add(agent_id)

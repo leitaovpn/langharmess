@@ -78,7 +78,14 @@ class FakeScope:
         parent_id: ScopeId | None = None,
     ) -> None:
         if self.tree.get(scope_id) is None:
-            self.tree.create(scope_id, name)
+            wanted_parent = parent_id or ScopeId("root")
+            if self.tree.get(wanted_parent) is None:
+                if wanted_parent == ScopeId("agent"):
+                    self.tree.create(ScopeId("server"), "server")
+                    self.tree.create(wanted_parent, str(wanted_parent), ScopeId("server"))
+                else:
+                    self.tree.create(wanted_parent, str(wanted_parent))
+            self.tree.create(scope_id, name, wanted_parent)
 
     def scope_filter(self, scope_id: ScopeId) -> str:
         visible = self.tree.ancestors(scope_id, include_self=True)
@@ -97,6 +104,12 @@ class FakeScope:
 
     def find_service(self, specification: str, filter: str | None = None) -> Any:
         return self.services.get((specification, filter))
+
+    def find_services(
+        self, specification: str, filter: str | None = None
+    ) -> list[Any]:
+        service = self.find_service(specification, filter)
+        return [] if service is None else [service]
 
     def apply_config(self, overrides: dict[str, Any]) -> dict[str, list[str]]:
         return {"applied": sorted(overrides), "restart_required": []}
@@ -174,10 +187,10 @@ def test_validate_materializes_default_plugins_and_loop() -> None:
     assert loop.specification == SPEC_AGENT_LOOP
     assert loop.properties["plugin.agent_id"] == "simple_agent"
     assert loop.properties["requires.filters"] == {
-        "_llm_provider": "(|(plugin.scope_id=simple_agent)(plugin.scope_id=root))",
-        "_scoped_llm_providers": "(|(plugin.scope_id=simple_agent)(plugin.scope_id=root))",
-        "_tool_providers": "(|(plugin.scope_id=simple_agent)(plugin.scope_id=root))",
-        "_name_provider": "(|(plugin.scope_id=simple_agent)(plugin.scope_id=root))",
+        "_llm_provider": "(|(plugin.scope_id=agent/simple_agent)(plugin.scope_id=agent)(plugin.scope_id=server)(plugin.scope_id=root))",
+        "_scoped_llm_providers": "(|(plugin.scope_id=agent/simple_agent)(plugin.scope_id=agent)(plugin.scope_id=server)(plugin.scope_id=root))",
+        "_tool_providers": "(|(plugin.scope_id=agent/simple_agent)(plugin.scope_id=agent)(plugin.scope_id=server)(plugin.scope_id=root))",
+        "_name_provider": "(|(plugin.scope_id=agent/simple_agent)(plugin.scope_id=agent)(plugin.scope_id=server)(plugin.scope_id=root))",
     }
 
 
@@ -278,7 +291,7 @@ def test_remove_agent_removes_its_scope_after_instances() -> None:
 
     plugin.remove_agent("simple_agent")
 
-    assert plugin._scope.tree.get(ScopeId("simple_agent")) is None
+    assert plugin._scope.tree.get(ScopeId("agent/simple_agent")) is None
     assert plugin._scope.instances == {}
 
 
