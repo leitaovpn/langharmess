@@ -312,7 +312,7 @@ def test_agent_loop_astream_extracts_responses_api_text_blocks() -> None:
 def test_stream_route_plugin_streams_agent_output() -> None:
     class FakeLoop:
         async def astream(self, message, *, thread_id=None):
-            assert thread_id == "local_user::session-1"
+            assert thread_id == "local_user::simple_agent::session-1"
             yield {"type": "assistant", "content": "hello"}
             yield {"type": "assistant", "content": "world"}
 

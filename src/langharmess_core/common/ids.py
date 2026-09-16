@@ -15,8 +15,9 @@ def validate_id(value: str, *, field: str) -> str:
     return value
 
 
-def thread_key(user_id: str, session_id: str) -> str:
-    """Build the LangGraph thread id isolating one user's session memory."""
+def thread_key(user_id: str, session_id: str, agent_id: str) -> str:
+    """Build the LangGraph thread id isolating one user/agent session memory."""
     user = validate_id(user_id, field="user_id")
     session = validate_id(session_id, field="session_id")
-    return f"{user}::{session}"
+    agent = validate_id(agent_id, field="agent_id")
+    return f"{user}::{agent}::{session}"

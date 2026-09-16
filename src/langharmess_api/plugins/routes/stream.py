@@ -145,7 +145,8 @@ class StreamRoutePlugin:
                         }
                     )
                     async for event in loop.astream(
-                        payload.input, thread_id=thread_key(user_id, session_id)
+                        payload.input,
+                        thread_id=thread_key(user_id, session_id, agent_id),
                     ):
                         yield _encode(event)
                 except Exception as exc:

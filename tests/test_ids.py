@@ -56,12 +56,16 @@ def test_validate_id_reports_field_name() -> None:
         validate_id("bad id", field="session_id")
 
 
-def test_thread_key_combines_user_and_session() -> None:
-    assert thread_key("local_user", "abc123") == "local_user::abc123"
+def test_thread_key_combines_user_agent_and_session() -> None:
+    assert thread_key("local_user", "abc123", "simple_agent") == (
+        "local_user::simple_agent::abc123"
+    )
 
 
 def test_thread_key_rejects_invalid_ids() -> None:
     with pytest.raises(ValueError, match="user_id"):
-        thread_key("bad user", "abc123")
+        thread_key("bad user", "abc123", "simple_agent")
     with pytest.raises(ValueError, match="session_id"):
-        thread_key("local_user", "..")
+        thread_key("local_user", "..", "simple_agent")
+    with pytest.raises(ValueError, match="agent_id"):
+        thread_key("local_user", "abc123", "bad agent")
