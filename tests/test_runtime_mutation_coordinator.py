@@ -304,6 +304,18 @@ def test_duplicate_install_is_rejected() -> None:
     assert store.saves == 1
 
 
+def test_builtin_packages_cannot_be_dynamically_installed() -> None:
+    runtime = manager()
+    store = CountingStore()
+    mutations = coordinator(runtime, store)
+
+    with pytest.raises(RuntimeError, match="Built-in plugins"):
+        mutations.install("builtin.api", "auth")
+
+    assert store.saves == 0
+    assert mutations.registrations() == ()
+
+
 def test_enable_installs_adapters_and_disable_kills_them() -> None:
     runtime = manager()
     store = CountingStore()

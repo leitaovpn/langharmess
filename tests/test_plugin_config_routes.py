@@ -65,6 +65,18 @@ class FakeContribution:
     def __init__(self, id: str, target: str) -> None:
         self.id = id
         self.target = target
+        self.descriptor = type(
+            "Descriptor",
+            (),
+            {
+                "name": f"fake-{id}",
+                "module": f"dynamic_plugins.{id}",
+                "factory": f"fake-{id}-factory",
+                "specification": "plugin.tool_export.target",
+                "enabled": True,
+                "scope": "server",
+            },
+        )()
 
 
 class FakePackage:
@@ -76,7 +88,16 @@ class FakePackage:
 
 class FakeRegistration:
     def __init__(self, name: str) -> None:
-        self.descriptor = type("Descriptor", (), {"name": name})()
+        self.descriptor = type(
+            "Descriptor",
+            (),
+            {
+                "name": name,
+                "module": "dynamic_plugins.echo",
+                "specification": "plugin.tool_export.target",
+                "scope": "server",
+            },
+        )()
         self.package_id = "example.package"
         self.contribution_id = "echo"
         self.package_version = "1"
@@ -381,7 +402,19 @@ def test_dynamic_discovered_and_rescan(tmp_path: Path) -> None:
         {
             "id": "example.package",
             "version": "1",
-            "contributions": [{"id": "echo", "target": "server"}],
+            "source": "external",
+            "contributions": [
+                {
+                    "id": "echo",
+                    "name": "fake-echo",
+                    "target": "server",
+                    "module": "dynamic_plugins.echo",
+                    "factory": "fake-echo-factory",
+                    "specification": "plugin.tool_export.target",
+                    "enabled": True,
+                    "scope": "server",
+                }
+            ],
         }
     ]
 
@@ -456,10 +489,14 @@ def test_dynamic_endpoints_report_errors(tmp_path: Path) -> None:
     plugin._dynamic.upgrade = fail
     client = make_client(plugin)
 
-    assert client.post(
+    install_response = client.post(
         "/plugins/install",
         json={"package_id": "p", "contribution_id": "c"},
-    ).status_code == 400
+    )
+    assert install_response.status_code == 400
+    assert install_response.json()["detail"] == "'missing'"
+    assert install_response.headers["x-error-code"] == "PLUGIN_NOT_FOUND"
+    assert install_response.headers["x-error-type"] == "KeyError"
     assert client.put(
         "/plugins/runtime/x/enabled", json={"enabled": True}
     ).status_code == 400

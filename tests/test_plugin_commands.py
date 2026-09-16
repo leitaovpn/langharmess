@@ -63,7 +63,7 @@ class Response:
             raise httpx.HTTPStatusError(
                 str(self._payload),
                 request=request,
-                response=httpx.Response(self.status_code),
+                response=httpx.Response(self.status_code, json=self._payload),
             )
 
 
@@ -157,8 +157,11 @@ def test_noninteractive_discover_and_list_runtime(
         methods={"post": {"packages": []}},
     )
     assert code == 0
+    assert len(calls) == 2
     assert calls[0][0] == "post"
     assert calls[0][1].endswith("/plugins/rescan")
+    assert calls[1][0] == "get"
+    assert calls[1][1].endswith("/plugins/discovered")
 
     capsys.readouterr()
     code, calls = run_command(
@@ -169,6 +172,20 @@ def test_noninteractive_discover_and_list_runtime(
     assert code == 0
     assert calls[0][0] == "get"
     assert calls[0][1].endswith("/plugins/runtime")
+
+
+def test_noninteractive_list_scope_reads_plugin_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    code, calls = run_command(
+        monkeypatch,
+        ["list", "--scope", "cli"],
+        methods={"get": {"plugins": {}}},
+    )
+    assert code == 0
+    assert calls[0][0] == "get"
+    assert calls[0][1].endswith("/plugins")
+    assert calls[0][2]["params"] == {"scope": "cli"}
 
 
 def test_noninteractive_enable_disable_upgrade_uninstall(
@@ -245,7 +262,9 @@ def test_noninteractive_mutation_reports_http_failures(
         lambda *a, **k: Response({"detail": "boom"}, 500),
     )
     assert command.handler(parser.parse_args(["discover"])) == 1
-    assert "Plugin request failed" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "Plugin request failed" in output
+    assert "boom" in output
 
 
 def test_plugins_lists_scope_configuration(
@@ -282,6 +301,104 @@ def test_plugins_lists_agent_scope(
     handler_for("plugins")(Context(), "list agent:alpha")
     assert captured["params"] == {"scope": "agent:alpha"}
     assert "no plugin overrides" in capsys.readouterr().out
+
+
+def test_plugins_discover_rescans_and_prints_catalog(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    def fake_post(url: str, **kwargs: Any) -> Response:
+        calls.append(("post", url, kwargs))
+        return Response({"packages": []})
+
+    def fake_get(url: str, **kwargs: Any) -> Response:
+        calls.append(("get", url, kwargs))
+        return Response(
+            {
+                "packages": [
+                    {
+                        "id": "builtin.api",
+                        "version": "1.0.0",
+                        "source": "builtin",
+                        "contributions": [
+                            {
+                                "id": "auth",
+                                "name": "api-auth",
+                                "specification": "api.plugin.auth",
+                                "module": "langharmess_api.plugins.auth.auth",
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    assert handler_for("plugins")(Context(), "discover") is False
+
+    assert calls[0][0] == "post"
+    assert calls[0][1].endswith("/plugins/rescan")
+    assert calls[1][0] == "get"
+    assert calls[1][1].endswith("/plugins/discovered")
+    output = capsys.readouterr().out
+    assert "builtin.api" in output
+    assert "builtin" in output
+    assert "api-auth" in output
+    assert "api.plugin.auth" in output
+    assert "langharmess_api.plugins.auth.auth" in output
+
+
+def test_plugins_install_posts_dynamic_install(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    def fake_post(url: str, **kwargs: Any) -> Response:
+        calls.append((url, kwargs))
+        return Response({"name": "real-echo", "status": "installed"})
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    assert handler_for("plugins")(Context(), "install real.echo echo agent/a") is False
+
+    assert calls[0][0].endswith("/plugins/install")
+    assert calls[0][1]["json"] == {
+        "package_id": "real.echo",
+        "contribution_id": "echo",
+        "scope_id": "agent/a",
+    }
+    output = capsys.readouterr().out
+    assert "installed" in output
+
+
+def test_plugins_uninstall_deletes_dynamic_plugin(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    def fake_delete(url: str, **kwargs: Any) -> Response:
+        calls.append((url, kwargs))
+        return Response({"removed": True})
+
+    monkeypatch.setattr(httpx, "delete", fake_delete)
+
+    assert handler_for("plugins")(Context(), "uninstall real-echo") is False
+
+    assert calls[0][0].endswith("/plugins/runtime/real-echo")
+    assert "removed" in capsys.readouterr().out
+
+
+def test_plugins_install_and_uninstall_require_arguments(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert handler_for("plugins")(Context(), "install real.echo") is False
+    assert "usage" in capsys.readouterr().out.lower()
+
+    assert handler_for("plugins")(Context(), "uninstall") is False
+    assert "usage" in capsys.readouterr().out.lower()
 
 
 def test_plugins_set_merges_with_stored_configuration(
@@ -380,7 +497,9 @@ def test_plugins_reports_http_failures(
 ) -> None:
     monkeypatch.setattr(httpx, "get", lambda *a, **k: Response({"detail": "boom"}, 500))
     assert handler_for("plugins")(Context(), "list") is False
-    assert "Plugin request failed" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "Plugin request failed" in output
+    assert "boom" in output
 
 
 def test_plugins_without_arguments_prints_usage(

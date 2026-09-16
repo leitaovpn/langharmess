@@ -8,6 +8,11 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
+from langharmess_api.plugin import builtin_package as api_builtin_package
+from langharmess_cli.plugin import builtin_package as cli_builtin_package
+from langharmess_config.plugin import builtin_package as config_builtin_package
+from langharmess_core.plugin import builtin_package as core_builtin_package
+from langharmess_logging.plugin import builtin_package as logging_builtin_package
 from langharmess_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
 from langharmess_plugin.discovery import PluginDiscovery, PluginDiscoveryError
 from langharmess_plugin.package import PluginContribution, PluginPackage, ToolExport
@@ -76,6 +81,16 @@ class FakeEntryPoint:
         if isinstance(self.loaded, Exception):
             raise self.loaded
         return self.loaded
+
+
+def builtin_packages() -> tuple[PluginPackage, ...]:
+    return (
+        api_builtin_package(),
+        cli_builtin_package(),
+        config_builtin_package(),
+        core_builtin_package(),
+        logging_builtin_package(),
+    )
 
 
 def test_discovers_packages_and_records_broken_entry_points() -> None:
@@ -212,3 +227,47 @@ def test_rejects_tool_exports_without_target_specification() -> None:
     )
     with pytest.raises(PluginDiscoveryError, match="tool_export.target"):
         discovery.discover()
+
+
+def test_discovers_builtin_packages_from_runtime_plugin_directories() -> None:
+    packages = builtin_packages()
+    discovery = PluginDiscovery(
+        lambda: [
+            FakeEntryPoint(package.id, f"{package.id}:package", lambda package=package: package)
+            for package in packages
+        ]
+    )
+
+    result = discovery.scan()
+
+    assert result.failures == ()
+    assert [item.id for item in result.packages] == [
+        "builtin.api",
+        "builtin.cli",
+        "builtin.config",
+        "builtin.core",
+        "builtin.logging",
+    ]
+    modules = {
+        contribution.descriptor.module
+        for package in result.packages
+        for contribution in package.contributions
+    }
+    assert any(module.startswith("langharmess_api.plugins.") for module in modules)
+    assert any(module.startswith("langharmess_cli.plugins.") for module in modules)
+    assert any(module.startswith("langharmess_config.plugins.") for module in modules)
+    assert any(module.startswith("langharmess_core.plugins.") for module in modules)
+    assert any(module.startswith("langharmess_logging.plugins.") for module in modules)
+
+
+def test_builtin_packages_are_declarative_and_do_not_share_names() -> None:
+    names: set[str] = set()
+    instances: set[str] = set()
+    for package in builtin_packages():
+        assert package.id.startswith("builtin.")
+        for contribution in package.contributions:
+            descriptor = contribution.descriptor
+            assert descriptor.name not in names
+            assert descriptor.instance not in instances
+            names.add(descriptor.name)
+            instances.add(descriptor.instance)

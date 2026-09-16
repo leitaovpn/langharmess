@@ -24,6 +24,7 @@ from langharmess_core.contracts import (
     SPEC_TRANSFORMERS,
 )
 from langharmess_core.scopes import agent_instance_scope_id
+from langharmess_plugin.package import PluginContribution, PluginPackage
 from langharmess_plugin.registry import PluginDescriptor
 
 AGENT_PLUGIN_CATALOG: dict[str, tuple[str, str, str]] = {
@@ -234,4 +235,46 @@ def agent_directory_descriptor() -> PluginDescriptor:
         specification=SPEC_AGENT_DIRECTORY,
         scope="server",
         scope_parent="root",
+    )
+
+
+def builtin_package() -> PluginPackage:
+    """Describe server-scoped core plugins and agent plugin templates."""
+    directory = str(Path.home() / ".langharmess")
+    return PluginPackage(
+        id="builtin.core",
+        version="1.0.0",
+        contributions=(
+            PluginContribution(
+                "sqlite-checkpointer",
+                "server",
+                sqlite_checkpointer_descriptor(directory),
+            ),
+            PluginContribution(
+                "session-index", "server", session_index_descriptor(directory)
+            ),
+            PluginContribution(
+                "agent-registry", "server", agent_registry_descriptor(directory)
+            ),
+            PluginContribution(
+                "agent-directory", "server", agent_directory_descriptor()
+            ),
+            PluginContribution(
+                "llm-template", "agent", agent_plugin_template_descriptor("llm")
+            ),
+            PluginContribution(
+                "tools-template", "agent", agent_plugin_template_descriptor("tools")
+            ),
+            PluginContribution(
+                "name-template", "agent", agent_plugin_template_descriptor("name")
+            ),
+            PluginContribution(
+                "agent-loop-template", "agent", agent_loop_template_descriptor()
+            ),
+            PluginContribution(
+                "tool-export-adapter-template",
+                "agent",
+                tool_export_adapter_template_descriptor(),
+            ),
+        ),
     )

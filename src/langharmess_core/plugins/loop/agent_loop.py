@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from langchain.agents import create_agent
@@ -213,6 +214,24 @@ class PluginAgentLoop:
             ),
         }
         self._graph: Any = None
+        self._excluded_services: set[int] = set()
+
+    @contextmanager
+    def _excluding_service(self, service: Any) -> Iterator[None]:
+        self._excluded_services.add(id(service))
+        try:
+            yield
+        finally:
+            self._excluded_services.discard(id(service))
+
+    def _without_excluded(self, providers: list[Any]) -> list[Any]:
+        if not self._excluded_services:
+            return list(providers or [])
+        return [
+            provider
+            for provider in providers or []
+            if id(provider) not in self._excluded_services
+        ]
 
     def _remember_service(self, service: Any, reference: Any) -> None:
         if reference is None or not hasattr(reference, "get_property"):
@@ -233,13 +252,15 @@ class PluginAgentLoop:
 
     def _effective(self, providers: list[Any]) -> list[Any]:
         return resolve_scoped_aggregate(
-            self._scope_chain or [], providers or [], self._service_metadata
+            self._scope_chain or [],
+            self._without_excluded(providers),
+            self._service_metadata,
         )
 
     def _resolve_scoped_llm(self) -> None:
         selected = resolve_scoped_best(
             self._scope_chain or [],
-            self._scoped_llm_providers or [],
+            self._without_excluded(self._scoped_llm_providers),
             self._service_metadata,
         )
         if selected is not None:
@@ -278,10 +299,11 @@ class PluginAgentLoop:
     def _on_scoped_llm_unbind(
         self, field: str, service: Any, reference: Any
     ) -> None:
-        self._guards[field].release(service)
-        self._forget_service(service)
-        self._resolve_scoped_llm()
-        self._rebuild()
+        with self._excluding_service(service):
+            self._guards[field].release(service)
+            self._forget_service(service)
+            self._resolve_scoped_llm()
+            self._rebuild()
 
     @BindField("_tool_providers", if_valid=True)
     def _on_tool_bind(self, field: str, service: Any, reference: Any) -> None:
@@ -292,9 +314,10 @@ class PluginAgentLoop:
 
     @UnbindField("_tool_providers", if_valid=True)
     def _on_tool_unbind(self, field: str, service: Any, reference: Any) -> None:
-        self._guards[field].release(service)
-        self._forget_service(service)
-        self._rebuild()
+        with self._excluding_service(service):
+            self._guards[field].release(service)
+            self._forget_service(service)
+            self._rebuild()
 
     @BindField("_middleware_providers", if_valid=True)
     def _on_middleware_bind(self, field: str, service: Any, reference: Any) -> None:
@@ -305,9 +328,10 @@ class PluginAgentLoop:
 
     @UnbindField("_middleware_providers", if_valid=True)
     def _on_middleware_unbind(self, field: str, service: Any, reference: Any) -> None:
-        self._guards[field].release(service)
-        self._forget_service(service)
-        self._rebuild()
+        with self._excluding_service(service):
+            self._guards[field].release(service)
+            self._forget_service(service)
+            self._rebuild()
 
     @BindField("_system_prompt_providers", if_valid=True)
     def _on_system_prompt_bind(self, field: str, service: Any, reference: Any) -> None:
@@ -318,9 +342,10 @@ class PluginAgentLoop:
 
     @UnbindField("_system_prompt_providers", if_valid=True)
     def _on_system_prompt_unbind(self, field: str, service: Any, reference: Any) -> None:
-        self._guards[field].release(service)
-        self._forget_service(service)
-        self._rebuild()
+        with self._excluding_service(service):
+            self._guards[field].release(service)
+            self._forget_service(service)
+            self._rebuild()
 
     @BindField("_response_format_provider", if_valid=True)
     def _on_response_format_bind(self, field: str, service: Any, reference: Any) -> None:
@@ -388,9 +413,10 @@ class PluginAgentLoop:
     def _on_interrupt_before_unbind(
         self, field: str, service: Any, reference: Any
     ) -> None:
-        self._guards[field].release(service)
-        self._forget_service(service)
-        self._rebuild()
+        with self._excluding_service(service):
+            self._guards[field].release(service)
+            self._forget_service(service)
+            self._rebuild()
 
     @BindField("_interrupt_after_providers", if_valid=True)
     def _on_interrupt_after_bind(self, field: str, service: Any, reference: Any) -> None:
@@ -403,9 +429,10 @@ class PluginAgentLoop:
     def _on_interrupt_after_unbind(
         self, field: str, service: Any, reference: Any
     ) -> None:
-        self._guards[field].release(service)
-        self._forget_service(service)
-        self._rebuild()
+        with self._excluding_service(service):
+            self._guards[field].release(service)
+            self._forget_service(service)
+            self._rebuild()
 
     @BindField("_debug_provider", if_valid=True)
     def _on_debug_bind(self, field: str, service: Any, reference: Any) -> None:
@@ -451,9 +478,10 @@ class PluginAgentLoop:
     def _on_transformers_unbind(
         self, field: str, service: Any, reference: Any
     ) -> None:
-        self._guards[field].release(service)
-        self._forget_service(service)
-        self._rebuild()
+        with self._excluding_service(service):
+            self._guards[field].release(service)
+            self._forget_service(service)
+            self._rebuild()
 
     def _collect_tools(self) -> list[Any]:
         tools: list[Any] = []

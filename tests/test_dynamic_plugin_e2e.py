@@ -32,10 +32,10 @@ class EntryPoint:
         return lambda: self.package
 
 
-def echo_descriptor(name: str) -> PluginDescriptor:
+def echo_descriptor(name: str, version: str = "1.0.0") -> PluginDescriptor:
     return PluginDescriptor(
         name=name,
-        version="1.0.0",
+        version=version,
         module="dynamic_plugins.echo",
         factory="dynamic-echo-factory",
         instance=name,
@@ -46,15 +46,15 @@ def echo_descriptor(name: str) -> PluginDescriptor:
     )
 
 
-def server_echo_package() -> PluginPackage:
+def server_echo_package(version: str = "1.0.0") -> PluginPackage:
     return PluginPackage(
         "example.echo",
-        "1.0.0",
+        version,
         (
             PluginContribution(
                 "echo",
                 "server",
-                echo_descriptor("server-echo"),
+                echo_descriptor("server-echo", version=version),
                 tool_exports=(ToolExport("server_echo", "Server echo", "echo", EchoArgs),),
             ),
         ),
@@ -188,3 +188,40 @@ def test_dynamic_discovery_install_visibility_and_restore() -> None:
             assert restored.scope_tree.get(ScopeId(scope_id)) is not None
     finally:
         restored.stop()
+
+
+def test_dynamic_discovery_full_lifecycle() -> None:
+    manager = make_manager()
+    try:
+        install_templates(manager)
+        store = InMemoryRuntimeStateStore()
+        coordinator = RuntimeMutationCoordinator(manager, store, make_discovery())
+
+        coordinator.rescan()
+        assert [item.id for item in coordinator.discovered()] == [
+            "example.agent-echo",
+            "example.echo",
+        ]
+
+        installed = coordinator.install("example.echo", "echo")
+        assert installed.descriptor.name == "server-echo"
+        assert "server_echo" in tool_names(manager, "agent")
+
+        disabled = coordinator.set_enabled("server-echo", False)
+        assert disabled.enabled is False
+        assert "server_echo" not in tool_names(manager, "agent")
+
+        enabled = coordinator.set_enabled("server-echo", True)
+        assert enabled.enabled is True
+        assert "server_echo" in tool_names(manager, "agent")
+
+        coordinator._catalog["example.echo"] = server_echo_package("1.1.0")
+        upgraded = coordinator.upgrade("server-echo")
+        assert upgraded.package_version == "1.1.0"
+        assert upgraded.descriptor.version == "1.1.0"
+
+        coordinator.uninstall("server-echo")
+        assert coordinator.registrations() == ()
+        assert "server_echo" not in tool_names(manager, "agent")
+    finally:
+        manager.stop()

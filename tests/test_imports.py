@@ -64,6 +64,7 @@ PUBLIC_MODULES = [
     "langharmess_api",
     "langharmess_api.plugin",
     "langharmess_api.common.server",
+    "langharmess_api.common.errors",
     "langharmess_api.plugins",
     "langharmess_api.plugins.routes.agents",
     "langharmess_api.plugins.routes.plugins",
