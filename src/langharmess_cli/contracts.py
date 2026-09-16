@@ -11,6 +11,7 @@ from langharmess_plugin.validation import service_contract
 SPEC_CLI_COMMAND = "cli.plugin.command"
 SPEC_CLI_RUNNER = "cli.runner"
 SPEC_CLI_RENDERER = "cli.plugin.renderer"
+SPEC_UI_SERVER = "ui.server"
 
 
 @dataclass(frozen=True)
@@ -72,3 +73,9 @@ class InteractiveRenderer(Protocol):
     def set_model(self, name: str) -> None: ...
 
     def get_status_text(self) -> str: ...
+
+
+@service_contract(SPEC_UI_SERVER)
+@runtime_checkable
+class UIServerProvider(Protocol):
+    def run(self, config: Mapping[str, Any]) -> int: ...

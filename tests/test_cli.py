@@ -106,13 +106,15 @@ def test_api_guard_starts_server(monkeypatch: pytest.MonkeyPatch) -> None:
     assert guard._process is process
     assert commands == [
         [
-            sys.executable,
-            "-m",
-            "langharmess_api",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            "8000",
+                sys.executable,
+                "-m",
+                "langharmess",
+                "--mode",
+                "server",
+                "--server-ip",
+                "127.0.0.1",
+                "--server-port",
+                "11534",
         ]
     ]
 
@@ -120,12 +122,12 @@ def test_api_guard_starts_server(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_api_guard_uses_frozen_executable_to_start_server(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import langharmess_api.__main__ as api_main_module
+    import langharmess.__main__ as bootstrap_main_module
 
     calls = []
     monkeypatch.setattr(api_guard_module.sys, "frozen", True, raising=False)
     monkeypatch.setattr(
-        api_main_module,
+        bootstrap_main_module,
         "main",
         lambda argv=None: calls.append(argv) or 0,
     )
@@ -135,7 +137,16 @@ def test_api_guard_uses_frozen_executable_to_start_server(
 
     guard.ensure_api_server()
 
-    assert calls == [["--host", "127.0.0.1", "--port", "9123"]]
+    assert calls == [
+        [
+            "--mode",
+            "server",
+            "--server-ip",
+            "127.0.0.1",
+            "--server-port",
+            "9123",
+        ]
+    ]
     assert guard._process is None
 
 
@@ -377,7 +388,7 @@ def test_main_forwards_identity_flags_to_resolution(
 
     assert main_module.main() == 0
     assert captured == {
-        "base_url": "http://127.0.0.1:8000",
+        "base_url": "http://127.0.0.1:11534",
         "token": "secret",
         "user_id": "alice",
         "agent_id": "researcher",
@@ -452,8 +463,9 @@ def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> 
         "cli-session",
         "cli-shell",
         "config-toml",
-        "configs",
-    }
+            "configs",
+            "ui-server",
+        }
 
 
 def test_main_uses_selected_provider_and_directory(

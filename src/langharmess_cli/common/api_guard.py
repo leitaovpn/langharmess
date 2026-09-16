@@ -14,11 +14,13 @@ import httpx
 class APIGuard:
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:8000",
+        base_url: str = "http://127.0.0.1:11534",
         *,
+        config_dir: str | None = None,
         startup_timeout: float = 30.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
+        self.config_dir = config_dir
         self.startup_timeout = startup_timeout
         self._process: subprocess.Popen[bytes] | None = None
 
@@ -35,24 +37,38 @@ class APIGuard:
 
         parsed = urlparse(self.base_url)
         host = parsed.hostname or "127.0.0.1"
-        port = parsed.port or 8000
+        port = parsed.port or 11534
 
         if getattr(sys, "frozen", False):
             # A frozen executable cannot spawn `python -m`; serve in-process.
-            from langharmess_api.__main__ import main as serve
+            from langharmess.__main__ import main as serve
 
-            serve(["--host", host, "--port", str(port)])
+            command = [
+                "--mode",
+                "server",
+                "--server-ip",
+                host,
+                "--server-port",
+                str(port),
+            ]
+            if self.config_dir is not None:
+                command.extend(["--config-dir", self.config_dir])
+            serve(command)
             return
 
         command = [
             sys.executable,
             "-m",
-            "langharmess_api",
-            "--host",
+            "langharmess",
+            "--mode",
+            "server",
+            "--server-ip",
             host,
-            "--port",
+            "--server-port",
             str(port),
         ]
+        if self.config_dir is not None:
+            command.extend(["--config-dir", self.config_dir])
         self._process = subprocess.Popen(command)
         atexit.register(self._terminate)
 

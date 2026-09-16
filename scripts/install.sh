@@ -35,6 +35,19 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   cat >"$CONFIG_FILE" <<'EOF'
 [DEFAULT]
 
+[plugins.ui]
+builtin_package="langharmess_cli.plugin:builtin_package"
+sdk_package="langharmess_api.sdk:package"
+
+[plugins.server]
+builtin_package="langharmess_api.plugin:builtin_package"
+
+[plugins.agent]
+builtin_package="langharmess_core.plugin:builtin_package"
+
+[plugins.log]
+builtin_package="langharmess_logging.plugin:builtin_package"
+
 [providers.deepseek-v4-flash]
 
 protocol="chat"

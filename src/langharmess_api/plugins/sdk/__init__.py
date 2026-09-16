@@ -1,0 +1,2 @@
+"""REST SDK plugin package."""
+

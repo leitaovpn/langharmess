@@ -20,13 +20,13 @@ from langharmess_cli.contracts import (
 @Provides(CLICommandProvider)
 @Property("_plugin_name", "plugin.name", "health-command")
 @Property("_plugin_version", "plugin.version", "1.0.0")
-@Property("_base_url", "plugin.base_url", "http://127.0.0.1:8000")
+@Property("_base_url", "plugin.base_url", "http://127.0.0.1:11534")
 @Property("_token", "plugin.token", "secret")
 class HealthCommandPlugin:
     def __init__(self) -> None:
         self._plugin_name = "health-command"
         self._plugin_version = "1.0.0"
-        self._base_url = "http://127.0.0.1:8000"
+        self._base_url = "http://127.0.0.1:11534"
         self._token = "secret"
 
     def _add_arguments(self, parser: argparse.ArgumentParser) -> None:

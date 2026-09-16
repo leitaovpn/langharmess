@@ -199,7 +199,7 @@ def test_noninteractive_enable_disable_upgrade_uninstall(
     assert code == 0
     assert calls[0] == (
         "put",
-        "http://127.0.0.1:8000/plugins/runtime/api-rate-limit/enabled",
+        "http://127.0.0.1:11534/plugins/runtime/api-rate-limit/enabled",
         {"json": {"enabled": True}, "headers": {"Authorization": "Bearer secret"}, "timeout": 10.0},
     )
 

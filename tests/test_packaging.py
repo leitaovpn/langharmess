@@ -12,7 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_console_script_and_packaging_dependencies_are_declared() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
-    assert project["scripts"]["langharmess"] == "langharmess_cli.__main__:main"
+    assert project["scripts"]["langharmess"] == "langharmess.__main__:main"
+    assert project["entry-points"]["langharmess.config"]["config"] == (
+        "langharmess_config.plugin:builtin_package"
+    )
     assert {"build>=1.3.0", "pyinstaller>=6.16.0"} <= set(
         project["optional-dependencies"]["packaging"]
     )
@@ -33,10 +36,14 @@ def test_packaging_scripts_are_executable_and_valid_bash() -> None:
     assert 'CONFIG_DIR=${LANG_HARMESS_HOME:-"$HOME/.langharmess"}' in installer
     assert 'CONFIG_FILE="$CONFIG_DIR/langharmess.toml"' in installer
     assert "[providers.deepseek-v4-flash]" in installer
+    assert "[plugins.ui]" in installer
+    assert "langharmess_api.sdk:package" in installer
     template = (ROOT / "src/langharmess_config/config/langharmess.toml").read_text()
     assert "log_file" not in template
     builder = (ROOT / "scripts/build_packages.sh").read_text()
+    assert "--collect-submodules langharmess" in builder
     assert "--collect-submodules langharmess_logging" in builder
+    assert '"$PROJECT_ROOT/src/langharmess/__main__.py"' in builder
 
 
 def test_package_workflow_builds_all_supported_platforms() -> None:

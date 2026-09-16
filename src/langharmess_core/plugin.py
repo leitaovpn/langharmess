@@ -10,6 +10,7 @@ from langharmess_core.contracts import (
     SPEC_AGENT_DIRECTORY,
     SPEC_AGENT_LOOP,
     SPEC_AGENT_REGISTRY,
+    SPEC_AGENT_SERVER,
     SPEC_CACHE,
     SPEC_CHECKPOINTER,
     SPEC_INTERRUPT_AFTER,
@@ -238,6 +239,19 @@ def agent_directory_descriptor() -> PluginDescriptor:
     )
 
 
+def agent_server_descriptor() -> PluginDescriptor:
+    return PluginDescriptor(
+        name="agent-server",
+        version="1.0.0",
+        module="langharmess_core.plugins.agents.server",
+        factory="agent-server-factory",
+        instance="agent-server",
+        specification=SPEC_AGENT_SERVER,
+        scope="server",
+        scope_parent="root",
+    )
+
+
 def builtin_package() -> PluginPackage:
     """Describe server-scoped core plugins and agent plugin templates."""
     directory = str(Path.home() / ".langharmess")
@@ -259,6 +273,7 @@ def builtin_package() -> PluginPackage:
             PluginContribution(
                 "agent-directory", "server", agent_directory_descriptor()
             ),
+            PluginContribution("agent-server", "server", agent_server_descriptor()),
             PluginContribution(
                 "llm-template", "agent", agent_plugin_template_descriptor("llm")
             ),

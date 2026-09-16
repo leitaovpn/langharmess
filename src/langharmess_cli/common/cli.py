@@ -35,7 +35,7 @@ def _global_options(argv: list[str]) -> tuple[Namespace, list[str]]:
 def _interactive_options(argv: list[str]) -> dict[str, Any]:
     """Extract interactive-mode flags from argv, mirroring the global scan."""
     values: dict[str, Any] = {
-        "base_url": "http://127.0.0.1:8000",
+        "base_url": "http://127.0.0.1:11534",
         "token": "secret",
         "user_id": os.environ.get("LANG_HARMESS_USER_ID") or DEFAULT_USER_ID,
         "agent_id": None,
@@ -71,14 +71,19 @@ def _locale_option(argv: list[str], *, default: str) -> str:
     return default
 
 
-def main() -> int:
-    options, argv = _global_options(sys.argv[1:])
+def main(
+    argv: list[str] | None = None,
+    *,
+    descriptors: list[PluginDescriptor] | None = None,
+    manager: PluginManager | None = None,
+) -> int:
+    options, argv = _global_options(sys.argv[1:] if argv is None else argv)
     locale = _locale_option(argv, default=get_locale())
     directory = str(Path(options.dir).expanduser().resolve())
     inherited_directory = os.environ.get("LANG_HARMESS_DIR")
     os.environ["LANG_HARMESS_DIR"] = directory
     overrides = load_overrides(directory, "cli")
-    descriptors: list[PluginDescriptor] = (
+    selected_descriptors = descriptors or (
         config_descriptors(directory)
         + [log_descriptor("cli", directory)]
         + cli_descriptors(locale)
@@ -88,17 +93,20 @@ def main() -> int:
             apply_overrides(descriptor, overrides[descriptor.name])
             if descriptor.name in overrides
             else descriptor
-            for descriptor in descriptors
+            for descriptor in selected_descriptors
         ]
     )
-    manager = PluginManager(registry)
-    manager.start()
+    active_manager = manager or PluginManager(registry)
+    owns_manager = manager is None
+    if owns_manager:
+        active_manager.start()
     try:
-        for descriptor in registry.list():
-            manager.install_plugin(descriptor)
+        if owns_manager:
+            for descriptor in registry.list():
+                active_manager.install_plugin(descriptor)
 
-        providers = manager.get_services(SPEC_CLI_COMMAND)
-        get_service = getattr(manager, "get_service", lambda specification: None)
+        providers = active_manager.get_services(SPEC_CLI_COMMAND)
+        get_service = getattr(active_manager, "get_service", lambda specification: None)
         configs = get_service(SPEC_CONFIGS)
         log_provider = get_service(SPEC_LOG)
         renderer = get_service(SPEC_CLI_RENDERER)
@@ -174,7 +182,8 @@ def main() -> int:
         cli_runner.log = log_provider
         return cli_runner.run(argv)
     finally:
-        manager.stop()
+        if owns_manager:
+            active_manager.stop()
         if inherited_directory is None:
             os.environ.pop("LANG_HARMESS_DIR", None)
         else:

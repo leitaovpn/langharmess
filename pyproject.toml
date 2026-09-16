@@ -27,7 +27,10 @@ dependencies = [
 ]
 
 [project.scripts]
-langharmess = "langharmess_cli.__main__:main"
+langharmess = "langharmess.__main__:main"
+
+[project.entry-points."langharmess.config"]
+config = "langharmess_config.plugin:builtin_package"
 
 [project.entry-points."langharmess.plugins"]
 builtin-api = "langharmess_api.plugin:builtin_package"
@@ -89,6 +92,7 @@ markers = [
 
 [tool.coverage.run]
 source = [
+    "langharmess",
     "langharmess_scope",
     "langharmess_config",
     "langharmess_logging",
