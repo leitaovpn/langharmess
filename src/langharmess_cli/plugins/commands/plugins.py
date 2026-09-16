@@ -68,9 +68,15 @@ class PluginCommandPlugin:
         context = SimpleNamespace(base_url=args.base_url, token=args.token)
         try:
             if args.action == "discover":
-                payload = self._post_raw(context, "/plugins/rescan", {})
+                self._post_raw(context, "/plugins/rescan", {})
+                payload = self._get_raw(context, "/plugins/discovered")
             elif args.action == "list":
-                payload = self._get_raw(context, "/plugins/runtime")
+                if args.scope:
+                    payload = self._get_raw(
+                        context, "/plugins", params={"scope": args.scope}
+                    )
+                else:
+                    payload = self._get_raw(context, "/plugins/runtime")
             elif args.action == "install":
                 if len(args.values) != 2:
                     raise ValueError("install requires PACKAGE_ID CONTRIBUTION_ID")
@@ -104,7 +110,7 @@ class PluginCommandPlugin:
                     context, f"/plugins/runtime/{args.values[0]}"
                 )
         except (httpx.HTTPError, ValueError) as exc:
-            print(f"Plugin request failed: {exc}")
+            print(f"Plugin request failed: {self._error_message(exc)}")
             return 1
         print(json.dumps(payload, ensure_ascii=False))
         return 0
@@ -114,7 +120,8 @@ class PluginCommandPlugin:
             InteractiveCommandSpec(
                 name="plugins",
                 help=(
-                    "Plugin configuration: list|set|enable|disable|history|rollback "
+                    "Plugin management: discover|list|install|uninstall|"
+                    "set|enable|disable|history|rollback "
                     "[scope] (scope: api, cli, or agent:<id>)"
                 ),
                 handler=self._handle,
@@ -133,6 +140,12 @@ class PluginCommandPlugin:
         try:
             if action == "list":
                 self._list(context, arguments)
+            elif action == "discover":
+                self._discover(context)
+            elif action == "install":
+                self._install(context, arguments)
+            elif action == "uninstall":
+                self._uninstall(context, arguments)
             elif action in ("set", "enable", "disable"):
                 self._update(context, action, arguments)
             elif action == "history":
@@ -143,12 +156,15 @@ class PluginCommandPlugin:
                 print(f"Unknown /plugins action: {action}")
                 self._usage()
         except (httpx.HTTPError, ValueError) as exc:
-            print(f"Plugin request failed: {exc}")
+            print(f"Plugin request failed: {self._error_message(exc)}")
         return False
 
     def _usage(self) -> None:
         print(
-            "usage: /plugins list|history|rollback [scope] [version]"
+            "usage: /plugins discover"
+            " | /plugins list|history|rollback [scope] [version]"
+            " | /plugins install <package_id> <contribution_id> [scope_id]"
+            " | /plugins uninstall <plugin_name>"
             " | /plugins set|enable|disable [scope] <plugin> [KEY=VALUE]"
         )
 
@@ -168,6 +184,55 @@ class PluginCommandPlugin:
             )
             state = "enabled" if entry.get("enabled", True) else "disabled"
             print(f"  {name} · {state} · {pairs}".rstrip())
+
+    def _discover(self, context: InteractiveCommandContext) -> None:
+        self._post_raw(context, "/plugins/rescan", {})
+        payload = self._get_raw(context, "/plugins/discovered")
+        packages = payload.get("packages") or []
+        if not packages:
+            print("no discovered plugins")
+            return
+        for package in packages:
+            source = package.get("source", "external")
+            print(f"{package.get('id')} {package.get('version')} [{source}]")
+            for contribution in package.get("contributions") or []:
+                print(
+                    "  "
+                    f"{contribution.get('id')} "
+                    f"{contribution.get('name')} "
+                    f"{contribution.get('specification')} "
+                    f"{contribution.get('module')}"
+                )
+
+    def _install(
+        self, context: InteractiveCommandContext, arguments: list[str]
+    ) -> None:
+        if len(arguments) < 2:
+            self._usage()
+            return
+        package_id, contribution_id = arguments[0], arguments[1]
+        scope_id = arguments[2] if len(arguments) > 2 else None
+        payload = self._post_raw(
+            context,
+            "/plugins/install",
+            {
+                "package_id": package_id,
+                "contribution_id": contribution_id,
+                "scope_id": scope_id,
+            },
+        )
+        print(json.dumps(payload, ensure_ascii=False))
+
+    def _uninstall(
+        self, context: InteractiveCommandContext, arguments: list[str]
+    ) -> None:
+        if len(arguments) != 1:
+            self._usage()
+            return
+        payload = self._delete_raw(
+            context, f"/plugins/runtime/{arguments[0]}"
+        )
+        print(json.dumps(payload, ensure_ascii=False))
 
     def _update(
         self, context: InteractiveCommandContext, action: str, arguments: list[str]
@@ -261,6 +326,21 @@ class PluginCommandPlugin:
     def _is_scope(value: str) -> bool:
         return value in ("api", "cli") or value.startswith("agent:")
 
+    @staticmethod
+    def _error_message(exc: Exception) -> str:
+        if isinstance(exc, httpx.HTTPStatusError):
+            try:
+                detail = exc.response.json().get("detail")
+            except Exception:
+                return str(exc)
+            if isinstance(detail, str):
+                return detail
+            if isinstance(detail, dict):
+                message = detail.get("message")
+                return str(message) if message else str(detail)
+            return str(detail)
+        return str(exc)
+
     def _headers(self, context: InteractiveCommandContext) -> dict[str, str]:
         return {"Authorization": f"Bearer {context.token}"}
 
@@ -312,9 +392,16 @@ class PluginCommandPlugin:
         response.raise_for_status()
         return dict(response.json())
 
-    def _get_raw(self, context: Any, path: str) -> dict[str, Any]:
+    def _get_raw(
+        self,
+        context: Any,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         response = httpx.get(
             f"{context.base_url.rstrip('/')}{path}",
+            params=params,
             headers=self._headers(context),
             timeout=10.0,
         )

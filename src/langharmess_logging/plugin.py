@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from langharmess_logging.contracts import SPEC_LOG
+from langharmess_plugin.package import PluginContribution, PluginPackage
 from langharmess_plugin.registry import PluginDescriptor
 
 
@@ -25,4 +28,21 @@ def log_descriptor(role: str, directory: str) -> PluginDescriptor:
                 "uvicorn.error,uvicorn.access" if role == "server" else ""
             ),
         },
+    )
+
+
+def builtin_package() -> PluginPackage:
+    """Describe the CLI and server logging plugins."""
+    directory = str(Path.home() / ".langharmess")
+    return PluginPackage(
+        id="builtin.logging",
+        version="1.0.0",
+        contributions=(
+            PluginContribution(
+                "server-log", "root", log_descriptor("server", directory)
+            ),
+            PluginContribution(
+                "cli-log", "root", log_descriptor("cli", directory)
+            ),
+        ),
     )

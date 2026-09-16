@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from langharmess_config.contracts import SPEC_CONFIG_PROVIDER, SPEC_CONFIGS
+from langharmess_plugin.package import PluginContribution, PluginPackage
 from langharmess_plugin.registry import PluginDescriptor
 
 
@@ -35,3 +36,16 @@ def config_descriptors(directory: str | None = None) -> list[PluginDescriptor]:
             scope="root",
         ),
     ]
+
+
+def builtin_package() -> PluginPackage:
+    """Describe the built-in configuration plugins."""
+    config_toml, configs = config_descriptors()
+    return PluginPackage(
+        id="builtin.config",
+        version="1.0.0",
+        contributions=(
+            PluginContribution("toml", "root", config_toml),
+            PluginContribution("configs", "root", configs),
+        ),
+    )

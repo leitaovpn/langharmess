@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from langharmess_cli.contracts import SPEC_CLI_COMMAND, SPEC_CLI_RENDERER
+from langharmess_plugin.package import PluginContribution, PluginPackage
 from langharmess_plugin.registry import PluginDescriptor
 
 
@@ -74,3 +75,25 @@ def cli_descriptors(locale: str) -> list[PluginDescriptor]:
             scope_parent="root",
         ),
     ]
+
+
+def builtin_package() -> PluginPackage:
+    """Describe the CLI plugins already installed by the CLI assembly."""
+    contribution_ids = (
+        "health",
+        "model",
+        "rich-renderer",
+        "session",
+        "plugins",
+        "shell",
+    )
+    return PluginPackage(
+        id="builtin.cli",
+        version="1.0.0",
+        contributions=tuple(
+            PluginContribution(contribution_id, "ui", descriptor)
+            for contribution_id, descriptor in zip(
+                contribution_ids, cli_descriptors("en"), strict=True
+            )
+        ),
+    )

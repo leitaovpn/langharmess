@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from langharmess_api.contracts import (
     SPEC_API_SERVER,
     SPEC_AUTH,
@@ -9,6 +11,7 @@ from langharmess_api.contracts import (
     SPEC_RATE_LIMIT,
     SPEC_ROUTE,
 )
+from langharmess_plugin.package import PluginContribution, PluginPackage
 from langharmess_plugin.registry import PluginDescriptor
 
 
@@ -130,4 +133,26 @@ def api_server_descriptor() -> PluginDescriptor:
         specification=SPEC_API_SERVER,
         scope="server",
         scope_parent="root",
+    )
+
+
+def builtin_package() -> PluginPackage:
+    """Describe the API plugins already installed by the server assembly."""
+    directory = str(Path.home() / ".langharmess")
+    return PluginPackage(
+        id="builtin.api",
+        version="1.0.0",
+        contributions=(
+            PluginContribution("auth", "server", api_auth_descriptor()),
+            PluginContribution("rate-limit", "server", api_rate_limit_descriptor()),
+            PluginContribution("db", "root", api_db_descriptor()),
+            PluginContribution("health", "server", api_health_descriptor()),
+            PluginContribution("stream", "server", api_stream_descriptor()),
+            PluginContribution(
+                "plugins", "server", api_plugins_descriptor(directory)
+            ),
+            PluginContribution("sessions", "server", api_sessions_descriptor()),
+            PluginContribution("agents", "server", api_agents_descriptor()),
+            PluginContribution("server", "server", api_server_descriptor()),
+        ),
     )

@@ -19,6 +19,7 @@ from langharmess_scope import ROOT_SCOPE_ID, ScopeId
 TOOL_ADAPTER_MODULE = "langharmess_core.plugins.tools.export_adapter"
 TOOL_ADAPTER_FACTORY = "tool-export-adapter-factory"
 TOOL_SPECIFICATION = "agent.plugin.tools"
+BUILTIN_PACKAGE_PREFIX = "builtin."
 
 
 class RuntimeMutationError(RuntimeError):
@@ -66,6 +67,11 @@ class RuntimeMutationCoordinator:
         scope_id: ScopeId | None = None,
     ) -> PersistedPluginRegistration:
         with self._lock:
+            if package_id.startswith(BUILTIN_PACKAGE_PREFIX):
+                raise RuntimeMutationError(
+                    "Built-in plugins are managed by server/CLI assembly "
+                    "and cannot be installed dynamically"
+                )
             package, contribution = self._find(package_id, contribution_id)
             descriptor = self._descriptor(contribution, scope_id)
             if any(item.descriptor.name == descriptor.name for item in self._registrations):

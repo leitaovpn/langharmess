@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Query
 from pelix.ipopo.decorators import (
     BindField,
     ComponentFactory,
@@ -15,6 +15,7 @@ from pelix.ipopo.decorators import (
 )
 from pydantic import BaseModel
 
+from langharmess_api.common.errors import http_error, operation_error
 from langharmess_api.contracts import RouteProvider
 from langharmess_core.contracts import AgentDirectoryProvider
 from langharmess_plugin.config_store import PluginConfigStore, scope_path
@@ -107,7 +108,12 @@ class PluginsRoutePlugin:
             payload: PluginsRequest = Body(...), scope: str = Query(...)
         ) -> dict[str, Any]:
             if payload.plugins is None:
-                raise HTTPException(status_code=400, detail="plugins payload is required")
+                raise http_error(
+                    400,
+                    "plugins payload is required",
+                    code="VALIDATION_ERROR",
+                    error_type="ValidationError",
+                )
             store = self._store(scope)
             result = self._apply(scope, payload.plugins)
             version = store.update(payload.plugins, actor=payload.actor)
@@ -136,7 +142,7 @@ class PluginsRoutePlugin:
             try:
                 target = store.config_of(payload.seq)
             except KeyError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
+                raise operation_error(exc, status_code=404) from exc
             result = self._apply(scope, target.get("plugins", {}))
             version = store.rollback(payload.seq, actor=payload.actor)
             return {"scope": scope, "version": version, **result}
@@ -181,7 +187,7 @@ class PluginsRoutePlugin:
                     scope_id=payload.scope_id,
                 )
             except (KeyError, ValueError, RuntimeError) as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                raise operation_error(exc) from exc
             return self._registration_payload(registration)
 
         @router.put("/plugins/runtime/{name}/enabled")
@@ -189,7 +195,7 @@ class PluginsRoutePlugin:
             try:
                 registration = self._require_dynamic().set_enabled(name, enabled)
             except (KeyError, ValueError, RuntimeError) as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                raise operation_error(exc) from exc
             return self._registration_payload(registration)
 
         @router.delete("/plugins/runtime/{name}")
@@ -197,7 +203,7 @@ class PluginsRoutePlugin:
             try:
                 self._require_dynamic().uninstall(name)
             except (KeyError, ValueError, RuntimeError) as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                raise operation_error(exc) from exc
             return {"removed": True}
 
         @router.post("/plugins/runtime/{name}/upgrade")
@@ -205,14 +211,19 @@ class PluginsRoutePlugin:
             try:
                 registration = self._require_dynamic().upgrade(name)
             except (KeyError, ValueError, RuntimeError) as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                raise operation_error(exc) from exc
             return self._registration_payload(registration)
 
         return router
 
     def _require_dynamic(self) -> Any:
         if self._dynamic is None:
-            raise HTTPException(status_code=503, detail="Dynamic plugin manager unavailable")
+            raise http_error(
+                503,
+                "Dynamic plugin manager unavailable",
+                code="SERVICE_UNAVAILABLE",
+                error_type="ServiceUnavailable",
+            )
         return self._dynamic
 
     @staticmethod
@@ -220,8 +231,18 @@ class PluginsRoutePlugin:
         return {
             "id": package.id,
             "version": package.version,
+            "source": "builtin" if package.id.startswith("builtin.") else "external",
             "contributions": [
-                {"id": item.id, "target": item.target}
+                {
+                    "id": item.id,
+                    "name": item.descriptor.name,
+                    "target": item.target,
+                    "module": item.descriptor.module,
+                    "factory": item.descriptor.factory,
+                    "specification": item.descriptor.specification,
+                    "enabled": item.descriptor.enabled,
+                    "scope": item.descriptor.scope,
+                }
                 for item in package.contributions
             ],
         }
@@ -236,6 +257,9 @@ class PluginsRoutePlugin:
             "scope_id": registration.scope_id,
             "enabled": registration.enabled,
             "status": registration.status,
+            "module": registration.descriptor.module,
+            "specification": registration.descriptor.specification,
+            "scope": registration.descriptor.scope,
         }
 
     def _store(self, scope: str) -> PluginConfigStore:
@@ -247,29 +271,40 @@ class PluginsRoutePlugin:
             return
         if scope.startswith("agent:") and len(scope) > len("agent:"):
             return
-        raise HTTPException(status_code=400, detail=f"Unknown scope: {scope}")
+        raise http_error(
+            400,
+            f"Unknown scope: {scope}",
+            code="VALIDATION_ERROR",
+            error_type="ValidationError",
+        )
 
     def _apply(self, scope: str, plugins: dict[str, Any]) -> dict[str, list[str]]:
         if scope == "api":
             if self._scope is None:
-                raise HTTPException(
-                    status_code=503, detail="Plugin scope service unavailable"
+                raise http_error(
+                    503,
+                    "Plugin scope service unavailable",
+                    code="SERVICE_UNAVAILABLE",
+                    error_type="ServiceUnavailable",
                 )
             try:
                 result: dict[str, list[str]] = self._scope.apply_config(plugins)
                 return result
             except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                raise operation_error(exc) from exc
         if scope.startswith("agent:"):
             if self._directory is None:
-                raise HTTPException(
-                    status_code=503, detail="Agent directory unavailable"
+                raise http_error(
+                    503,
+                    "Agent directory unavailable",
+                    code="SERVICE_UNAVAILABLE",
+                    error_type="ServiceUnavailable",
                 )
             agent_id = scope.split(":", 1)[1]
             try:
                 self._directory.apply_agent_config(agent_id, plugins)
             except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                raise operation_error(exc) from exc
             return {"applied": sorted(plugins), "restart_required": []}
         # The CLI process owns its plugin set, so it picks changes up on restart.
         return {"applied": [], "restart_required": sorted(plugins)}
