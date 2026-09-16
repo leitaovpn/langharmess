@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -43,6 +44,8 @@ from langharmess_plugin.scope_policy import (
     resolve_scoped_best,
 )
 from langharmess_plugin.validation import ContractGuard
+
+LOGGER = logging.getLogger("langharmess.agent")
 
 
 def _extract_usage(message: Any) -> dict[str, int] | None:
@@ -524,43 +527,52 @@ class PluginAgentLoop:
         return values
 
     def _rebuild(self) -> None:
-        model = self._llm_provider.get_model() if self._llm_provider else None
-        if model is None:
+        # A provider failure here must never escape: _rebuild runs inside
+        # iPOPO validation/bind callbacks, and a raised exception puts the
+        # instance into the permanent ERRONEOUS state ("Agent loop
+        # unavailable" until restart). Clear the graph instead; the next
+        # successful rebind rebuilds it.
+        try:
+            model = self._llm_provider.get_model() if self._llm_provider else None
+            if model is None:
+                self._graph = None
+                return
+            self._graph = create_agent(
+                model,
+                tools=self._collect_tools(),
+                middleware=self._collect_middlewares(),
+                system_prompt=self._collect_system_prompt(),
+                response_format=(
+                    self._response_format_provider.get_response_format()
+                    if self._response_format_provider
+                    else None
+                ),
+                state_schema=(
+                    self._state_schema_provider.get_state_schema()
+                    if self._state_schema_provider
+                    else None
+                ),
+                context_schema=(
+                    self._context_schema_provider.get_context_schema()
+                    if self._context_schema_provider
+                    else None
+                ),
+                checkpointer=(
+                    self._checkpointer_provider.get_checkpointer()
+                    if self._checkpointer_provider
+                    else None
+                ),
+                store=self._store_provider.get_store() if self._store_provider else None,
+                interrupt_before=self._collect_interrupt_before() or None,
+                interrupt_after=self._collect_interrupt_after() or None,
+                debug=self._debug_provider.get_debug() if self._debug_provider else False,
+                name=self._name_provider.get_name() if self._name_provider else None,
+                cache=self._cache_provider.get_cache() if self._cache_provider else None,
+                transformers=self._collect_transformers() or None,
+            )
+        except Exception:
+            LOGGER.exception("Agent graph rebuild failed; graph is unavailable")
             self._graph = None
-            return
-        self._graph = create_agent(
-            model,
-            tools=self._collect_tools(),
-            middleware=self._collect_middlewares(),
-            system_prompt=self._collect_system_prompt(),
-            response_format=(
-                self._response_format_provider.get_response_format()
-                if self._response_format_provider
-                else None
-            ),
-            state_schema=(
-                self._state_schema_provider.get_state_schema()
-                if self._state_schema_provider
-                else None
-            ),
-            context_schema=(
-                self._context_schema_provider.get_context_schema()
-                if self._context_schema_provider
-                else None
-            ),
-            checkpointer=(
-                self._checkpointer_provider.get_checkpointer()
-                if self._checkpointer_provider
-                else None
-            ),
-            store=self._store_provider.get_store() if self._store_provider else None,
-            interrupt_before=self._collect_interrupt_before() or None,
-            interrupt_after=self._collect_interrupt_after() or None,
-            debug=self._debug_provider.get_debug() if self._debug_provider else False,
-            name=self._name_provider.get_name() if self._name_provider else None,
-            cache=self._cache_provider.get_cache() if self._cache_provider else None,
-            transformers=self._collect_transformers() or None,
-        )
 
     def invoke(self, message: str, *, thread_id: str | None = None) -> Any:
         if self._graph is None:
@@ -598,8 +610,14 @@ class PluginAgentLoop:
                 content = _extract_content(streamed_message)
                 message_id = str(getattr(streamed_message, "id", None) or "default")
                 previous = previous_content.get(message_id, "")
-                delta = content[len(previous) :] if content.startswith(previous) else content
-                previous_content[message_id] = content
+                # Chunks may be cumulative (anthropic) or per-token deltas
+                # (openai-compatible); compare against the accumulated text so
+                # an identical consecutive delta is never sliced to nothing.
+                if content.startswith(previous):
+                    delta = content[len(previous) :]
+                else:
+                    delta = content
+                previous_content[message_id] = previous + delta
                 if delta:
                     yield {"type": "assistant", "content": delta}
                 continue
