@@ -38,12 +38,13 @@ cd "$PROJECT_ROOT"
   --collect-all langchain_experimental \
   --collect-data langharmess_config \
   --collect-submodules langharmess_config \
+  --collect-submodules langharmess \
   --collect-submodules langharmess_logging \
   --collect-submodules langharmess_api \
   --collect-submodules langharmess_cli \
   --collect-submodules langharmess_core \
   --collect-submodules langharmess_plugin \
-  "$PROJECT_ROOT/src/langharmess_cli/__main__.py"
+  "$PROJECT_ROOT/src/langharmess/__main__.py"
 
 BINARY="$BUILD_DIR/bin/langharmess"
 chmod 755 "$BINARY"

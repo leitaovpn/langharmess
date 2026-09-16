@@ -28,6 +28,7 @@ SPEC_AGENT_LOOP = "agent.loop"
 SPEC_SESSION_INDEX = "session.index"
 SPEC_AGENT_REGISTRY = "agent.registry"
 SPEC_AGENT_DIRECTORY = "agent.directory"
+SPEC_AGENT_SERVER = "agent.server"
 ModelProtocol = Literal["anthropic", "chat", "responses"]
 
 ALL_PLUGIN_SPECS = (
@@ -240,3 +241,15 @@ class AgentDirectoryProvider(Protocol):
     def remove_agent(self, agent_id: str) -> None: ...
 
     def reload(self, agent_id: str | None = None) -> None: ...
+
+
+@service_contract(SPEC_AGENT_SERVER)
+@runtime_checkable
+class AgentServerProvider(Protocol):
+    def list_agents(self) -> list[dict[str, Any]]: ...
+
+    def get_loop(self, agent_id: str) -> Any | None: ...
+
+    def reload(self, agent_id: str | None = None) -> None: ...
+
+    def replace_loop_package(self, package_id: str, contribution_id: str) -> None: ...

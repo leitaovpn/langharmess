@@ -9,6 +9,9 @@ from pathlib import Path
 
 SOURCE_DIR = Path(__file__).resolve().parents[1] / "src"
 PUBLIC_MODULES = [
+    "langharmess",
+    "langharmess.__main__",
+    "langharmess.bootstrap",
     "langharmess_scope",
     "langharmess_scope.contracts",
     "langharmess_scope.errors",
@@ -63,6 +66,7 @@ PUBLIC_MODULES = [
     "langharmess_logging.plugins.log",
     "langharmess_api",
     "langharmess_api.plugin",
+    "langharmess_api.sdk",
     "langharmess_api.common.server",
     "langharmess_api.common.errors",
     "langharmess_api.plugins",
@@ -70,6 +74,8 @@ PUBLIC_MODULES = [
     "langharmess_api.plugins.routes.plugins",
     "langharmess_api.plugins.routes.sessions",
     "langharmess_api.plugins.server.app",
+    "langharmess_api.plugins.server.runtime",
+    "langharmess_api.plugins.sdk.http",
     "langharmess_cli",
     "langharmess_cli.plugin",
     "langharmess_cli.common.api_guard",
@@ -82,6 +88,8 @@ PUBLIC_MODULES = [
     "langharmess_cli.plugins.commands.health",
     "langharmess_cli.plugins.commands.plugins",
     "langharmess_cli.plugins.commands.session",
+    "langharmess_cli.plugins.server",
+    "langharmess_core.plugins.agents.server",
 ]
 
 

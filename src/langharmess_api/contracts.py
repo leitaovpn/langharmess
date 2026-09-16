@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from typing import Any, Protocol, runtime_checkable
 
 from fastapi import APIRouter, FastAPI, Request
@@ -14,6 +14,8 @@ SPEC_AUTH = "api.plugin.auth"
 SPEC_RATE_LIMIT = "api.plugin.rate_limit"
 SPEC_DB = "api.plugin.db"
 SPEC_ROUTE = "api.plugin.route"
+SPEC_SERVER_SERVER = "server.server"
+SPEC_UI_SDK = "ui.server_sdk"
 
 
 @service_contract(SPEC_ROUTE)
@@ -54,3 +56,23 @@ class APIServerProvider(Protocol):
     """Contract implemented by every ``api.server`` service."""
 
     def build_app(self) -> FastAPI: ...
+
+
+@service_contract(SPEC_SERVER_SERVER)
+@runtime_checkable
+class ServerServerProvider(Protocol):
+    def set_agent(self, agent: Any) -> None: ...
+
+    def serve(self, host: str, port: int) -> None: ...
+
+
+@service_contract(SPEC_UI_SDK)
+@runtime_checkable
+class UISdkProvider(Protocol):
+    def health(self) -> bool: ...
+
+    def get(self, path: str) -> Mapping[str, Any]: ...
+
+    def put(self, path: str, payload: Mapping[str, Any]) -> Mapping[str, Any]: ...
+
+    def stream(self, payload: Mapping[str, Any]) -> AsyncIterator[Mapping[str, Any]]: ...

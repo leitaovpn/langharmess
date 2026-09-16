@@ -10,6 +10,8 @@ from langharmess_api.contracts import (
     SPEC_DB,
     SPEC_RATE_LIMIT,
     SPEC_ROUTE,
+    SPEC_SERVER_SERVER,
+    SPEC_UI_SDK,
 )
 from langharmess_plugin.package import PluginContribution, PluginPackage
 from langharmess_plugin.registry import PluginDescriptor
@@ -136,6 +138,40 @@ def api_server_descriptor() -> PluginDescriptor:
     )
 
 
+def server_server_descriptor() -> PluginDescriptor:
+    return PluginDescriptor(
+        name="server-server",
+        version="1.0.0",
+        module="langharmess_api.plugins.server.runtime",
+        factory="server-server-factory",
+        instance="server-server",
+        specification=SPEC_SERVER_SERVER,
+        scope="server",
+        scope_parent="root",
+    )
+
+
+def ui_sdk_descriptor() -> PluginDescriptor:
+    return PluginDescriptor(
+        name="ui-sdk",
+        version="1.0.0",
+        module="langharmess_api.plugins.sdk.http",
+        factory="http-ui-sdk-factory",
+        instance="ui-sdk",
+        specification=SPEC_UI_SDK,
+        scope="ui",
+        scope_parent="root",
+    )
+
+
+def sdk_package() -> PluginPackage:
+    return PluginPackage(
+        id="builtin.api.sdk",
+        version="1.0.0",
+        contributions=(PluginContribution("sdk", "ui", ui_sdk_descriptor()),),
+    )
+
+
 def builtin_package() -> PluginPackage:
     """Describe the API plugins already installed by the server assembly."""
     directory = str(Path.home() / ".langharmess")
@@ -154,5 +190,8 @@ def builtin_package() -> PluginPackage:
             PluginContribution("sessions", "server", api_sessions_descriptor()),
             PluginContribution("agents", "server", api_agents_descriptor()),
             PluginContribution("server", "server", api_server_descriptor()),
+            PluginContribution(
+                "server-runtime", "server", server_server_descriptor()
+            ),
         ),
     )

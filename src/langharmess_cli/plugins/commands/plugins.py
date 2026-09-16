@@ -60,7 +60,7 @@ class PluginCommandPlugin:
         )
         parser.add_argument("values", nargs="*")
         parser.add_argument("--scope")
-        parser.add_argument("--base-url", default="http://127.0.0.1:8000")
+        parser.add_argument("--base-url", default="http://127.0.0.1:11534")
         parser.add_argument("--token", default="secret")
 
     def _command_handler(self, args: Namespace) -> int:

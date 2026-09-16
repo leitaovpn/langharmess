@@ -1,0 +1,246 @@
+"""Tests for the unified four-module bootstrap."""
+# mypy: ignore-errors
+# pyright: reportArgumentType=false
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import pytest
+
+import langharmess.bootstrap as bootstrap_module
+from langharmess.bootstrap import (
+    DEFAULT_PACKAGE_PATHS,
+    BootstrapError,
+    load_package,
+    parse_options,
+    selected_package_paths,
+)
+from langharmess_config.plugin import builtin_package as config_package
+from langharmess_plugin.package import PluginPackage
+
+
+def test_parse_options_uses_documented_defaults(tmp_path) -> None:
+    options, remainder = parse_options([])
+
+    assert options.mode == "all"
+    assert options.server_ip == "127.0.0.1"
+    assert options.server_port == 11534
+    assert options.config_dir.endswith(".langharmess")
+    assert remainder == []
+
+
+def test_parse_options_accepts_config_dir_alias_and_ui_arguments(tmp_path) -> None:
+    options, remainder = parse_options(
+        ["--mode", "ui", "--config_dir", str(tmp_path), "--provider", "demo"]
+    )
+
+    assert options.mode == "ui"
+    assert options.config_dir == str(tmp_path)
+    assert remainder == ["--provider", "demo"]
+
+
+def test_load_package_validates_import_path_and_result() -> None:
+    package = load_package(
+        "langharmess_config.plugin:builtin_package",
+        config_dir="/tmp/config",
+        section="plugins.config",
+    )
+    assert isinstance(package, PluginPackage)
+
+    with pytest.raises(BootstrapError, match="plugins.ui"):
+        load_package("missing", config_dir="/tmp/config", section="plugins.ui")
+    with pytest.raises(BootstrapError, match="not callable"):
+        load_package(
+            "langharmess_config.contracts:SPEC_CONFIGS",
+            config_dir="/tmp/config",
+            section="plugins.ui",
+        )
+    with pytest.raises(BootstrapError, match="PluginPackage"):
+        load_package(
+            "pathlib:Path",
+            config_dir="/tmp/config",
+            section="plugins.ui",
+        )
+
+
+def test_selected_package_paths_fall_back_per_missing_section() -> None:
+    configs = SimpleNamespace(
+        get_section=lambda section: {
+            "builtin_package": "example.ui:package"
+        }
+        if section == "plugins.ui"
+        else {}
+    )
+
+    paths = selected_package_paths(configs, mode="ui")
+
+    assert paths["ui"] == "example.ui:package"
+    assert paths["sdk"] == DEFAULT_PACKAGE_PATHS["sdk"]
+    assert paths["log"] == DEFAULT_PACKAGE_PATHS["log"]
+
+
+def test_selected_package_paths_for_server_include_agent() -> None:
+    configs = SimpleNamespace(get_section=lambda section: {})
+
+    paths = selected_package_paths(configs, mode="server")
+
+    assert set(paths) == {"server", "agent", "log"}
+
+
+def test_config_entry_point_discovery_success_and_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_point = SimpleNamespace(
+        name="config", load=lambda: config_package
+    )
+    monkeypatch.setattr(
+        bootstrap_module, "_config_entry_points", lambda: [entry_point]
+    )
+    assert bootstrap_module._discover_config_package("/tmp/config").id == (
+        "builtin.config"
+    )
+
+    entry_point.load = lambda: lambda: object()
+    with pytest.raises(BootstrapError, match="did not return PluginPackage"):
+        bootstrap_module._discover_config_package("/tmp/config")
+
+    def broken_load():
+        raise RuntimeError("broken")
+
+    entry_point.load = broken_load
+    with pytest.raises(BootstrapError, match="broken"):
+        bootstrap_module._discover_config_package("/tmp/config")
+
+    monkeypatch.setattr(bootstrap_module, "_config_entry_points", lambda: [])
+    assert bootstrap_module._discover_config_package("/tmp/config").id == (
+        "builtin.config"
+    )
+
+
+def test_descriptors_retarget_persistent_paths_and_locale(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from langharmess_api.plugin import builtin_package as api_package
+    from langharmess_cli.plugin import builtin_package as ui_package
+    from langharmess_core.plugin import builtin_package as agent_package
+    from langharmess_logging.plugin import builtin_package as log_package
+
+    descriptors = bootstrap_module._descriptors(
+        [config_package(), ui_package(), api_package(), agent_package(), log_package()],
+        config_dir=str(tmp_path),
+        locale="zh",
+        override_scope="api",
+    )
+    by_name = {descriptor.name: descriptor for descriptor in descriptors}
+
+    assert by_name["config-toml"].properties["plugin.config.path"] == str(
+        tmp_path / "langharmess.toml"
+    )
+    assert by_name["api-plugins"].properties["plugin.config_dir"] == str(tmp_path)
+    assert by_name["sqlite-checkpointer"].properties["plugin.checkpoint.path"] == str(
+        tmp_path / "langharmess_checkpoints.sqlite3"
+    )
+    assert by_name["session-index"].properties["plugin.sessions.path"] == str(
+        tmp_path / "sessions.sqlite3"
+    )
+    assert by_name["agent-registry"].properties["plugin.agents.path"] == str(
+        tmp_path / "agents.json"
+    )
+    assert by_name["server-log"].properties["plugin.log.directory"] == str(tmp_path)
+    assert by_name["cli-model"].properties["plugin.ui.locale"] == "zh"
+
+    monkeypatch_overrides = {"configs": {"enabled": False}}
+    monkeypatch.setattr(
+        bootstrap_module,
+        "load_overrides",
+        lambda directory, scope: monkeypatch_overrides,
+    )
+    duplicate_descriptors = bootstrap_module._descriptors(
+        [config_package(), config_package()],
+        config_dir=str(tmp_path),
+        locale="en",
+        override_scope="api",
+    )
+    assert len(duplicate_descriptors) == 2
+    configs = next(item for item in duplicate_descriptors if item.name == "configs")
+    assert configs.enabled is False
+
+
+def test_select_packages_reads_config_service(tmp_path) -> None:
+    packages = bootstrap_module._select_packages(
+        config_package(),
+        SimpleNamespace(config_dir=str(tmp_path), mode="server"),
+    )
+
+    assert [package.id for package in packages] == [
+        "builtin.api",
+        "builtin.core",
+        "builtin.logging",
+    ]
+
+
+def test_select_packages_requires_configs_service(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    manager = SimpleNamespace(
+        start=lambda: None,
+        stop=lambda: None,
+        install_plugin=lambda descriptor: None,
+        get_service=lambda specification: None,
+    )
+    monkeypatch.setattr(bootstrap_module, "PluginManager", lambda registry: manager)
+    with pytest.raises(BootstrapError, match="did not provide configs"):
+        bootstrap_module._select_packages(
+            config_package(), SimpleNamespace(config_dir=str(tmp_path), mode="ui")
+        )
+
+
+def test_run_assembles_real_ui_and_server_managers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from langharmess_api.plugins.server.runtime import ServerServerService
+    from langharmess_cli.plugins.server import UIServerService
+
+    calls = []
+
+    def serve(self, host: str, port: int) -> None:
+        calls.append(("server", host, port))
+
+    def run(self, config) -> int:
+        calls.append(("ui", dict(config)))
+        return 8
+
+    monkeypatch.setattr(ServerServerService, "serve", serve)
+    monkeypatch.setattr(UIServerService, "run", run)
+    base = {
+        "server_ip": "127.0.0.2",
+        "server_port": 19000,
+        "config_dir": str(tmp_path),
+    }
+
+    assert bootstrap_module._run(SimpleNamespace(mode="server", **base), []) == 0
+    assert calls[0] == ("server", "127.0.0.2", 19000)
+    assert bootstrap_module._run(
+        SimpleNamespace(mode="ui", **base), ["interactive"]
+    ) == 8
+    assert calls[1][0] == "ui"
+    assert calls[1][1]["base_url"] == "http://127.0.0.2:19000"
+
+
+def test_main_restores_environment_and_reports_bootstrap_errors(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
+    monkeypatch.setenv("LANG_HARMESS_DIR", "before")
+    monkeypatch.setattr(bootstrap_module, "_run", lambda options, remainder: 6)
+    assert bootstrap_module.main(["--config-dir", str(tmp_path)]) == 6
+    assert bootstrap_module.os.environ["LANG_HARMESS_DIR"] == "before"
+
+    def fail(options, remainder):
+        raise BootstrapError("bad bootstrap")
+
+    monkeypatch.delenv("LANG_HARMESS_DIR")
+    monkeypatch.setattr(bootstrap_module, "_run", fail)
+    assert bootstrap_module.main(["--config-dir", str(tmp_path)]) == 2
+    assert "bad bootstrap" in capsys.readouterr().err
+    assert "LANG_HARMESS_DIR" not in bootstrap_module.os.environ

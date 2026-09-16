@@ -2,13 +2,27 @@
 
 from __future__ import annotations
 
-from langharmess_cli.contracts import SPEC_CLI_COMMAND, SPEC_CLI_RENDERER
+from langharmess_cli.contracts import (
+    SPEC_CLI_COMMAND,
+    SPEC_CLI_RENDERER,
+    SPEC_UI_SERVER,
+)
 from langharmess_plugin.package import PluginContribution, PluginPackage
 from langharmess_plugin.registry import PluginDescriptor
 
 
 def cli_descriptors(locale: str) -> list[PluginDescriptor]:
     return [
+        PluginDescriptor(
+            name="ui-server",
+            version="1.0.0",
+            module="langharmess_cli.plugins.server",
+            factory="ui-server-factory",
+            instance="ui-server",
+            specification=SPEC_UI_SERVER,
+            scope="ui",
+            scope_parent="root",
+        ),
         PluginDescriptor(
             name="cli-health",
             version="1.0.0",
@@ -80,6 +94,7 @@ def cli_descriptors(locale: str) -> list[PluginDescriptor]:
 def builtin_package() -> PluginPackage:
     """Describe the CLI plugins already installed by the CLI assembly."""
     contribution_ids = (
+        "server",
         "health",
         "model",
         "rich-renderer",
