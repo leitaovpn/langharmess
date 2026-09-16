@@ -83,6 +83,9 @@ typeCheckingMode = "standard"
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
 pythonpath = ["src"]
+markers = [
+    "real_llm: exercises a real external LLM provider and is skipped by default",
+]
 
 [tool.coverage.run]
 source = [
