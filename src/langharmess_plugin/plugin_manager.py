@@ -15,6 +15,7 @@ from langharmess_plugin.contracts import (
 )
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
 from langharmess_plugin.scope_const import (
+    BUILTIN_SCOPES,
     PLUGIN_KEY,
     PLUGIN_SCOPE_CHAIN,
     PLUGIN_SCOPE_ID,
@@ -91,6 +92,16 @@ class PluginManager:
         self._scope_registration = self._context.register_service(
             ScopedPluginRegistrar, self, {}
         )
+        try:
+            self._seed_builtin_scopes()
+        except Exception:
+            self.stop()
+            raise
+
+    def _seed_builtin_scopes(self) -> None:
+        """Create the fixed runtime topology so every process has the tree."""
+        for scope_id, name, parent_id in BUILTIN_SCOPES:
+            self.ensure_scope(scope_id, name=name, parent_id=parent_id)
 
     def stop(self) -> None:
         if self._framework is None:
