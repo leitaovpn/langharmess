@@ -118,9 +118,9 @@ class FakeDynamic:
         self.failures = ()
         self.registrations_list = (FakeRegistration("echo"),)
         self.installs: list[tuple[str, str, str | None]] = []
-        self.enabled: list[tuple[str, bool]] = []
-        self.uninstalled: list[str] = []
-        self.upgraded: list[str] = []
+        self.enabled: list[tuple[str, bool, str | None]] = []
+        self.uninstalled: list[tuple[str, str | None]] = []
+        self.upgraded: list[tuple[str, str | None]] = []
 
     def discovered(self):
         return self.packages
@@ -135,19 +135,19 @@ class FakeDynamic:
         self.installs.append((package_id, contribution_id, scope_id))
         return FakeRegistration(f"{contribution_id}@{scope_id or 'server'}")
 
-    def set_enabled(self, name, enabled):
-        self.enabled.append((name, enabled))
+    def set_enabled(self, name, enabled, *, scope_id=None):
+        self.enabled.append((name, enabled, str(scope_id) if scope_id else None))
         return FakeRegistration(name)
 
-    def update_properties(self, name, properties):
-        self.properties = (name, properties)
+    def update_properties(self, name, properties, *, scope_id=None):
+        self.properties = (name, properties, str(scope_id) if scope_id else None)
         return FakeRegistration(name)
 
-    def uninstall(self, name):
-        self.uninstalled.append(name)
+    def uninstall(self, name, *, scope_id=None):
+        self.uninstalled.append((name, str(scope_id) if scope_id else None))
 
-    def upgrade(self, name):
-        self.upgraded.append(name)
+    def upgrade(self, name, *, scope_id=None):
+        self.upgraded.append((name, str(scope_id) if scope_id else None))
         return FakeRegistration(name)
 
     def scopes(self):
@@ -451,25 +451,29 @@ def test_dynamic_runtime_install_enable_upgrade_uninstall(tmp_path: Path) -> Non
     assert plugin._dynamic.installs == [("example.package", "echo", "server")]
 
     enable = client.put(
-        "/plugins/runtime/echo/enabled", json={"enabled": False}
+        "/plugins/runtime/echo/enabled",
+        json={"enabled": False},
+        params={"scope": "server"},
     )
     assert enable.status_code == 200
-    assert plugin._dynamic.enabled == [("echo", False)]
+    assert plugin._dynamic.enabled == [("echo", False, "server")]
 
     properties = client.put(
-        "/plugins/runtime/echo/properties", json={"properties": {"plugin.value": "x"}}
+        "/plugins/runtime/echo/properties",
+        json={"properties": {"plugin.value": "x"}},
+        params={"scope": "server"},
     )
     assert properties.status_code == 200
-    assert plugin._dynamic.properties == ("echo", {"plugin.value": "x"})
+    assert plugin._dynamic.properties == ("echo", {"plugin.value": "x"}, "server")
 
-    upgrade = client.post("/plugins/runtime/echo/upgrade")
+    upgrade = client.post("/plugins/runtime/echo/upgrade", params={"scope": "server"})
     assert upgrade.status_code == 200
-    assert plugin._dynamic.upgraded == ["echo"]
+    assert plugin._dynamic.upgraded == [("echo", "server")]
 
-    delete = client.delete("/plugins/runtime/echo")
+    delete = client.delete("/plugins/runtime/echo", params={"scope": "server"})
     assert delete.status_code == 200
     assert delete.json() == {"removed": True}
-    assert plugin._dynamic.uninstalled == ["echo"]
+    assert plugin._dynamic.uninstalled == [("echo", "server")]
 
 
 def test_runtime_plugins_filters_by_scope(tmp_path: Path) -> None:
@@ -497,9 +501,9 @@ def test_dynamic_endpoints_require_dynamic_manager(tmp_path: Path) -> None:
         ("post", "/plugins/rescan", {}),
         ("get", "/plugins/runtime", {}),
         ("post", "/plugins/install", {"json": {"package_id": "p", "contribution_id": "c"}}),
-        ("put", "/plugins/runtime/x/enabled", {"json": {"enabled": True}}),
-        ("delete", "/plugins/runtime/x", {}),
-        ("post", "/plugins/runtime/x/upgrade", {}),
+        ("put", "/plugins/runtime/x/enabled", {"json": {"enabled": True}, "params": {"scope": "server"}}),
+        ("delete", "/plugins/runtime/x", {"params": {"scope": "server"}}),
+        ("post", "/plugins/runtime/x/upgrade", {"params": {"scope": "server"}}),
     ]:
         response = getattr(client, method)(path, **kwargs)
         assert response.status_code == 503
@@ -526,7 +530,68 @@ def test_dynamic_endpoints_report_errors(tmp_path: Path) -> None:
     assert install_response.headers["x-error-code"] == "PLUGIN_NOT_FOUND"
     assert install_response.headers["x-error-type"] == "KeyError"
     assert client.put(
+        "/plugins/runtime/x/enabled",
+        json={"enabled": True},
+        params={"scope": "server"},
+    ).status_code == 404
+    assert client.delete(
+        "/plugins/runtime/x", params={"scope": "server"}
+    ).status_code == 404
+    assert client.post(
+        "/plugins/runtime/x/upgrade", params={"scope": "server"}
+    ).status_code == 404
+
+
+def test_runtime_mutations_require_scope(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    client = make_client(plugin)
+
+    assert client.put(
         "/plugins/runtime/x/enabled", json={"enabled": True}
-    ).status_code == 400
-    assert client.delete("/plugins/runtime/x").status_code == 400
-    assert client.post("/plugins/runtime/x/upgrade").status_code == 400
+    ).status_code == 422
+    assert client.put(
+        "/plugins/runtime/x/properties", json={"properties": {}}
+    ).status_code == 422
+    assert client.delete("/plugins/runtime/x").status_code == 422
+    assert client.post("/plugins/runtime/x/upgrade").status_code == 422
+
+
+def test_runtime_mutations_reject_unknown_scope(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    client = make_client(plugin)
+
+    response = client.put(
+        "/plugins/runtime/x/enabled",
+        json={"enabled": True},
+        params={"scope": "mars"},
+    )
+    assert response.status_code == 400
+    assert "Unknown runtime scope: mars" in response.json()["detail"]
+
+
+def test_runtime_list_rejects_unknown_scope(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    client = make_client(plugin)
+
+    response = client.get("/plugins/runtime", params={"scope": "mars"})
+    assert response.status_code == 400
+    assert "Unknown runtime scope: mars" in response.json()["detail"]
+
+
+def test_runtime_mutation_not_found_in_scope_returns_404(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+
+    def fail(*args, **kwargs):
+        raise KeyError("plugin echo not found in scope server")
+
+    plugin._dynamic.set_enabled = fail
+    client = make_client(plugin)
+
+    response = client.put(
+        "/plugins/runtime/echo/enabled",
+        json={"enabled": False},
+        params={"scope": "server"},
+    )
+    assert response.status_code == 404
+    assert "not found in scope" in response.json()["detail"]
+    assert response.headers["x-error-code"] == "PLUGIN_NOT_FOUND"
