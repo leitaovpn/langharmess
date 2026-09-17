@@ -248,9 +248,9 @@ class RuntimeMutationCoordinator:
         descriptor = contribution.descriptor
         if contribution.target != "agent_instance":
             return descriptor
-        if scope_id is None or not str(scope_id).startswith("agent/"):
-            raise RuntimeMutationError("agent_instance contribution requires agent/<id>")
-        suffix = str(scope_id).replace("/", "-")
+        if scope_id is None or not str(scope_id).startswith("agent:"):
+            raise RuntimeMutationError("agent_instance contribution requires agent:<id>")
+        suffix = str(scope_id).replace(":", "-")
         return replace(
             descriptor,
             name=f"{descriptor.name}@{suffix}",
@@ -327,7 +327,7 @@ class RuntimeMutationCoordinator:
                     "plugin.tool_export.exports": exports,
                 },
                 scope=target_scope,
-                scope_parent="agent" if target_scope.startswith("agent/") else "server",
+                scope_parent="agent" if target_scope.startswith("agent:") else "server",
             )
             self.manager.instantiate_instance(
                 descriptor,

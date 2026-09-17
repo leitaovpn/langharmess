@@ -30,7 +30,7 @@ from langharmess_core.plugin import (
     agent_required_modules,
     agent_scoped_specifications,
 )
-from langharmess_core.scopes import AGENT_SCOPE_ID, agent_instance_scope_id
+from langharmess_plugin.scope_const import AGENT_SCOPE_ID, agent_instance_scope_id
 from langharmess_plugin.contracts import ScopedPluginRegistrar
 from langharmess_plugin.registry import PluginDescriptor
 from langharmess_plugin.validation import ContractGuard

@@ -118,7 +118,7 @@ def make_manager() -> PluginManager:
 def install_templates(manager: PluginManager) -> None:
     for descriptor in manager.registry.list():
         manager.install_plugin(descriptor)
-    manager.ensure_scope(ScopeId("agent/a"), name="A", parent_id=ScopeId("agent"))
+    manager.ensure_scope(ScopeId("agent:a"), name="A", parent_id=ScopeId("agent"))
 
 
 def make_discovery() -> PluginDiscovery:
@@ -140,7 +140,7 @@ def test_dynamic_discovery_install_visibility_and_restore() -> None:
 
         coordinator.install("example.echo", "echo")
         coordinator.install(
-            "example.agent-echo", "echo", scope_id=ScopeId("agent/a")
+            "example.agent-echo", "echo", scope_id=ScopeId("agent:a")
         )
 
         assert "server_echo" in tool_names(manager, "agent")
@@ -149,7 +149,7 @@ def test_dynamic_discovery_install_visibility_and_restore() -> None:
         agent_properties = manager.service_properties(SPEC_TOOL)
         assert {item.get("plugin.scope_id") for item in agent_properties} == {
             "agent",
-            "agent/a",
+            "agent:a",
         }
         ranked = sorted(
             agent_properties,
@@ -157,7 +157,7 @@ def test_dynamic_discovery_install_visibility_and_restore() -> None:
             reverse=True,
         )
         assert [item.get("plugin.scope_id") for item in ranked] == [
-            "agent/a",
+            "agent:a",
             "agent",
         ]
         tools = []
@@ -179,9 +179,9 @@ def test_dynamic_discovery_install_visibility_and_restore() -> None:
         registrations = restarted.restore()
         assert {item.scope_id for item in registrations} == {
             ScopeId("server"),
-            ScopeId("agent/a"),
+            ScopeId("agent:a"),
         }
-        for scope_id in ("ui", "server", "agent", "agent/a"):
+        for scope_id in ("ui", "server", "agent", "agent:a"):
             assert restored.scope_tree.get(ScopeId(scope_id)) is not None
     finally:
         restored.stop()

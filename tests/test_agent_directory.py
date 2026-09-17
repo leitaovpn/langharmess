@@ -187,10 +187,10 @@ def test_validate_materializes_default_plugins_and_loop() -> None:
     assert loop.specification == SPEC_AGENT_LOOP
     assert loop.properties["plugin.agent_id"] == "simple_agent"
     assert loop.properties["requires.filters"] == {
-        "_llm_provider": "(|(plugin.scope_id=agent/simple_agent)(plugin.scope_id=agent)(plugin.scope_id=server)(plugin.scope_id=root))",
-        "_scoped_llm_providers": "(|(plugin.scope_id=agent/simple_agent)(plugin.scope_id=agent)(plugin.scope_id=server)(plugin.scope_id=root))",
-        "_tool_providers": "(|(plugin.scope_id=agent/simple_agent)(plugin.scope_id=agent)(plugin.scope_id=server)(plugin.scope_id=root))",
-        "_name_provider": "(|(plugin.scope_id=agent/simple_agent)(plugin.scope_id=agent)(plugin.scope_id=server)(plugin.scope_id=root))",
+        "_llm_provider": "(|(plugin.scope_id=agent:simple_agent)(plugin.scope_id=agent)(plugin.scope_id=server)(plugin.scope_id=root))",
+        "_scoped_llm_providers": "(|(plugin.scope_id=agent:simple_agent)(plugin.scope_id=agent)(plugin.scope_id=server)(plugin.scope_id=root))",
+        "_tool_providers": "(|(plugin.scope_id=agent:simple_agent)(plugin.scope_id=agent)(plugin.scope_id=server)(plugin.scope_id=root))",
+        "_name_provider": "(|(plugin.scope_id=agent:simple_agent)(plugin.scope_id=agent)(plugin.scope_id=server)(plugin.scope_id=root))",
     }
 
 
@@ -291,7 +291,7 @@ def test_remove_agent_removes_its_scope_after_instances() -> None:
 
     plugin.remove_agent("simple_agent")
 
-    assert plugin._scope.tree.get(ScopeId("agent/simple_agent")) is None
+    assert plugin._scope.tree.get(ScopeId("agent:simple_agent")) is None
     assert plugin._scope.instances == {}
 
 

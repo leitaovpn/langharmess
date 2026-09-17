@@ -276,12 +276,12 @@ def test_agent_instance_contribution_suffixes_descriptor() -> None:
     mutations = coordinator(runtime, store, packages=(agent_instance_package(),))
 
     registration = mutations.install(
-        "instance.package", "instance", scope_id=ScopeId("agent/a")
+        "instance.package", "instance", scope_id=ScopeId("agent:a")
     )
 
     assert registration.descriptor.name == "instance@agent-a"
     assert registration.descriptor.instance == "instance@agent-a"
-    assert registration.scope_id == ScopeId("agent/a")
+    assert registration.scope_id == ScopeId("agent:a")
 
 
 def test_agent_instance_contribution_requires_agent_scope() -> None:
@@ -289,7 +289,7 @@ def test_agent_instance_contribution_requires_agent_scope() -> None:
     store = CountingStore()
     mutations = coordinator(runtime, store, packages=(agent_instance_package(),))
 
-    with pytest.raises(RuntimeError, match="agent/<id>"):
+    with pytest.raises(RuntimeError, match="agent:<id>"):
         mutations.install("instance.package", "instance")
 
 
@@ -532,7 +532,7 @@ def test_restore_raises_for_orphaned_persisted_scope() -> None:
         1,
         (
             {"id": "root", "parent_id": None, "name": "root"},
-            {"id": "agent/a", "parent_id": "agent", "name": "A"},
+            {"id": "agent:a", "parent_id": "agent", "name": "A"},
         ),
         (),
     )
