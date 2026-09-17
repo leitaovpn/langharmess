@@ -97,10 +97,6 @@ def test_noninteractive_plugin_install_calls_runtime_api(
         ["install", "example.package", "echo", "--scope", "agent/a"]
     )
     calls: list[tuple[str, dict[str, Any]]] = []
-    monkeypatch.setattr(
-        "langharmess_cli.plugins.commands.plugins.APIGuard.ensure_api_server",
-        lambda self: None,
-    )
 
     def fake_post(url: str, **kwargs: Any) -> Response:
         calls.append((url, kwargs))
@@ -130,10 +126,6 @@ def run_command(
     command.add_arguments(parser)
     parsed = parser.parse_args(args)
     calls: list[tuple[str, str, dict[str, Any]]] = []
-    monkeypatch.setattr(
-        "langharmess_cli.plugins.commands.plugins.APIGuard.ensure_api_server",
-        lambda self: None,
-    )
 
     def fake_request(method: str) -> Any:
         def handler(url: str, **kwargs: Any) -> Response:
@@ -252,10 +244,6 @@ def test_noninteractive_mutation_reports_http_failures(
     parser = ArgumentParser()
     assert command.add_arguments is not None
     command.add_arguments(parser)
-    monkeypatch.setattr(
-        "langharmess_cli.plugins.commands.plugins.APIGuard.ensure_api_server",
-        lambda self: None,
-    )
     monkeypatch.setattr(
         httpx,
         "post",

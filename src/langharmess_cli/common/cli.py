@@ -9,7 +9,6 @@ from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from typing import Any
 
-from langharmess_cli.common.api_guard import APIGuard
 from langharmess_cli.common.i18n import get_locale
 from langharmess_cli.common.interactive import InteractiveCLIRunner
 from langharmess_cli.common.runner import CLIRunner
@@ -35,7 +34,6 @@ def _global_options(argv: list[str]) -> tuple[Namespace, list[str]]:
 def _interactive_options(argv: list[str]) -> dict[str, Any]:
     """Extract interactive-mode flags from argv, mirroring the global scan."""
     values: dict[str, Any] = {
-        "base_url": "http://127.0.0.1:11534",
         "token": "secret",
         "user_id": os.environ.get("LANG_HARMESS_USER_ID") or DEFAULT_USER_ID,
         "agent_id": None,
@@ -43,7 +41,6 @@ def _interactive_options(argv: list[str]) -> dict[str, Any]:
         "new_session": False,
     }
     flags = {
-        "--base-url": "base_url",
         "--token": "token",
         "--user-id": "user_id",
         "--agent-id": "agent_id",
@@ -76,6 +73,7 @@ def main(
     *,
     descriptors: list[PluginDescriptor] | None = None,
     manager: PluginManager | None = None,
+    base_url: str | None = None,
 ) -> int:
     options, argv = _global_options(sys.argv[1:] if argv is None else argv)
     locale = _locale_option(argv, default=get_locale())
@@ -119,11 +117,18 @@ def main(
 
         if not argv or argv[0] == "interactive":
             interactive_args = argv[1:] if argv and argv[0] == "interactive" else argv
+            if any(
+                arg == "--base-url" or arg.startswith("--base-url=")
+                for arg in interactive_args
+            ):
+                print(
+                    "--base-url is removed; use --server-ip/--server-port",
+                    file=sys.stderr,
+                )
             interactive_options = _interactive_options(interactive_args)
-            base_url = str(interactive_options["base_url"])
+            base_url = base_url or "http://127.0.0.1:11534"
             token = str(interactive_options["token"])
             user_id = str(interactive_options["user_id"])
-            APIGuard(base_url).ensure_api_server()
             session_id, agent_id = resolve_identity(
                 base_url,
                 token,

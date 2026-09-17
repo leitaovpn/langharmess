@@ -20,6 +20,18 @@ from langharmess_config.plugin import builtin_package as config_package
 from langharmess_plugin.package import PluginPackage
 
 
+def test_base_url_for_maps_wildcard_bind_to_loopback() -> None:
+    assert bootstrap_module.base_url_for(
+        SimpleNamespace(server_ip="0.0.0.0", server_port=11534)
+    ) == "http://127.0.0.1:11534"
+    assert bootstrap_module.base_url_for(
+        SimpleNamespace(server_ip="::", server_port=9000)
+    ) == "http://127.0.0.1:9000"
+    assert bootstrap_module.base_url_for(
+        SimpleNamespace(server_ip="127.0.0.2", server_port=19000)
+    ) == "http://127.0.0.2:19000"
+
+
 def test_parse_options_uses_documented_defaults(tmp_path) -> None:
     options, remainder = parse_options([])
 
@@ -131,6 +143,7 @@ def test_descriptors_retarget_persistent_paths_and_locale(
         config_dir=str(tmp_path),
         locale="zh",
         override_scope="api",
+        base_url="http://10.0.0.1:4321",
     )
     by_name = {descriptor.name: descriptor for descriptor in descriptors}
 
@@ -149,6 +162,10 @@ def test_descriptors_retarget_persistent_paths_and_locale(
     )
     assert by_name["server-log"].properties["plugin.log.directory"] == str(tmp_path)
     assert by_name["cli-model"].properties["plugin.ui.locale"] == "zh"
+    assert by_name["cli-health"].properties["plugin.base_url"] == "http://10.0.0.1:4321"
+    assert (
+        by_name["cli-plugins"].properties["plugin.base_url"] == "http://10.0.0.1:4321"
+    )
 
     monkeypatch_overrides = {"configs": {"enabled": False}}
     monkeypatch.setattr(
@@ -161,16 +178,46 @@ def test_descriptors_retarget_persistent_paths_and_locale(
         config_dir=str(tmp_path),
         locale="en",
         override_scope="api",
+        base_url="http://127.0.0.1:11534",
     )
     assert len(duplicate_descriptors) == 2
     configs = next(item for item in duplicate_descriptors if item.name == "configs")
     assert configs.enabled is False
 
 
+def test_descriptors_launcher_base_url_beats_stored_overrides(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from langharmess_cli.plugin import builtin_package as ui_package
+
+    monkeypatch.setattr(
+        bootstrap_module,
+        "load_overrides",
+        lambda directory, scope: {
+            "cli-health": {"plugin.base_url": "http://override:1"}
+        },
+    )
+    descriptors = bootstrap_module._descriptors(
+        [config_package(), ui_package()],
+        config_dir=str(tmp_path),
+        locale="en",
+        override_scope="cli",
+        base_url="http://launcher:2",
+    )
+    by_name = {descriptor.name: descriptor for descriptor in descriptors}
+
+    assert by_name["cli-health"].properties["plugin.base_url"] == "http://launcher:2"
+
+
 def test_select_packages_reads_config_service(tmp_path) -> None:
     packages = bootstrap_module._select_packages(
         config_package(),
-        SimpleNamespace(config_dir=str(tmp_path), mode="server"),
+        SimpleNamespace(
+            config_dir=str(tmp_path),
+            mode="server",
+            server_ip="127.0.0.1",
+            server_port=11534,
+        ),
     )
 
     assert [package.id for package in packages] == [
@@ -192,7 +239,13 @@ def test_select_packages_requires_configs_service(
     monkeypatch.setattr(bootstrap_module, "PluginManager", lambda registry: manager)
     with pytest.raises(BootstrapError, match="did not provide configs"):
         bootstrap_module._select_packages(
-            config_package(), SimpleNamespace(config_dir=str(tmp_path), mode="ui")
+            config_package(),
+            SimpleNamespace(
+                config_dir=str(tmp_path),
+                mode="ui",
+                server_ip="127.0.0.1",
+                server_port=11534,
+            ),
         )
 
 
@@ -226,6 +279,51 @@ def test_run_assembles_real_ui_and_server_managers(
     ) == 8
     assert calls[1][0] == "ui"
     assert calls[1][1]["base_url"] == "http://127.0.0.2:19000"
+
+
+def _guard_spy(
+    monkeypatch: pytest.MonkeyPatch, mode: str, tmp_path
+) -> list[tuple[str, dict]]:
+    """Run one UI process mode with the guard and the UI itself captured.
+
+    Each mode gets its own `_run` call: a second call re-executes the plugin
+    module for a new framework, which would discard the patched `run`.
+    """
+    from langharmess_cli.plugins.server import UIServerService
+
+    guards: list[tuple[str, dict]] = []
+
+    def guard(base_url: str, **kwargs) -> SimpleNamespace:
+        guards.append((base_url, kwargs))
+        return SimpleNamespace(ensure_api_server=lambda: None)
+
+    def run(self, config) -> int:
+        return 0
+
+    monkeypatch.setattr(bootstrap_module, "APIGuard", guard)
+    monkeypatch.setattr(UIServerService, "run", run)
+    options = SimpleNamespace(
+        mode=mode,
+        server_ip="127.0.0.2",
+        server_port=19000,
+        config_dir=str(tmp_path),
+    )
+    assert bootstrap_module._run(options, []) == 0
+    return guards
+
+
+def test_run_does_not_guard_api_server_in_ui_mode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    assert _guard_spy(monkeypatch, "ui", tmp_path) == []
+
+
+def test_run_guards_api_server_in_all_mode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    assert _guard_spy(monkeypatch, "all", tmp_path) == [
+        ("http://127.0.0.2:19000", {"config_dir": str(tmp_path)})
+    ]
 
 
 def test_main_restores_environment_and_reports_bootstrap_errors(

@@ -42,8 +42,11 @@ def test_ui_server_forwards_unified_settings(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(
         cli_module,
         "main",
-        lambda argv, descriptors=None, manager=None: captured.update(
-            argv=argv, descriptors=descriptors, manager=manager
+        lambda argv, descriptors=None, manager=None, base_url=None: captured.update(
+            argv=argv,
+            descriptors=descriptors,
+            manager=manager,
+            base_url=base_url,
         )
         or 7,
     )
@@ -60,15 +63,10 @@ def test_ui_server_forwards_unified_settings(monkeypatch: pytest.MonkeyPatch) ->
 
     assert result == 7
     assert captured == {
-        "argv": [
-            "--dir",
-            "/tmp/demo",
-            "interactive",
-            "--base-url",
-            "http://127.0.0.1:11534",
-        ],
+        "argv": ["--dir", "/tmp/demo", "interactive"],
         "descriptors": descriptors,
         "manager": None,
+        "base_url": "http://127.0.0.1:11534",
     }
 
     captured.clear()
@@ -80,6 +78,7 @@ def test_ui_server_forwards_unified_settings(monkeypatch: pytest.MonkeyPatch) ->
         }
     ) == 7
     assert "--base-url" not in captured["argv"]
+    assert captured["base_url"] == "http://127.0.0.1:11534"
 
 
 def test_server_service_builds_app_and_exposes_agent(

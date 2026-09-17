@@ -11,9 +11,7 @@ from typing import Any
 
 import pytest
 
-import langharmess_cli.common.api_guard as api_guard_module
 import langharmess_cli.common.cli as main_module
-from langharmess_cli.common.api_guard import APIGuard
 from langharmess_cli.common.runner import CLIRunner
 from langharmess_cli.contracts import CLICommandProvider, CommandSpec
 from langharmess_cli.plugins.commands.health import HealthCommandPlugin
@@ -57,99 +55,6 @@ def test_health_command_provider_conforms() -> None:
     assert [command.name for command in commands] == ["health"]
 
 
-def test_api_guard_is_running_accepts_client_errors(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class Response:
-        status_code = 401
-
-    monkeypatch.setattr(api_guard_module.httpx, "get", lambda *a, **k: Response())
-    assert APIGuard().is_running() is True
-
-
-def test_api_guard_is_running_rejects_server_errors(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class Response:
-        status_code = 503
-
-    monkeypatch.setattr(api_guard_module.httpx, "get", lambda *a, **k: Response())
-    assert APIGuard().is_running() is False
-
-
-def test_api_guard_starts_server(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FakeProcess:
-        def terminate(self) -> None:
-            pass
-
-        def poll(self) -> None:
-            return None
-
-    process = FakeProcess()
-    commands = []
-    monkeypatch.setattr(
-        api_guard_module.subprocess,
-        "Popen",
-        lambda command: commands.append(command) or process,
-    )
-    monkeypatch.setattr(api_guard_module.time, "sleep", lambda _: None)
-    monkeypatch.setattr(
-        api_guard_module.time,
-        "monotonic",
-        lambda: [0.0, 0.1][0],
-    )
-
-    guard = APIGuard()
-    states = [False, True]
-    guard.is_running = lambda: states.pop(0)  # type: ignore[method-assign]
-    guard.ensure_api_server()
-    assert guard._process is process
-    assert commands == [
-        [
-                sys.executable,
-                "-m",
-                "langharmess",
-                "--mode",
-                "server",
-                "--server-ip",
-                "127.0.0.1",
-                "--server-port",
-                "11534",
-        ]
-    ]
-
-
-def test_api_guard_uses_frozen_executable_to_start_server(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import langharmess.__main__ as bootstrap_main_module
-
-    calls = []
-    monkeypatch.setattr(api_guard_module.sys, "frozen", True, raising=False)
-    monkeypatch.setattr(
-        bootstrap_main_module,
-        "main",
-        lambda argv=None: calls.append(argv) or 0,
-    )
-    guard = APIGuard("http://127.0.0.1:9123")
-    states = [False, True]
-    guard.is_running = lambda: states.pop(0)  # type: ignore[method-assign]
-
-    guard.ensure_api_server()
-
-    assert calls == [
-        [
-            "--mode",
-            "server",
-            "--server-ip",
-            "127.0.0.1",
-            "--server-port",
-            "9123",
-        ]
-    ]
-    assert guard._process is None
-
-
 def test_api_server_entrypoint_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
     import uvicorn
 
@@ -179,25 +84,23 @@ def test_health_command_handler(
 ) -> None:
     import langharmess_cli.plugins.commands.health as health_module
 
-    class FakeGuard:
-        def __init__(self, base_url):
-            self.base_url = base_url
-
-        def ensure_api_server(self):
-            return None
-
     class Response:
         status_code = 200
 
         def json(self):
             return {"status": "ok"}
 
-    monkeypatch.setattr(health_module, "APIGuard", FakeGuard)
-    monkeypatch.setattr(health_module.httpx, "get", lambda *a, **k: Response())
+    urls = []
+    monkeypatch.setattr(
+        health_module.httpx,
+        "get",
+        lambda url, *a, **k: urls.append(url) or Response(),
+    )
 
     plugin = HealthCommandPlugin()
-    args = type("Args", (), {"base_url": "http://127.0.0.1:8000"})()
-    assert plugin._handler(args) == 0
+    plugin._base_url = "http://api:9000"
+    assert plugin._handler(type("Args", (), {})()) == 0
+    assert urls == ["http://api:9000/health"]
     assert "{'status': 'ok'}" in capsys.readouterr().out
 
 
@@ -243,13 +146,6 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         get_services=lambda spec: [provider],
     )
 
-    class FakeGuard:
-        def __init__(self, base_url):
-            self.base_url = base_url
-
-        def ensure_api_server(self):
-            return None
-
     captured = {}
 
     class FakeInteractive:
@@ -275,7 +171,6 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         "PluginRegistry",
         lambda descriptors: SimpleNamespace(list=lambda: descriptors),
     )
-    monkeypatch.setattr(main_module, "APIGuard", FakeGuard)
     monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
     monkeypatch.setattr(
         main_module, "resolve_identity", lambda *a, **k: ("resumed-session", "researcher")
@@ -294,6 +189,40 @@ def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     }
 
 
+def test_main_warns_when_removed_base_url_flag_is_used(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        sys, "argv", ["langharmess", "interactive", "--base-url", "http://api:9000"]
+    )
+    provider = SimpleNamespace(
+        get_commands=lambda: [], get_interactive_commands=lambda: []
+    )
+    manager = SimpleNamespace(
+        start=lambda: None,
+        stop=lambda: None,
+        install_plugin=lambda descriptor: None,
+        get_services=lambda spec: [provider],
+    )
+    monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
+    monkeypatch.setattr(
+        main_module,
+        "PluginRegistry",
+        lambda descriptors: SimpleNamespace(list=lambda: descriptors),
+    )
+    monkeypatch.setattr(
+        main_module,
+        "InteractiveCLIRunner",
+        lambda **kwargs: SimpleNamespace(cmdloop=lambda: None),
+    )
+    monkeypatch.setattr(
+        main_module, "resolve_identity", lambda *a, **k: ("s", "a")
+    )
+
+    assert main_module.main() == 0
+    assert "--base-url is removed" in capsys.readouterr().err
+
+
 def test_interactive_options_parse_identity_flags() -> None:
     options = main_module._interactive_options(
         [
@@ -303,13 +232,11 @@ def test_interactive_options_parse_identity_flags() -> None:
             "--session-id",
             "s1",
             "--new-session",
-            "--base-url=http://api:9000",
             "--token",
             "tok",
         ]
     )
     assert options == {
-        "base_url": "http://api:9000",
         "token": "tok",
         "user_id": "alice",
         "agent_id": "researcher",
@@ -361,11 +288,6 @@ def test_main_forwards_identity_flags_to_resolution(
         get_services=lambda spec: [],
     )
     monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
-    monkeypatch.setattr(
-        main_module,
-        "APIGuard",
-        lambda base_url: SimpleNamespace(ensure_api_server=lambda: None),
-    )
     captured: dict[str, Any] = {}
 
     def fake_resolve(base_url, token, user_id, **kwargs):
@@ -413,11 +335,6 @@ def test_main_passes_locale_flag_to_plugins_and_runner(
         get_services=lambda spec: [],
     )
     monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
-    monkeypatch.setattr(
-        main_module,
-        "APIGuard",
-        lambda base_url: SimpleNamespace(ensure_api_server=lambda: None),
-    )
     captured = {}
 
     class FakeInteractive:
@@ -446,11 +363,6 @@ def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> 
         get_services=lambda spec: [],
     )
     monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
-    monkeypatch.setattr(
-        main_module,
-        "APIGuard",
-        lambda base_url: SimpleNamespace(ensure_api_server=lambda: None),
-    )
     monkeypatch.setattr(main_module.InteractiveCLIRunner, "cmdloop", lambda self: None)
 
     assert main_module.main() == 0
@@ -520,11 +432,6 @@ def test_main_uses_selected_provider_and_directory(
         "PluginRegistry",
         lambda descriptors: SimpleNamespace(list=lambda: descriptors),
     )
-    monkeypatch.setattr(
-        main_module,
-        "APIGuard",
-        lambda base_url: SimpleNamespace(ensure_api_server=lambda: None),
-    )
     monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
     assert main_module.main() == 0
     assert captured["model"] == "provider-model"
@@ -566,11 +473,6 @@ def test_main_randomly_selects_configured_provider_when_not_specified(
             return None
 
     monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
-    monkeypatch.setattr(
-        main_module,
-        "APIGuard",
-        lambda base_url: SimpleNamespace(ensure_api_server=lambda: None),
-    )
     monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
     monkeypatch.setattr(main_module.random, "choice", lambda names: names[-1])
 
@@ -609,20 +511,12 @@ def test_main_survives_broken_provider_config(
         get_service=lambda spec: configs,
     )
 
-    class FakeGuard:
-        def __init__(self, base_url):
-            self.base_url = base_url
-
-        def ensure_api_server(self):
-            return None
-
     monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
     monkeypatch.setattr(
         main_module,
         "PluginRegistry",
         lambda descriptors: SimpleNamespace(list=lambda: descriptors),
     )
-    monkeypatch.setattr(main_module, "APIGuard", FakeGuard)
     monkeypatch.setattr(
         main_module,
         "InteractiveCLIRunner",
