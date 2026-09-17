@@ -78,6 +78,17 @@ def cli_descriptors(locale: str) -> list[PluginDescriptor]:
             scope_parent="root",
         ),
         PluginDescriptor(
+            name="cli-scope",
+            version="1.0.0",
+            module="langharmess_cli.plugins.commands.scope",
+            factory="cli-scope-command-factory",
+            instance="cli-scope",
+            specification=SPEC_CLI_COMMAND,
+            properties={"plugin.ui.locale": locale},
+            scope="ui",
+            scope_parent="root",
+        ),
+        PluginDescriptor(
             name="cli-shell",
             version="1.0.0",
             module="langharmess_cli.plugins.commands.shell",
@@ -100,6 +111,7 @@ def builtin_package() -> PluginPackage:
         "rich-renderer",
         "session",
         "plugins",
+        "scope",
         "shell",
     )
     return PluginPackage(
