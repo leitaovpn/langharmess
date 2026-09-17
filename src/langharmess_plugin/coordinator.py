@@ -313,7 +313,7 @@ class RuntimeMutationCoordinator:
             groups.setdefault(target_scope, []).append(export)
         created: list[str] = []
         for target_scope, exports in groups.items():
-            suffix = target_scope.replace("/", "-")
+            suffix = target_scope.replace(":", "-")
             instance_name = f"tool-export@{registration.descriptor.name}@{suffix}"
             descriptor = PluginDescriptor(
                 name=instance_name,
