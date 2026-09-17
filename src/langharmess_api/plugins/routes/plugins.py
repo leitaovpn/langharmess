@@ -337,25 +337,21 @@ class PluginsRoutePlugin:
         return ("api", "cli", *agent_scopes)
 
     def _validate_scope(self, scope: str) -> None:
-        if scope in KNOWN_SCOPES:
-            return
-        if scope.startswith("agent:") and len(scope) > len("agent:"):
-            return
-        raise http_error(
-            400,
-            f"Unknown scope: {scope}",
-            code="VALIDATION_ERROR",
-            error_type="ValidationError",
-        )
+        self._validate_known_scope(scope, KNOWN_SCOPES, "scope")
 
     def _validate_runtime_scope(self, scope: str) -> None:
-        if scope in KNOWN_RUNTIME_SCOPES:
+        self._validate_known_scope(scope, KNOWN_RUNTIME_SCOPES, "runtime scope")
+
+    def _validate_known_scope(
+        self, scope: str, known: tuple[str, ...], label: str
+    ) -> None:
+        if scope in known:
             return
         if scope.startswith("agent:") and len(scope) > len("agent:"):
             return
         raise http_error(
             400,
-            f"Unknown runtime scope: {scope}",
+            f"Unknown {label}: {scope}",
             code="VALIDATION_ERROR",
             error_type="ValidationError",
         )
