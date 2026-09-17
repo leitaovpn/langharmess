@@ -38,6 +38,7 @@ builtin-cli = "langharmess_cli.plugin:builtin_package"
 builtin-config = "langharmess_config.plugin:builtin_package"
 builtin-core = "langharmess_core.plugin:builtin_package"
 builtin-logging = "langharmess_logging.plugin:builtin_package"
+dynamic-core = "langharmess_core.plugin:dynamic_package"
 
 [project.optional-dependencies]
 dev = [

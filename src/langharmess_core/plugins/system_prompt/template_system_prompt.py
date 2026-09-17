@@ -18,7 +18,7 @@ class TemplateSystemPromptPlugin:
     def __init__(self) -> None:
         self._plugin_name = "system-prompt-plugin"
         self._plugin_version = "1.0.0"
-        self._system_prompt = ""
+        self._system_prompt = "你是一个阅读者，通过读取项目，给出改进建议"
 
     def get_system_prompt(self) -> str:
         return self._system_prompt

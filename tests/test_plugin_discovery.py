@@ -11,7 +11,12 @@ from pydantic import BaseModel
 from langharmess_api.plugin import builtin_package as api_builtin_package
 from langharmess_cli.plugin import builtin_package as cli_builtin_package
 from langharmess_config.plugin import builtin_package as config_builtin_package
-from langharmess_core.plugin import builtin_package as core_builtin_package
+from langharmess_core.plugin import (
+    builtin_package as core_builtin_package,
+)
+from langharmess_core.plugin import (
+    dynamic_package as core_dynamic_package,
+)
 from langharmess_logging.plugin import builtin_package as logging_builtin_package
 from langharmess_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
 from langharmess_plugin.discovery import PluginDiscovery, PluginDiscoveryError
@@ -271,3 +276,18 @@ def test_builtin_packages_are_declarative_and_do_not_share_names() -> None:
             assert descriptor.instance not in instances
             names.add(descriptor.name)
             instances.add(descriptor.instance)
+
+
+def test_dynamic_package_scans_cleanly_alongside_builtin_packages() -> None:
+    packages = builtin_packages() + (core_dynamic_package(),)
+    discovery = PluginDiscovery(
+        lambda: [
+            FakeEntryPoint(package.id, f"{package.id}:package", lambda package=package: package)
+            for package in packages
+        ]
+    )
+
+    result = discovery.scan()
+
+    assert result.failures == ()
+    assert "dynamic.core" in [item.id for item in result.packages]

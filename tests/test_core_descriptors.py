@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from langharmess_core.contracts import SPEC_CHECKPOINTER, SPEC_LLM, SPEC_TOOL
+from langharmess_core.contracts import (
+    SPEC_CHECKPOINTER,
+    SPEC_LLM,
+    SPEC_MIDDLEWARE,
+    SPEC_TOOL,
+)
 from langharmess_core.plugin import (
     agent_directory_descriptor,
     agent_filter,
@@ -15,8 +20,29 @@ from langharmess_core.plugin import (
     agent_registry_descriptor,
     agent_required_modules,
     agent_scoped_specifications,
+    builtin_package,
+    dynamic_package,
+    dynamic_template_descriptor,
     session_index_descriptor,
     sqlite_checkpointer_descriptor,
+)
+
+EXPECTED_DYNAMIC_CONTRIBUTIONS = frozenset(
+    {
+        "cache-plugin-template",
+        "checkpointer-plugin-template",
+        "context-schema-plugin-template",
+        "debug-plugin-template",
+        "interrupt-after-plugin-template",
+        "interrupt-before-plugin-template",
+        "middleware-plugin-template",
+        "response-format-plugin-template",
+        "state-schema-plugin-template",
+        "store-plugin-template",
+        "system-prompt-plugin-template",
+        "tools-plugin-template",
+        "transformers-plugin-template",
+    }
 )
 
 
@@ -97,3 +123,43 @@ def test_agent_directory_descriptor_declares_its_specification() -> None:
     descriptor = agent_directory_descriptor()
     assert descriptor.specification == "agent.directory"
     assert descriptor.module == "langharmess_core.plugins.agents.directory"
+
+
+def test_dynamic_package_covers_plugins_absent_from_builtin() -> None:
+    package = dynamic_package()
+    assert package.id == "dynamic.core"
+    assert package.version == "1.0.0"
+
+    builtin = builtin_package()
+    dynamic_ids = {contribution.id for contribution in package.contributions}
+    assert dynamic_ids == EXPECTED_DYNAMIC_CONTRIBUTIONS
+    assert dynamic_ids.isdisjoint(
+        {contribution.id for contribution in builtin.contributions}
+    )
+    builtin_names = {
+        contribution.descriptor.name for contribution in builtin.contributions
+    }
+    assert {
+        contribution.descriptor.name for contribution in package.contributions
+    }.isdisjoint(builtin_names)
+
+
+def test_dynamic_templates_install_without_instantiating() -> None:
+    for contribution in dynamic_package().contributions:
+        descriptor = contribution.descriptor
+        assert contribution.target == "agent"
+        assert descriptor.name.endswith("-template")
+        assert descriptor.enabled is False
+        assert descriptor.instance == descriptor.name
+        assert descriptor.scope == "agent"
+        assert descriptor.scope_parent == "root"
+        assert descriptor.module.startswith("langharmess_core.plugins.")
+        assert descriptor.factory.endswith("-factory")
+        assert descriptor.specification.startswith("agent.plugin.")
+
+
+def test_dynamic_template_descriptor_matches_catalog_entry() -> None:
+    descriptor = dynamic_template_descriptor("middleware-plugin")
+    assert descriptor.module == "langharmess_core.plugins.middleware.template_middleware"
+    assert descriptor.factory == "middleware-plugin-factory"
+    assert descriptor.specification == SPEC_MIDDLEWARE
