@@ -327,7 +327,7 @@ class RuntimeMutationCoordinator:
                     "plugin.tool_export.exports": exports,
                 },
                 scope=target_scope,
-                scope_parent="agent" if target_scope.startswith("agent:") else "server",
+                scope_parent="agent" if target_scope.startswith("agent:") else str(ROOT_SCOPE_ID),
             )
             self.manager.instantiate_instance(
                 descriptor,

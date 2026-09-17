@@ -119,7 +119,7 @@ def agent_plugin_template_descriptor(plugin: str) -> PluginDescriptor:
         specification=specification,
         enabled=False,
         scope="agent",
-        scope_parent="server",
+        scope_parent="root",
     )
 
 
@@ -162,7 +162,7 @@ def agent_loop_template_descriptor() -> PluginDescriptor:
         specification=SPEC_AGENT_LOOP,
         enabled=False,
         scope="agent",
-        scope_parent="server",
+        scope_parent="root",
     )
 
 
@@ -176,7 +176,7 @@ def tool_export_adapter_template_descriptor() -> PluginDescriptor:
         specification=SPEC_TOOL,
         enabled=False,
         scope="agent",
-        scope_parent="server",
+        scope_parent="root",
     )
 
 
