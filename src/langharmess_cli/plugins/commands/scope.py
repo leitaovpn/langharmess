@@ -58,7 +58,7 @@ class ScopeCommandPlugin:
             payload = self._get(
                 f"{self._base_url.rstrip('/')}/scope", self._token
             )
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, ValueError) as exc:
             print(f"Scope request failed: {exc}")
             return 1
         print(json.dumps(payload, ensure_ascii=False))
@@ -71,7 +71,7 @@ class ScopeCommandPlugin:
             payload = self._get(
                 f"{context.base_url.rstrip('/')}/scope", context.token
             )
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, ValueError) as exc:
             print(f"Scope request failed: {exc}")
             return False
         print(_render_tree(payload.get("scopes") or []))
