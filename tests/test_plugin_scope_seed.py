@@ -39,7 +39,11 @@ def test_seeding_is_idempotent_across_restarts() -> None:
     manager.stop()
     manager.start()
     try:
-        assert len(manager.scope_tree.snapshot().scopes) == 4
+        tree = manager.scope_tree
+        assert len(tree.snapshot().scopes) == 4
+        assert tree.get(AGENT_SCOPE_ID).parent_id == ROOT_SCOPE_ID
+        assert tree.get(SERVER_SCOPE_ID).parent_id == ROOT_SCOPE_ID
+        assert tree.get(UI_SCOPE_ID).parent_id == ROOT_SCOPE_ID
     finally:
         manager.stop()
 
@@ -51,3 +55,10 @@ def test_seeding_rejects_a_scope_with_a_conflicting_parent() -> None:
     manager = PluginManager(PluginRegistry([]), scope_tree=tree)
     with pytest.raises(ValueError, match="already has a different parent"):
         manager.start()
+    assert not manager.started
+    tree.remove(ScopeId("custom"), recursive=True)
+    try:
+        manager.start()
+        assert manager.started
+    finally:
+        manager.stop()
