@@ -192,34 +192,42 @@ def test_noninteractive_enable_disable_upgrade_uninstall(
     assert calls[0] == (
         "put",
         "http://127.0.0.1:11534/plugins/runtime/api-rate-limit/enabled",
-        {"json": {"enabled": True}, "headers": {"Authorization": "Bearer secret"}, "timeout": 10.0},
+        {
+            "json": {"enabled": True},
+            "headers": {"Authorization": "Bearer secret"},
+            "timeout": 10.0,
+            "params": {"scope": "server"},
+        },
     )
 
     code, calls = run_command(
         monkeypatch,
-        ["disable", "api-rate-limit"],
+        ["disable", "api-rate-limit", "--scope", "server"],
         methods={"put": {"enabled": False}},
     )
     assert code == 0
     assert calls[0][2]["json"] == {"enabled": False}
+    assert calls[0][2]["params"] == {"scope": "server"}
 
     code, calls = run_command(
         monkeypatch,
-        ["upgrade", "api-rate-limit"],
+        ["upgrade", "api-rate-limit", "--scope", "server"],
         methods={"post": {"status": "upgraded"}},
     )
     assert code == 0
     assert calls[0][0] == "post"
     assert calls[0][1].endswith("/plugins/runtime/api-rate-limit/upgrade")
+    assert calls[0][2]["params"] == {"scope": "server"}
 
     code, calls = run_command(
         monkeypatch,
-        ["uninstall", "api-rate-limit"],
+        ["uninstall", "api-rate-limit", "--scope", "server"],
         methods={"delete": {"removed": True}},
     )
     assert code == 0
     assert calls[0][0] == "delete"
     assert calls[0][1].endswith("/plugins/runtime/api-rate-limit")
+    assert calls[0][2]["params"] == {"scope": "server"}
 
 
 def test_noninteractive_mutation_rejects_wrong_arguments(
@@ -289,7 +297,7 @@ def test_plugins_lists_runtime_plugins_for_default_scope(
     assert "enabled" in output
     assert "builtin.api/server" in output
     assert captured["url"].endswith("/plugins/runtime")
-    assert captured["params"] == {"scope": "server"}
+    assert captured["params"] is None
 
 
 def test_plugins_lists_runtime_plugins_for_parent_agent_scope(
@@ -653,3 +661,51 @@ def test_plugins_list_without_overrides_and_apply_without_targets(
     output = capsys.readouterr().out
     assert "no registered plugins" in output
     assert "Applied" in output
+
+
+def test_noninteractive_runtime_set_requires_scope(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, calls = run_command(
+        monkeypatch,
+        ["runtime", "set", "api-rate-limit", "plugin.limit=5"],
+        methods={},
+    )
+    assert code == 1
+    assert "runtime requires" in capsys.readouterr().out
+    assert calls == []
+
+
+def test_noninteractive_runtime_set_updates_dynamic_properties(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    code, calls = run_command(
+        monkeypatch,
+        ["runtime", "set", "echo", "plugin.value=x", "--scope", "server"],
+        methods={"put": {"status": "installed"}},
+    )
+    assert code == 0
+    assert calls[0][0] == "put"
+    assert calls[0][1].endswith("/plugins/runtime/echo/properties")
+    assert calls[0][2]["params"] == {"scope": "server"}
+    assert calls[0][2]["json"] == {"properties": {"plugin.value": "x"}}
+
+
+def test_noninteractive_mutations_reject_invalid_scope(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for args, message in [
+        (["enable", "api-rate-limit", "--scope", "mars"], "enable requires"),
+        (["disable", "api-rate-limit", "--scope", "mars"], "disable requires"),
+        (["upgrade", "api-rate-limit", "--scope", "mars"], "upgrade requires"),
+        (["uninstall", "api-rate-limit", "--scope", "mars"], "uninstall requires"),
+        (
+            ["runtime", "set", "api-rate-limit", "plugin.limit=5", "--scope", "mars"],
+            "runtime requires",
+        ),
+        (["list", "--scope", "mars"], "list --scope must be"),
+        (["config", "--scope", "mars"], "config --scope must be"),
+    ]:
+        code, _ = run_command(monkeypatch, args, methods={})
+        assert code == 1
+        assert message in capsys.readouterr().out
