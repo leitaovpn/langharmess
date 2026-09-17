@@ -22,6 +22,7 @@ from langharmess_core.plugin import (
     agent_registry_descriptor,
     session_index_descriptor,
     sqlite_checkpointer_descriptor,
+    tool_export_adapter_template_descriptor,
 )
 from langharmess_logging.plugin import log_descriptor
 
@@ -69,6 +70,7 @@ def test_agent_templates_and_instances_form_two_levels() -> None:
         agent_plugin_template_descriptor("llm"),
         agent_plugin_template_descriptor("tools"),
         agent_loop_template_descriptor(),
+        tool_export_adapter_template_descriptor(),
     ]
     assert {(item.scope, item.scope_parent) for item in templates} == {
         ("agent", "root")

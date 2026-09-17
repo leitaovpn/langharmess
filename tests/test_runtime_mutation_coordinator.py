@@ -267,6 +267,7 @@ def test_install_exports_agent_and_agent_instance_adapters() -> None:
     agent_call = runtime.instantiate_instance.call_args_list[0]
     instance_call = runtime.instantiate_instance.call_args_list[1]
     assert agent_call.kwargs["scope_id"] == ScopeId("agent")
+    assert agent_call.args[0].scope_parent == "root"
     assert instance_call.kwargs["scope_id"] == ScopeId("server")
 
 
@@ -543,6 +544,63 @@ def test_restore_raises_for_orphaned_persisted_scope() -> None:
 
     with pytest.raises(RuntimeError, match="orphan"):
         mutations.restore()
+
+
+def test_restore_skips_legacy_and_preexisting_scopes() -> None:
+    store = CountingStore()
+    store.snapshot = RuntimeStateSnapshot(
+        1,
+        (
+            {"id": "root", "parent_id": None, "name": "root"},
+            {"id": "agent", "parent_id": "server", "name": "Agent"},
+            {"id": "agent/a", "parent_id": "agent", "name": "A"},
+        ),
+        (),
+    )
+    runtime = manager()
+    # The fake tree already carries the seeded built-in: agent under root.
+    runtime.scope_tree.create(ScopeId("agent"), "Agent", ROOT_SCOPE_ID)
+    mutations = RuntimeMutationCoordinator(
+        runtime, store, PluginDiscovery(lambda: [])
+    )
+
+    assert mutations.restore() == ()
+
+    ids = {scope.id for scope in runtime.scope_tree.snapshot().scopes}
+    assert ScopeId("agent/a") not in ids
+    assert runtime.scope_tree.get(ScopeId("agent")).parent_id == ROOT_SCOPE_ID
+
+
+def test_restore_drops_legacy_agent_slash_registrations() -> None:
+    store = CountingStore()
+    legacy = PersistedPluginRegistration(
+        "gone.package",
+        "echo",
+        "1",
+        ScopeId("agent/a"),
+        "echo",
+        descriptor("echo"),
+        True,
+        "installed",
+    )
+    store.snapshot = RuntimeStateSnapshot(
+        1,
+        (
+            {"id": "root", "parent_id": None, "name": "root"},
+            {"id": "agent", "parent_id": "root", "name": "Agent"},
+            {"id": "agent/a", "parent_id": "agent", "name": "A"},
+        ),
+        (legacy,),
+    )
+    runtime = manager()
+    runtime.scope_tree.create(ScopeId("agent"), "Agent", ROOT_SCOPE_ID)
+    mutations = RuntimeMutationCoordinator(
+        runtime, store, PluginDiscovery(lambda: [])
+    )
+
+    assert mutations.restore() == ()
+    assert mutations.registrations() == ()
+    assert store.saves == 1
 
 
 def test_rescan_and_discovered_are_sorted() -> None:
