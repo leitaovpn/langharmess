@@ -145,9 +145,10 @@ The same gate is enforced locally by `.githooks/pre-commit` and in CI by
   launch the "API server" configuration separately or use the "full stack"
   compound — the guard reuses an already-running server. `--mode ui` starts
   no server, so it needs one already listening.
-- Without `--provider` the CLI picks a random provider from
-  `~/.langharmess/langharmess.toml`; pass `--provider` for deterministic
-  sessions.
+- Interactive mode requires a default model: `[providers.default]` in
+  `~/.langharmess/langharmess.toml`, or an explicit `--provider <name>`;
+  without either it exits with code 2. `default` is a reserved provider name
+  (hidden from `/model`, rejected by `--provider`).
 
 ### Real end-to-end testing
 

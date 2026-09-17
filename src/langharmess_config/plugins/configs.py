@@ -85,7 +85,22 @@ class ConfigsPlugin:
         }
 
     def get_provider(self, name: str) -> dict[str, Any]:
-        provider = self.get_section(f"providers.{name}")
+        if name == "default":
+            raise ValueError(
+                "Provider name 'default' is reserved for the default model"
+            )
+        return self._validated_provider(name, self.get_section(f"providers.{name}"))
+
+    def get_default_provider(self) -> dict[str, Any]:
+        provider = self.get_section("providers.default")
+        if not provider:
+            raise ValueError(
+                "No default model is configured: add a "
+                "[providers.default] section to langharmess.toml"
+            )
+        return self._validated_provider("default", provider)
+
+    def _validated_provider(self, name: str, provider: dict[str, Any]) -> dict[str, Any]:
         if not provider:
             return {}
         protocol = provider.get("protocol", "chat")
@@ -109,6 +124,8 @@ class ConfigsPlugin:
         )
         valid: list[str] = []
         for name in names:
+            if name == "default":
+                continue
             try:
                 self.get_provider(name)
             except ValueError as exc:

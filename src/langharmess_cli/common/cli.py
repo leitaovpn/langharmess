@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import random
 import sys
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
@@ -143,15 +142,17 @@ def main(
                 for command in provider.get_interactive_commands()
             ]
             selected_provider = options.provider
-            if configs is not None and selected_provider is None:
-                provider_names = configs.list_providers()
-                if provider_names:
-                    selected_provider = random.choice(provider_names)
-            provider_config = (
-                configs.get_provider(selected_provider)
-                if configs is not None and selected_provider
-                else {}
-            )
+            provider_config: dict[str, Any] = {}
+            if configs is not None:
+                try:
+                    if selected_provider:
+                        provider_config = dict(configs.get_provider(selected_provider))
+                    else:
+                        provider_config = dict(configs.get_default_provider())
+                        selected_provider = "default"
+                except ValueError as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 2
             if options.provider and not provider_config:
                 print(f"Unknown provider: {options.provider}", file=sys.stderr)
                 return 2

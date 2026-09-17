@@ -442,18 +442,17 @@ def test_main_uses_selected_provider_and_directory(
     assert "LANG_HARMESS_DIR" not in os.environ
 
 
-def test_main_randomly_selects_configured_provider_when_not_specified(
+def test_main_uses_default_provider_when_not_specified(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
     monkeypatch.setattr(
         sys, "argv", ["langharmess", "--dir", str(tmp_path), "interactive"]
     )
     configs = SimpleNamespace(
-        list_providers=lambda: ["first", "chosen"],
-        get_provider=lambda name: {
-            "model": f"{name}-model",
-            "api_key": f"{name}-key",
-            "base_url": f"https://{name}.example/v1",
+        get_default_provider=lambda: {
+            "model": "default-model",
+            "api_key": "default-key",
+            "base_url": "https://default.example/v1",
         },
     )
     manager = SimpleNamespace(
@@ -474,12 +473,74 @@ def test_main_randomly_selects_configured_provider_when_not_specified(
 
     monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
     monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
-    monkeypatch.setattr(main_module.random, "choice", lambda names: names[-1])
 
     assert main_module.main() == 0
-    assert captured["model"] == "chosen-model"
-    assert captured["api_key"] == "chosen-key"
-    assert captured["model_base_url"] == "https://chosen.example/v1"
+    assert captured["model"] == "default-model"
+    assert captured["api_key"] == "default-key"
+    assert captured["model_base_url"] == "https://default.example/v1"
+    assert captured["provider_name"] == "default"
+
+
+def test_main_errors_when_default_provider_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
+    monkeypatch.setattr(
+        sys, "argv", ["langharmess", "--dir", str(tmp_path), "interactive"]
+    )
+
+    def missing_default() -> dict[str, str]:
+        raise ValueError("No default model is configured")
+
+    configs = SimpleNamespace(get_default_provider=missing_default)
+    manager = SimpleNamespace(
+        start=lambda: None,
+        stop=lambda: None,
+        install_plugin=lambda descriptor: None,
+        get_services=lambda spec: [],
+        get_service=lambda spec: configs if spec == "configs" else None,
+    )
+    started = []
+
+    class FakeInteractive:
+        def __init__(self, **kwargs):
+            started.append(kwargs)
+
+        def cmdloop(self):
+            return None
+
+    monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
+    monkeypatch.setattr(main_module, "InteractiveCLIRunner", FakeInteractive)
+
+    assert main_module.main() == 2
+    assert started == []
+    assert "No default model is configured" in capsys.readouterr().err
+
+
+def test_main_rejects_reserved_default_provider_name(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["langharmess", "--provider", "default", "--dir", str(tmp_path), "interactive"],
+    )
+
+    def reserved(name: str) -> dict[str, str]:
+        raise ValueError("Provider name 'default' is reserved")
+
+    configs = SimpleNamespace(get_provider=reserved)
+    manager = SimpleNamespace(
+        start=lambda: None,
+        stop=lambda: None,
+        install_plugin=lambda descriptor: None,
+        get_services=lambda spec: [],
+        get_service=lambda spec: configs if spec == "configs" else None,
+    )
+
+    monkeypatch.setattr(main_module, "PluginManager", lambda registry: manager)
+
+    assert main_module.main() == 2
+    assert "reserved" in capsys.readouterr().err
 
 
 def test_main_survives_broken_provider_config(
@@ -494,7 +555,7 @@ def test_main_survives_broken_provider_config(
         SimpleNamespace(
             get_config=lambda: {
                 "providers": {
-                    "good": {"model": "demo", "api_key": "k"},
+                    "default": {"model": "demo", "api_key": "k"},
                     "broken": {"model": "demo", "api_key": "k", "protocol": "ftp"},
                 }
             }

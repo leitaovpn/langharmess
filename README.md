@@ -50,25 +50,28 @@ The configuration template is:
 ```toml
 [DEFAULT]
 
-[providers.deepseek-v4-flash]
-protocol = "chat"
-base_url = "xxxxx"
-model = "xxxxx"
-api_key = "xxxx"
+# Default model used when interactive mode starts without --provider.
+# [providers.default]
+# protocol = "chat"
+# base_url = "https://api.example.com/v1"
+# model = "your-model"
+# api_key = "your-api-key"
 ```
+
+Uncomment and fill in `[providers.default]` to select the model interactive
+mode uses at startup. Without it, interactive mode fails with an error;
+`--provider <name>` selects one of the other configured providers instead.
+`default` is a reserved provider name: it is hidden from `/model` and cannot
+be selected with `--provider` or `/model`.
 
 Optionally select a configured model provider and override the common data
 directory:
 
 ```bash
-langharmess --provider deepseek-v4-flash --dir /data/langharmess
+langharmess --provider demo --dir /data/langharmess
 ```
 
-`--dir` controls the location of the TOML file and both log files. Existing
-`LANG_HARMESS_MODEL`, `LANG_HARMESS_API_KEY`, and `LANG_HARMESS_BASE_URL` values
-remain the fallback when no provider is configured. When `--provider` is
-omitted and the TOML file contains providers, the CLI randomly selects one for
-the session.
+`--dir` controls the location of the TOML file and both log files.
 
 Each provider selects one LangChain client protocol: `chat` for the
 OpenAI-compatible Chat Completions API, `responses` for the OpenAI Responses

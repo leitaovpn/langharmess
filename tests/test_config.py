@@ -24,12 +24,7 @@ def test_toml_config_plugin_creates_and_reads_user_config(tmp_path: Path) -> Non
 
     assert path.is_file()
     assert config["DEFAULT"] == {}
-    assert config["providers"]["deepseek-v4-flash"] == {
-        "base_url": "xxxxx",
-        "model": "xxxxx",
-        "api_key": "xxxx",
-        "protocol": "chat",
-    }
+    assert "providers" not in config
 
 
 def test_toml_config_plugin_reads_toml_strings(tmp_path: Path) -> None:
@@ -137,6 +132,11 @@ def test_configs_requires_a_non_empty_provider_model() -> None:
 
 
 def test_configs_service_aggregates_toml_plugin_in_ipopo(tmp_path: Path) -> None:
+    (tmp_path / "langharmess.toml").write_text(
+        '[providers.default]\nbase_url = "https://example.test/v1"\n'
+        'model = "default-model"\napi_key = "k"\n',
+        encoding="utf-8",
+    )
     manager = PluginManager(PluginRegistry(config_descriptors(str(tmp_path))))
     manager.start()
     try:
@@ -144,7 +144,7 @@ def test_configs_service_aggregates_toml_plugin_in_ipopo(tmp_path: Path) -> None
             manager.install_plugin(descriptor)
         configs = manager.get_service(SPEC_CONFIGS)
         assert configs is not None
-        assert configs.get_provider("deepseek-v4-flash")["model"] == "xxxxx"
+        assert configs.get_default_provider()["model"] == "default-model"
     finally:
         manager.stop()
 
@@ -163,3 +163,91 @@ def test_configs_list_providers_skips_invalid_entries() -> None:
     ]
 
     assert configs.list_providers() == ["good"]
+
+
+def test_configs_get_default_provider_returns_validated_section() -> None:
+    configs = ConfigsPlugin()
+    configs._providers = [
+        SimpleNamespace(
+            get_config=lambda: {
+                "providers": {
+                    "default": {
+                        "model": "default-model",
+                        "api_key": "key",
+                        "base_url": "https://example.test/v1",
+                    }
+                }
+            }
+        )
+    ]
+
+    assert configs.get_default_provider() == {
+        "model": "default-model",
+        "api_key": "key",
+        "base_url": "https://example.test/v1",
+        "protocol": "chat",
+    }
+
+
+def test_configs_get_default_provider_raises_when_missing() -> None:
+    configs = ConfigsPlugin()
+    configs._providers = [
+        SimpleNamespace(get_config=lambda: {"providers": {"demo": {"model": "m"}}})
+    ]
+
+    with pytest.raises(ValueError, match="No default model is configured"):
+        configs.get_default_provider()
+
+
+def test_configs_get_default_provider_raises_when_section_empty() -> None:
+    configs = ConfigsPlugin()
+    configs._providers = [
+        SimpleNamespace(get_config=lambda: {"providers": {"default": {}}})
+    ]
+
+    with pytest.raises(ValueError, match="No default model is configured"):
+        configs.get_default_provider()
+
+
+def test_configs_get_default_provider_raises_when_invalid() -> None:
+    configs = ConfigsPlugin()
+    configs._providers = [
+        SimpleNamespace(
+            get_config=lambda: {
+                "providers": {"default": {"model": "", "api_key": "k"}}
+            }
+        )
+    ]
+
+    with pytest.raises(ValueError, match="requires a non-empty model"):
+        configs.get_default_provider()
+
+
+def test_configs_get_provider_rejects_reserved_default_name() -> None:
+    configs = ConfigsPlugin()
+    configs._providers = [
+        SimpleNamespace(
+            get_config=lambda: {
+                "providers": {"default": {"model": "m", "api_key": "k"}}
+            }
+        )
+    ]
+
+    with pytest.raises(ValueError, match="reserved"):
+        configs.get_provider("default")
+
+
+def test_configs_list_providers_excludes_reserved_default() -> None:
+    configs = ConfigsPlugin()
+    configs._providers = [
+        SimpleNamespace(
+            get_config=lambda: {
+                "providers": {
+                    "default": {"model": "m", "api_key": "k"},
+                    "demo": {"model": "m", "api_key": "k"},
+                }
+            }
+        )
+    ]
+
+    assert configs.list_providers() == ["demo"]
