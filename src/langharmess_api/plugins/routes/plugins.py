@@ -25,8 +25,11 @@ from langharmess_plugin.config_store import (
 )
 from langharmess_plugin.contracts import DynamicPluginManager, ScopedPluginRegistrar
 from langharmess_plugin.validation import ContractGuard
+from langharmess_scope import ScopeId
 
 KNOWN_SCOPES = ("api", "cli")
+
+KNOWN_RUNTIME_SCOPES = ("root", "server", "ui", "agent")
 
 
 class PluginsRequest(BaseModel):
@@ -191,6 +194,8 @@ class PluginsRoutePlugin:
 
         @router.get("/plugins/runtime")
         def runtime_plugins(scope: str | None = Query(None)) -> dict[str, Any]:
+            if scope is not None:
+                self._validate_runtime_scope(scope)
             registrations = self._require_dynamic().registrations()
             if scope is not None:
                 registrations = (
@@ -216,38 +221,60 @@ class PluginsRoutePlugin:
             return self._registration_payload(registration)
 
         @router.put("/plugins/runtime/{name}/enabled")
-        def enable_plugin(name: str, enabled: bool = Body(..., embed=True)) -> dict[str, Any]:
+        def enable_plugin(
+            name: str,
+            enabled: bool = Body(..., embed=True),
+            scope: str = Query(...),
+        ) -> dict[str, Any]:
+            self._validate_runtime_scope(scope)
             try:
-                registration = self._require_dynamic().set_enabled(name, enabled)
-            except (KeyError, ValueError, RuntimeError) as exc:
+                registration = self._require_dynamic().set_enabled(
+                    name, enabled, scope_id=ScopeId(scope)
+                )
+            except KeyError as exc:
+                raise operation_error(exc, status_code=404) from exc
+            except (ValueError, RuntimeError) as exc:
                 raise operation_error(exc) from exc
             return self._registration_payload(registration)
 
         @router.put("/plugins/runtime/{name}/properties")
         def update_runtime_properties(
-            name: str, payload: DynamicPropertiesRequest
+            name: str,
+            payload: DynamicPropertiesRequest,
+            scope: str = Query(...),
         ) -> dict[str, Any]:
+            self._validate_runtime_scope(scope)
             try:
                 registration = self._require_dynamic().update_properties(
-                    name, payload.properties
+                    name, payload.properties, scope_id=ScopeId(scope)
                 )
-            except (KeyError, ValueError, RuntimeError) as exc:
+            except KeyError as exc:
+                raise operation_error(exc, status_code=404) from exc
+            except (ValueError, RuntimeError) as exc:
                 raise operation_error(exc) from exc
             return self._registration_payload(registration)
 
         @router.delete("/plugins/runtime/{name}")
-        def uninstall_plugin(name: str) -> dict[str, bool]:
+        def uninstall_plugin(name: str, scope: str = Query(...)) -> dict[str, bool]:
+            self._validate_runtime_scope(scope)
             try:
-                self._require_dynamic().uninstall(name)
-            except (KeyError, ValueError, RuntimeError) as exc:
+                self._require_dynamic().uninstall(name, scope_id=ScopeId(scope))
+            except KeyError as exc:
+                raise operation_error(exc, status_code=404) from exc
+            except (ValueError, RuntimeError) as exc:
                 raise operation_error(exc) from exc
             return {"removed": True}
 
         @router.post("/plugins/runtime/{name}/upgrade")
-        def upgrade_plugin(name: str) -> dict[str, Any]:
+        def upgrade_plugin(name: str, scope: str = Query(...)) -> dict[str, Any]:
+            self._validate_runtime_scope(scope)
             try:
-                registration = self._require_dynamic().upgrade(name)
-            except (KeyError, ValueError, RuntimeError) as exc:
+                registration = self._require_dynamic().upgrade(
+                    name, scope_id=ScopeId(scope)
+                )
+            except KeyError as exc:
+                raise operation_error(exc, status_code=404) from exc
+            except (ValueError, RuntimeError) as exc:
                 raise operation_error(exc) from exc
             return self._registration_payload(registration)
 
@@ -317,6 +344,18 @@ class PluginsRoutePlugin:
         raise http_error(
             400,
             f"Unknown scope: {scope}",
+            code="VALIDATION_ERROR",
+            error_type="ValidationError",
+        )
+
+    def _validate_runtime_scope(self, scope: str) -> None:
+        if scope in KNOWN_RUNTIME_SCOPES:
+            return
+        if scope.startswith("agent:") and len(scope) > len("agent:"):
+            return
+        raise http_error(
+            400,
+            f"Unknown runtime scope: {scope}",
             code="VALIDATION_ERROR",
             error_type="ValidationError",
         )
