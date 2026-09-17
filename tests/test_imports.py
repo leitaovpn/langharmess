@@ -73,6 +73,7 @@ PUBLIC_MODULES = [
     "langharmess_api.plugins",
     "langharmess_api.plugins.routes.agents",
     "langharmess_api.plugins.routes.plugins",
+    "langharmess_api.plugins.routes.scopes",
     "langharmess_api.plugins.routes.sessions",
     "langharmess_api.plugins.server.app",
     "langharmess_api.plugins.server.runtime",

@@ -99,6 +99,19 @@ def api_plugins_descriptor(directory: str) -> PluginDescriptor:
     )
 
 
+def api_scopes_descriptor() -> PluginDescriptor:
+    return PluginDescriptor(
+        name="api-scopes",
+        version="1.0.0",
+        module="langharmess_api.plugins.routes.scopes",
+        factory="api-scopes-route-factory",
+        instance="api-scopes",
+        specification=SPEC_ROUTE,
+        scope="server",
+        scope_parent="root",
+    )
+
+
 def api_sessions_descriptor() -> PluginDescriptor:
     return PluginDescriptor(
         name="api-sessions",
@@ -187,6 +200,7 @@ def builtin_package() -> PluginPackage:
             PluginContribution(
                 "plugins", "server", api_plugins_descriptor(directory)
             ),
+            PluginContribution("scopes", "server", api_scopes_descriptor()),
             PluginContribution("sessions", "server", api_sessions_descriptor()),
             PluginContribution("agents", "server", api_agents_descriptor()),
             PluginContribution("server", "server", api_server_descriptor()),
