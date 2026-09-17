@@ -603,6 +603,18 @@ def test_restore_drops_legacy_agent_slash_registrations() -> None:
     assert store.saves == 1
 
 
+def test_scopes_returns_the_live_scope_tree_snapshot() -> None:
+    runtime = manager()
+    runtime.scope_tree.create(ScopeId("agent"), "Agent", ROOT_SCOPE_ID)
+    store = CountingStore()
+    mutations = coordinator(runtime, store)
+
+    assert {scope.id for scope in mutations.scopes()} == {
+        ROOT_SCOPE_ID,
+        ScopeId("agent"),
+    }
+
+
 def test_rescan_and_discovered_are_sorted() -> None:
     runtime = manager()
     store = CountingStore()
