@@ -7,7 +7,7 @@ from typing import Any, Protocol, runtime_checkable
 from langharmess_plugin.registry import PluginDescriptor
 from langharmess_plugin.state_store import PersistedPluginRegistration
 from langharmess_plugin.validation import service_contract
-from langharmess_scope import ScopeId
+from langharmess_scope import Scope, ScopeId
 
 SPEC_PLUGIN_REGISTRAR = "plugin.registrar"
 SPEC_PLUGIN_SCOPE = "plugin.scope"
@@ -87,6 +87,8 @@ class DynamicPluginManager(Protocol):
     def uninstall(self, name: str) -> None: ...
 
     def upgrade(self, name: str) -> PersistedPluginRegistration: ...
+
+    def scopes(self) -> tuple[Scope, ...]: ...
 
 
 @service_contract(SPEC_TOOL_EXPORT_TARGET)

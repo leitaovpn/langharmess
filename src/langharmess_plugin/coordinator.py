@@ -14,7 +14,7 @@ from langharmess_plugin.state_store import (
     RuntimeStateSnapshot,
     RuntimeStateStore,
 )
-from langharmess_scope import ROOT_SCOPE_ID, ScopeId
+from langharmess_scope import ROOT_SCOPE_ID, Scope, ScopeId
 
 TOOL_ADAPTER_MODULE = "langharmess_core.plugins.tools.export_adapter"
 TOOL_ADAPTER_FACTORY = "tool-export-adapter-factory"
@@ -58,6 +58,10 @@ class RuntimeMutationCoordinator:
 
     def registrations(self) -> tuple[PersistedPluginRegistration, ...]:
         return tuple(self._registrations)
+
+    def scopes(self) -> tuple[Scope, ...]:
+        """Current scope tree snapshot for read-only consumers."""
+        return self.manager.scope_tree.snapshot().scopes
 
     def install(
         self,
