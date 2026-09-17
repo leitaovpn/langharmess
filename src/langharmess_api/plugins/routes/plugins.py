@@ -18,7 +18,11 @@ from pydantic import BaseModel
 from langharmess_api.common.errors import http_error, operation_error
 from langharmess_api.contracts import RouteProvider
 from langharmess_core.contracts import AgentDirectoryProvider
-from langharmess_plugin.config_store import PluginConfigStore, scope_path
+from langharmess_plugin.config_store import (
+    PluginConfigStore,
+    agent_scope_configs,
+    scope_path,
+)
 from langharmess_plugin.contracts import DynamicPluginManager, ScopedPluginRegistrar
 from langharmess_plugin.validation import ContractGuard
 
@@ -99,7 +103,19 @@ class PluginsRoutePlugin:
         router = APIRouter()
 
         @router.get("/plugins")
-        def read_plugins(scope: str = Query(...)) -> dict[str, Any]:
+        def read_plugins(scope: str | None = Query(None)) -> dict[str, Any]:
+            if scope is None:
+                configs = []
+                for item_scope in self._config_scopes():
+                    store = self._store(item_scope)
+                    configs.append(
+                        {
+                            "scope": item_scope,
+                            "version": store.current_seq(),
+                            "plugins": store.plugins(),
+                        }
+                    )
+                return {"scopes": configs}
             store = self._store(scope)
             return {
                 "scope": scope,
@@ -286,6 +302,12 @@ class PluginsRoutePlugin:
     def _store(self, scope: str) -> PluginConfigStore:
         self._validate_scope(scope)
         return PluginConfigStore.load(scope_path(self._config_dir, scope), scope)
+
+    def _config_scopes(self) -> tuple[str, ...]:
+        agent_scopes = tuple(
+            f"agent:{agent_id}" for agent_id, _ in agent_scope_configs(self._config_dir)
+        )
+        return ("api", "cli", *agent_scopes)
 
     def _validate_scope(self, scope: str) -> None:
         if scope in KNOWN_SCOPES:

@@ -185,7 +185,7 @@ def test_noninteractive_enable_disable_upgrade_uninstall(
 ) -> None:
     code, calls = run_command(
         monkeypatch,
-        ["enable", "api-rate-limit"],
+        ["enable", "api-rate-limit", "--scope", "server"],
         methods={"put": {"enabled": True}},
     )
     assert code == 0
@@ -284,7 +284,7 @@ def test_plugins_lists_runtime_plugins_for_default_scope(
     assert handler_for("plugins")(Context(), "list") is False
 
     output = capsys.readouterr().out
-    assert "scope server" in output
+    assert "scope all" in output
     assert "api-server" in output
     assert "enabled" in output
     assert "builtin.api/server" in output
@@ -413,7 +413,7 @@ def test_plugins_uninstall_deletes_dynamic_plugin(
 
     monkeypatch.setattr(httpx, "delete", fake_delete)
 
-    assert handler_for("plugins")(Context(), "uninstall real-echo") is False
+    assert handler_for("plugins")(Context(), "uninstall server real-echo") is False
 
     assert calls[0][0].endswith("/plugins/runtime/real-echo")
     assert "Removed" in capsys.readouterr().out
@@ -444,7 +444,7 @@ def test_plugins_set_merges_with_stored_configuration(
     monkeypatch.setattr(httpx, "get", fake_get)
     monkeypatch.setattr(httpx, "put", fake_put)
 
-    assert handler_for("plugins")(Context(), "set api-rate-limit plugin.limit=5") is False
+    assert handler_for("plugins")(Context(), "set api api-rate-limit plugin.limit=5") is False
 
     payload = calls[0][1]["json"]
     assert payload["plugins"]["api-rate-limit"]["properties"] == {"plugin.limit": 5}
@@ -468,7 +468,7 @@ def test_plugins_config_disable_sets_configuration_override_false(
 
     monkeypatch.setattr(httpx, "put", fake_put)
 
-    handler_for("plugins")(Context(), "config disable api-auth")
+    handler_for("plugins")(Context(), "config disable api api-auth")
 
     assert calls[0]["json"]["plugins"]["api-auth"]["enabled"] is False
 
@@ -492,7 +492,7 @@ def test_plugins_enable_sets_runtime_plugin_enabled(
 
     monkeypatch.setattr(httpx, "put", fake_put)
 
-    handler_for("plugins")(Context(), "enable system-prompt-plugin-template")
+    handler_for("plugins")(Context(), "enable agent system-prompt-plugin-template")
 
     assert calls[0][0].endswith(
         "/plugins/runtime/system-prompt-plugin-template/enabled"
@@ -521,7 +521,7 @@ def test_plugins_runtime_set_updates_dynamic_properties(
 
     handler_for("plugins")(
         Context(),
-        'runtime set system-prompt-plugin-template plugin.system_prompt="你是李明"',
+        'runtime set agent system-prompt-plugin-template plugin.system_prompt="你是李明"',
     )
 
     assert calls[0][0].endswith(
@@ -534,14 +534,14 @@ def test_plugins_set_rejects_missing_pair(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert handler_for("plugins")(Context(), "set api-auth") is False
-    assert "usage" in capsys.readouterr().out.lower()
+    assert "Scope is required" in capsys.readouterr().out
 
 
 def test_plugins_set_rejects_malformed_pair(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert handler_for("plugins")(Context(), "set api-auth broken") is False
-    assert "KEY=VALUE" in capsys.readouterr().out
+    assert "Scope is required" in capsys.readouterr().out
 
 
 def test_plugins_history_lists_versions(
@@ -649,7 +649,7 @@ def test_plugins_list_without_overrides_and_apply_without_targets(
         lambda url, **kwargs: Response({"scope": "api", "version": 2}),
     )
     handler_for("plugins")(Context(), "list")
-    handler_for("plugins")(Context(), "set api-auth plugin.token=x")
+    handler_for("plugins")(Context(), "set api api-auth plugin.token=x")
     output = capsys.readouterr().out
     assert "no registered plugins" in output
     assert "Applied" in output
