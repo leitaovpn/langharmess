@@ -99,3 +99,16 @@ def test_scope_reports_request_failures(
 
     assert command.handler(Context(), "") is False
     assert "Scope request failed" in capsys.readouterr().out
+
+
+def test_scope_noninteractive_reports_request_failures(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    plugin = make_plugin()
+    monkeypatch.setattr(
+        httpx, "get", lambda *a, **k: Response({"detail": "boom"}, status_code=503)
+    )
+    command = plugin.get_commands()[0]
+
+    assert command.handler(type("Args", (), {})()) == 1
+    assert "Scope request failed" in capsys.readouterr().out
