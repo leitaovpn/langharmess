@@ -94,7 +94,7 @@ def test_noninteractive_plugin_install_calls_runtime_api(
     assert command.add_arguments is not None
     command.add_arguments(parser)
     args = parser.parse_args(
-        ["install", "example.package", "echo", "--scope", "agent/a"]
+        ["install", "example.package", "echo", "--scope", "agent:a"]
     )
     calls: list[tuple[str, dict[str, Any]]] = []
 
@@ -109,7 +109,7 @@ def test_noninteractive_plugin_install_calls_runtime_api(
     assert calls[0][1]["json"] == {
         "package_id": "example.package",
         "contribution_id": "echo",
-        "scope_id": "agent/a",
+        "scope_id": "agent:a",
     }
 
 
@@ -350,13 +350,13 @@ def test_plugins_install_posts_dynamic_install(
 
     monkeypatch.setattr(httpx, "post", fake_post)
 
-    assert handler_for("plugins")(Context(), "install real.echo echo agent/a") is False
+    assert handler_for("plugins")(Context(), "install real.echo echo agent:a") is False
 
     assert calls[0][0].endswith("/plugins/install")
     assert calls[0][1]["json"] == {
         "package_id": "real.echo",
         "contribution_id": "echo",
-        "scope_id": "agent/a",
+        "scope_id": "agent:a",
     }
     output = capsys.readouterr().out
     assert "installed" in output
