@@ -146,6 +146,9 @@ class FakeDynamic:
         self.upgraded.append(name)
         return FakeRegistration(name)
 
+    def scopes(self):
+        return ()
+
 
 def make_plugin(tmp_path: Path) -> PluginsRoutePlugin:
     plugin = PluginsRoutePlugin()
