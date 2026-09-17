@@ -5,10 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from langharmess_plugin.scope_const import PLUGIN_KEY, PLUGIN_SCOPE_ID
 from langharmess_scope import ScopeId, ScopeTreeProvider
-
-PLUGIN_SCOPE_ID = "plugin.scope_id"
-PLUGIN_KEY = "plugin.key"
 
 
 @dataclass(frozen=True, slots=True)
