@@ -360,6 +360,19 @@ def test_upgrade_same_version_is_a_noop() -> None:
     assert store.saves == 1
 
 
+def test_update_properties_replaces_plugin_and_persists() -> None:
+    runtime = manager()
+    store = CountingStore()
+    mutations = coordinator(runtime, store)
+    mutations.install("dynamic.package", "dynamic")
+
+    updated = mutations.update_properties("dynamic", {"plugin.value": "new"})
+
+    assert updated.descriptor.properties == {"plugin.value": "new"}
+    runtime.replace_plugin.assert_called_once_with(updated.descriptor)
+    assert store.saves == 2
+
+
 def test_upgrade_persistence_failure_rolls_back_runtime() -> None:
     runtime = manager()
     store = CountingStore()

@@ -144,6 +144,38 @@ class RuntimeMutationCoordinator:
                 raise
             return updated
 
+    def update_properties(
+        self, name: str, properties: dict[str, object]
+    ) -> PersistedPluginRegistration:
+        """Replace a dynamic instance with merged properties and persist it."""
+        with self._lock:
+            index, current = self._registration(name)
+            descriptor = replace(
+                current.descriptor,
+                properties={**current.descriptor.properties, **properties},
+            )
+            if descriptor == current.descriptor:
+                return current
+            _, contribution = self._find(
+                current.package_id, current.contribution_id
+            )
+            self._kill_adapters(name)
+            self.manager.replace_plugin(descriptor)
+            updated = replace(current, descriptor=descriptor)
+            self._registrations[index] = updated
+            try:
+                if updated.enabled:
+                    self._install_adapters(updated, contribution)
+                self._persist_once()
+            except Exception:
+                self._kill_adapters(name)
+                self.manager.replace_plugin(current.descriptor)
+                if current.enabled:
+                    self._install_adapters(current, contribution)
+                self._registrations[index] = current
+                raise
+            return updated
+
     def upgrade(self, name: str) -> PersistedPluginRegistration:
         with self._lock:
             index, current = self._registration(name)
