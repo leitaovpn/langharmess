@@ -11,6 +11,7 @@ SOURCE_DIR = Path(__file__).resolve().parents[1] / "src"
 PUBLIC_MODULES = [
     "langharmess",
     "langharmess.__main__",
+    "langharmess.api_guard",
     "langharmess.bootstrap",
     "langharmess_scope",
     "langharmess_scope.contracts",
@@ -78,7 +79,6 @@ PUBLIC_MODULES = [
     "langharmess_api.plugins.sdk.http",
     "langharmess_cli",
     "langharmess_cli.plugin",
-    "langharmess_cli.common.api_guard",
     "langharmess_cli.common.cli",
     "langharmess_cli.common.i18n",
     "langharmess_cli.common.interactive",

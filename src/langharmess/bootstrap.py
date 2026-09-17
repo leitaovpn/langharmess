@@ -13,6 +13,7 @@ from importlib.metadata import EntryPoint, entry_points
 from pathlib import Path
 from typing import cast
 
+from langharmess.api_guard import APIGuard
 from langharmess_api.common.server import _apply_agent_configs
 from langharmess_api.contracts import SPEC_SERVER_SERVER, ServerServerProvider
 from langharmess_cli.contracts import SPEC_UI_SERVER, UIServerProvider
@@ -154,12 +155,27 @@ def _configured_descriptor(
     return replace(descriptor, properties=properties)
 
 
+def base_url_for(options: Namespace) -> str:
+    """Connect URL built from the launcher's server options.
+
+    ``--server-ip`` is a bind address; wildcard binds map to loopback when
+    connecting.
+    """
+    host = (
+        "127.0.0.1"
+        if options.server_ip in {"0.0.0.0", "::", ""}
+        else options.server_ip
+    )
+    return f"http://{host}:{options.server_port}"
+
+
 def _descriptors(
     packages: Iterable[PluginPackage],
     *,
     config_dir: str,
     locale: str,
     override_scope: str,
+    base_url: str,
 ) -> list[PluginDescriptor]:
     overrides = load_overrides(config_dir, override_scope)
     result: list[PluginDescriptor] = []
@@ -179,11 +195,16 @@ def _descriptors(
             if descriptor.name in seen:
                 continue
             seen.add(descriptor.name)
-            result.append(
-                apply_overrides(descriptor, overrides[descriptor.name])
-                if descriptor.name in overrides
-                else descriptor
-            )
+            if descriptor.name in overrides:
+                descriptor = apply_overrides(descriptor, overrides[descriptor.name])
+            if descriptor.name in {"cli-health", "cli-plugins"}:
+                # The launcher owns the connect address; rewrite after stored
+                # overrides so --server-ip/--server-port always win.
+                descriptor = replace(
+                    descriptor,
+                    properties={**descriptor.properties, "plugin.base_url": base_url},
+                )
+            result.append(descriptor)
     return result
 
 
@@ -193,6 +214,7 @@ def _select_packages(config_package: PluginPackage, options: Namespace) -> list[
         config_dir=options.config_dir,
         locale="en",
         override_scope="cli" if options.mode in {"ui", "all"} else "api",
+        base_url=base_url_for(options),
     )
     manager = PluginManager(PluginRegistry(config_descriptors))
     manager.start()
@@ -215,11 +237,13 @@ def _run(options: Namespace, remainder: list[str]) -> int:
     config_package = _discover_config_package(options.config_dir)
     packages = [config_package, *_select_packages(config_package, options)]
     locale = "en"
+    base_url = base_url_for(options)
     descriptors = _descriptors(
         packages,
         config_dir=options.config_dir,
         locale=locale,
         override_scope="cli" if options.mode in {"ui", "all"} else "api",
+        base_url=base_url,
     )
     manager = PluginManager(PluginRegistry(descriptors))
     manager.start()
@@ -249,13 +273,16 @@ def _run(options: Namespace, remainder: list[str]) -> int:
             server_service.server(options.server_ip, options.server_port)
             return 0
 
+        if options.mode == "all":
+            APIGuard(base_url, config_dir=options.config_dir).ensure_api_server()
+
         ui_service = cast(UIServerProvider | None, manager.get_service(SPEC_UI_SERVER))
         if ui_service is None:
             raise BootstrapError("UI package did not provide ui.server")
         return ui_service.run(
             {
                 "argv": remainder,
-                "base_url": f"http://{options.server_ip}:{options.server_port}",
+                "base_url": base_url,
                 "config_dir": options.config_dir,
                 "descriptors": descriptors,
                 "manager": manager,

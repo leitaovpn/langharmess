@@ -90,12 +90,15 @@ builtin_package = "langharmess_logging.plugin:builtin_package"
 - `--mode ui`
   - 只加载 config + ui + log
   - 通过 REST SDK 访问 server
-  - 如果目标 server 未启动，自动拉起一个 `langharmess --mode server`
+  - 不拉起 server；目标 server 必须已在运行
 
 - `--mode all`
   - UI 作为前台进程
   - 若目标 server 已存在则复用；否则拉起一个 server 子进程
+  - 守护由 bootstrap 调用 `langharmess.api_guard.APIGuard` 执行，base url、host、port、config-dir 由统一启动参数注入
   - 等效于“ui 模式 + server 守护”
+
+- 连接地址统一由 `--server-ip`/`--server-port` 拼接（通配 bind 地址映射为 `127.0.0.1`）；CLI 子命令不再接受自己的 `--base-url`，base_url 由 bootstrap 注入 ui 模块。
 
 - `--mode` 未指定时默认 `all`。
 
@@ -129,7 +132,6 @@ SPEC_UI_SDK = "ui.server_sdk"
 
 - `UISdkProvider`
   - 封装 health、chat stream、session、plugin 配置等 REST 调用
-  - 保留 `APIGuard` 的 server 守护能力，但 base url、host、port 由统一启动参数注入
 
 ### 6. server 与 agent 直接通信
 
@@ -201,6 +203,7 @@ server.set_agent(agent)
 - `--mode` 默认 `all`，非法 mode 报错。
 - `--server-ip`、`--server-port`、`--config-dir` 的默认值和 `--config_dir` 别名。
 - `server.set_agent(agent)` 注入关系。
+- `APIGuard` 只在 `--mode all` 下被调用，`--mode ui` 不拉起 server。
 - 多 UI 场景下，健康检查通过时不启动第二个 server。
 
 ### 集成 / e2e

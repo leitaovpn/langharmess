@@ -35,9 +35,15 @@ def wait_for_health(base_url: str, timeout: float = 15.0) -> bool:
 
 def test_cli_auto_starts_api_server() -> None:
     port = free_port()
-    base_url = f"http://127.0.0.1:{port}"
     result = subprocess.run(
-        [sys.executable, "-m", "langharmess_cli", "health", "--base-url", base_url],
+        [
+            sys.executable,
+            "-m",
+            "langharmess_cli",
+            "--server-port",
+            str(port),
+            "health",
+        ],
         env=ENV,
         check=False,
         capture_output=True,
@@ -74,9 +80,9 @@ def test_cli_reuses_running_api_server() -> None:
                 sys.executable,
                 "-m",
                 "langharmess_cli",
+                "--server-port",
+                str(port),
                 "health",
-                "--base-url",
-                base_url,
             ],
             env=ENV,
             check=False,
@@ -93,7 +99,6 @@ def test_cli_reuses_running_api_server() -> None:
 
 def test_cli_interactive_mode(tmp_path: Path) -> None:
     port = free_port()
-    base_url = f"http://127.0.0.1:{port}"
     result = subprocess.run(
         [
             sys.executable,
@@ -102,8 +107,8 @@ def test_cli_interactive_mode(tmp_path: Path) -> None:
             "interactive",
             "--dir",
             str(tmp_path),
-            "--base-url",
-            base_url,
+            "--server-port",
+            str(port),
         ],
         env=ENV,
         input="/health\nexit\n",

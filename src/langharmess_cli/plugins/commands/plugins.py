@@ -10,7 +10,6 @@ from typing import Any
 import httpx
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_cli.common.api_guard import APIGuard
 from langharmess_cli.contracts import (
     CLICommandProvider,
     CommandSpec,
@@ -34,6 +33,7 @@ def _coerce(value: str) -> Any:
 @Property("_plugin_name", "plugin.name", "plugin-command")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @Property("_locale", "plugin.ui.locale", "en")
+@Property("_base_url", "plugin.base_url", "http://127.0.0.1:11534")
 class PluginCommandPlugin:
     """Reads and edits versioned plugin configuration through the API."""
 
@@ -41,6 +41,7 @@ class PluginCommandPlugin:
         self._plugin_name = "plugin-command"
         self._plugin_version = "1.0.0"
         self._locale = "en"
+        self._base_url = "http://127.0.0.1:11534"
 
     def get_commands(self) -> list[CommandSpec]:
         return [
@@ -60,12 +61,10 @@ class PluginCommandPlugin:
         )
         parser.add_argument("values", nargs="*")
         parser.add_argument("--scope")
-        parser.add_argument("--base-url", default="http://127.0.0.1:11534")
         parser.add_argument("--token", default="secret")
 
     def _command_handler(self, args: Namespace) -> int:
-        APIGuard(args.base_url).ensure_api_server()
-        context = SimpleNamespace(base_url=args.base_url, token=args.token)
+        context = SimpleNamespace(base_url=self._base_url, token=args.token)
         try:
             if args.action == "discover":
                 self._post_raw(context, "/plugins/rescan", {})

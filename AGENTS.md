@@ -97,7 +97,7 @@ Rules:
 - `langharmess_core`: agent loop and agent plugin contracts/implementations.
 - `langharmess_plugin`: plugin manager and registry.
 - `langharmess_api`: plugin-driven FastAPI server.
-- `langharmess_cli`: plugin-driven CLI with API auto-start.
+- `langharmess_cli`: plugin-driven CLI (the UI module).
 
 ## Quality gates
 
@@ -136,14 +136,15 @@ The same gate is enforced locally by `.githooks/pre-commit` and in CI by
   must point inside `src/`. A copy under `site-packages` means a plain
   `pip install .` replaced the editable links — repair with
   `.venv/bin/python -m pip install -e .`, otherwise `python -m langharmess_api`
-  (including the server the CLI auto-starts) silently runs old code.
+  (including the server `--mode all` auto-starts) silently runs old code.
 - Interactive mode uses prompt_toolkit and needs a real TTY: debug it with
   `"console": "integratedTerminal"`.
-- The interactive CLI auto-starts the API server as a subprocess
-  (`langharmess_cli.common.api_guard.APIGuard`); a debugger attached to the CLI
-  does not follow into it. To debug the server, launch the "API server"
-  configuration separately or use the "full stack" compound — the CLI reuses
-  an already-running server.
+- `langharmess --mode all` auto-starts the API server as a subprocess
+  (`langharmess.api_guard.APIGuard`, owned by the bootstrap); a debugger
+  attached to the UI process does not follow into it. To debug the server,
+  launch the "API server" configuration separately or use the "full stack"
+  compound — the guard reuses an already-running server. `--mode ui` starts
+  no server, so it needs one already listening.
 - Without `--provider` the CLI picks a random provider from
   `~/.langharmess/langharmess.toml`; pass `--provider` for deterministic
   sessions.

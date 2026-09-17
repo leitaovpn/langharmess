@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import argparse
+from argparse import Namespace
 
 import httpx
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_cli.common.api_guard import APIGuard
 from langharmess_cli.contracts import (
     CLICommandProvider,
     CommandSpec,
@@ -29,12 +28,8 @@ class HealthCommandPlugin:
         self._base_url = "http://127.0.0.1:11534"
         self._token = "secret"
 
-    def _add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument("--base-url", default=self._base_url)
-
-    def _handler(self, args: argparse.Namespace) -> int:
-        base_url = args.base_url.rstrip("/")
-        APIGuard(base_url).ensure_api_server()
+    def _handler(self, args: Namespace) -> int:
+        base_url = self._base_url.rstrip("/")
         response = httpx.get(
             f"{base_url}/health",
             headers={"Authorization": f"Bearer {self._token}"},
@@ -49,7 +44,6 @@ class HealthCommandPlugin:
                 name="health",
                 help="Check the API server health",
                 handler=self._handler,
-                add_arguments=self._add_arguments,
             )
         ]
 
@@ -66,7 +60,6 @@ class HealthCommandPlugin:
         self, context: InteractiveCommandContext, line: str
     ) -> bool:
         base_url = context.base_url.rstrip("/")
-        APIGuard(base_url).ensure_api_server()
         response = httpx.get(
             f"{base_url}/health",
             headers={"Authorization": f"Bearer {context.token}"},

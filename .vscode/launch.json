@@ -15,7 +15,7 @@
             "console": "integratedTerminal"
         },
         {
-            // 非交互命令示例（health，会以子进程方式自动拉起 API server）；
+            // 非交互命令示例（health；`--mode all` 会以子进程方式自动拉起 API server）；
             // 调试其它子命令时替换 args，例如 ["--provider", "chatgpt-chat", "health"]。
             "name": "CLI: custom args",
             "type": "debugpy",
@@ -27,7 +27,7 @@
         },
         {
             // python -m langharmess_api：FastAPI/uvicorn 服务端。
-            // 单独调试它时，CLI 的 APIGuard 检测到 /health 可用就不会再拉起子进程。
+            // 单独调试它时，bootstrap 的 APIGuard 检测到 /health 可用就不会再拉起子进程。
             "name": "API server",
             "type": "debugpy",
             "request": "launch",

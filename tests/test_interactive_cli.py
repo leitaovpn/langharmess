@@ -329,20 +329,12 @@ def test_health_interactive_handler(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    class FakeGuard:
-        def __init__(self, base_url):
-            self.base_url = base_url
-
-        def ensure_api_server(self):
-            return None
-
     class Response:
         status_code = 200
 
         def json(self):
             return {"status": "ok"}
 
-    monkeypatch.setattr(health_module, "APIGuard", FakeGuard)
     monkeypatch.setattr(health_module.httpx, "get", lambda *a, **k: Response())
 
     plugin = HealthCommandPlugin()

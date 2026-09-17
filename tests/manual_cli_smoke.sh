@@ -17,15 +17,15 @@ export LANG_HARMESS_DIR="$SMOKE_DIR"
 
 echo "== dynamic plugin lifecycle =="
 "$CLI" --dir "$SMOKE_DIR" plugins discover \
-  --base-url "http://127.0.0.1:$SERVER_PORT" --token secret
+  --server-port "$SERVER_PORT" --token secret
 "$CLI" --dir "$SMOKE_DIR" plugins install real.echo echo \
-  --base-url "http://127.0.0.1:$SERVER_PORT" --token secret
+  --server-port "$SERVER_PORT" --token secret
 "$CLI" --dir "$SMOKE_DIR" plugins disable real-echo \
-  --base-url "http://127.0.0.1:$SERVER_PORT" --token secret
+  --server-port "$SERVER_PORT" --token secret
 "$CLI" --dir "$SMOKE_DIR" plugins enable real-echo \
-  --base-url "http://127.0.0.1:$SERVER_PORT" --token secret
+  --server-port "$SERVER_PORT" --token secret
 "$CLI" --dir "$SMOKE_DIR" plugins uninstall real-echo \
-  --base-url "http://127.0.0.1:$SERVER_PORT" --token secret
+  --server-port "$SERVER_PORT" --token secret
 
 echo "== real LLM interactive flow =="
 printf '%s\n' \
@@ -36,7 +36,7 @@ printf '%s\n' \
   'what did I just say?' \
   '/exit' |
   "$CLI" --dir "$SMOKE_DIR" --provider "$PROVIDER" interactive \
-    --base-url "http://127.0.0.1:$SERVER_PORT" \
+    --server-port "$SERVER_PORT" \
     --token secret \
     --user-id smoke_user \
     --agent-id simple_agent

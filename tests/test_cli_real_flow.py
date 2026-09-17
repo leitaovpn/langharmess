@@ -68,7 +68,7 @@ def wait_for_health(base_url: str, timeout: float = 30.0) -> bool:
 @contextmanager
 def running_api(
     tmp_path: Path, plugin_root: Path
-) -> Iterator[tuple[str, subprocess.Popen[str]]]:
+) -> Iterator[tuple[str, int, subprocess.Popen[str]]]:
     port = free_port()
     base_url = f"http://127.0.0.1:{port}"
     process = subprocess.Popen(
@@ -92,7 +92,7 @@ def running_api(
     try:
         if not wait_for_health(base_url):
             raise RuntimeError("API server did not become ready")
-        yield base_url, process
+        yield base_url, port, process
     finally:
         process.terminate()
         try:
@@ -165,7 +165,7 @@ def create_agent(base_url: str, agent_id: str, name: str) -> None:
 def run_interactive(
     tmp_path: Path,
     plugin_root: Path,
-    base_url: str,
+    port: int,
     *,
     user_id: str,
     agent_id: str,
@@ -180,8 +180,8 @@ def run_interactive(
             "--provider",
             "fake",
             "interactive",
-            "--base-url",
-            base_url,
+            "--server-port",
+            str(port),
             "--token",
             "secret",
             "--user-id",
@@ -263,11 +263,11 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
 ) -> None:
     plugin_root = create_dynamic_plugin(tmp_path / "dynamic")
 
-    with running_api(tmp_path, plugin_root) as (base_url, _server):
+    with running_api(tmp_path, plugin_root) as (base_url, port, _server):
         discover = run_cli(
             tmp_path,
             plugin_root,
-            ["plugins", "discover", "--base-url", base_url, "--token", "secret"],
+            ["plugins", "discover", "--server-port", str(port), "--token", "secret"],
         )
         assert discover.returncode == 0, discover.stderr
         packages = json.loads(discover.stdout).get("packages") or []
@@ -286,8 +286,8 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
                 "install",
                 "real.echo",
                 "echo",
-                "--base-url",
-                base_url,
+                "--server-port",
+                str(port),
                 "--token",
                 "secret",
             ],
@@ -303,8 +303,8 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
                 "plugins",
                 "disable",
                 "real-echo",
-                "--base-url",
-                base_url,
+                "--server-port",
+                str(port),
                 "--token",
                 "secret",
             ],
@@ -321,8 +321,8 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
                 "plugins",
                 "enable",
                 "real-echo",
-                "--base-url",
-                base_url,
+                "--server-port",
+                str(port),
                 "--token",
                 "secret",
             ],
@@ -339,8 +339,8 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
                 "plugins",
                 "uninstall",
                 "real-echo",
-                "--base-url",
-                base_url,
+                "--server-port",
+                str(port),
                 "--token",
                 "secret",
             ],
@@ -356,7 +356,7 @@ def test_real_cli_llm_tool_call_with_dynamic_echo(tmp_path: Path) -> None:
     fake.start()
     try:
         write_fake_provider(tmp_path, fake)
-        with running_api(tmp_path, plugin_root) as (base_url, _server):
+        with running_api(tmp_path, plugin_root) as (base_url, port, _server):
             install = httpx.post(
                 f"{base_url}/plugins/install",
                 headers=auth_headers(),
@@ -371,7 +371,7 @@ def test_real_cli_llm_tool_call_with_dynamic_echo(tmp_path: Path) -> None:
             result = run_interactive(
                 tmp_path,
                 plugin_root,
-                base_url,
+                port,
                 user_id="tool_user",
                 agent_id="simple_agent",
                 session_id="tool_session",
@@ -394,11 +394,11 @@ def test_real_cli_memory_isolated_by_session(tmp_path: Path) -> None:
     fake.start()
     try:
         write_fake_provider(tmp_path, fake)
-        with running_api(tmp_path, plugin_root) as (base_url, _server):
+        with running_api(tmp_path, plugin_root) as (base_url, port, _server):
             first = run_interactive(
                 tmp_path,
                 plugin_root,
-                base_url,
+                port,
                 user_id="memory_user",
                 agent_id="simple_agent",
                 session_id="session-a",
@@ -409,7 +409,7 @@ def test_real_cli_memory_isolated_by_session(tmp_path: Path) -> None:
             second = run_interactive(
                 tmp_path,
                 plugin_root,
-                base_url,
+                port,
                 user_id="memory_user",
                 agent_id="simple_agent",
                 session_id="session-b",
@@ -452,13 +452,13 @@ def test_real_cli_memory_isolated_by_agent_and_session_index_tracks_agents(
     fake.start()
     try:
         write_fake_provider(tmp_path, fake)
-        with running_api(tmp_path, plugin_root) as (base_url, _server):
+        with running_api(tmp_path, plugin_root) as (base_url, port, _server):
             create_agent(base_url, "agent_b", "Agent B")
 
             result = run_interactive(
                 tmp_path,
                 plugin_root,
-                base_url,
+                port,
                 user_id="agent_memory_user",
                 agent_id="simple_agent",
                 session_id="shared-session",
@@ -517,7 +517,7 @@ def test_real_llm_smoke(tmp_path: Path) -> None:
     shutil.copy(source, tmp_path / "langharmess.toml")
 
     plugin_root = create_dynamic_plugin(tmp_path / "dynamic")
-    with running_api(tmp_path, plugin_root) as (base_url, _server):
+    with running_api(tmp_path, plugin_root) as (base_url, port, _server):
         result = run_cli(
             tmp_path,
             plugin_root,
@@ -525,8 +525,8 @@ def test_real_llm_smoke(tmp_path: Path) -> None:
                 "--provider",
                 provider,
                 "interactive",
-                "--base-url",
-                base_url,
+                "--server-port",
+                str(port),
                 "--token",
                 "secret",
                 "--user-id",
