@@ -88,6 +88,7 @@ PUBLIC_MODULES = [
     "langharmess_cli.plugins",
     "langharmess_cli.plugins.commands.health",
     "langharmess_cli.plugins.commands.plugins",
+    "langharmess_cli.plugins.commands.scope",
     "langharmess_cli.plugins.commands.session",
     "langharmess_cli.plugins.server",
     "langharmess_core.plugins.agents.server",
