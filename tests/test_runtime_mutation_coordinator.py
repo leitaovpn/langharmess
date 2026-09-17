@@ -223,11 +223,11 @@ def test_each_successful_mutation_persists_exactly_once() -> None:
 
     mutations.install("dynamic.package", "dynamic")
     assert store.saves == 1
-    mutations.set_enabled("dynamic", False)
+    mutations.set_enabled("dynamic", False, scope_id=ScopeId("server"))
     assert store.saves == 2
-    mutations.set_enabled("dynamic", True)
+    mutations.set_enabled("dynamic", True, scope_id=ScopeId("server"))
     assert store.saves == 3
-    mutations.uninstall("dynamic")
+    mutations.uninstall("dynamic", scope_id=ScopeId("server"))
     assert store.saves == 4
 
 
@@ -323,11 +323,11 @@ def test_enable_installs_adapters_and_disable_kills_them() -> None:
     mutations = coordinator(runtime, store, packages=(exporting_package(),))
     mutations.install("export.package", "export")
 
-    mutations.set_enabled("export", False)
+    mutations.set_enabled("export", False, scope_id=ScopeId("server"))
     assert runtime.kill_instance.call_count == 2
     assert "disabled" in mutations.registrations()[0].status
 
-    mutations.set_enabled("export", True)
+    mutations.set_enabled("export", True, scope_id=ScopeId("server"))
     assert runtime.instantiate_instance.call_count == 4
     assert "installed" in mutations.registrations()[0].status
 
@@ -339,7 +339,7 @@ def test_upgrade_replaces_plugin_and_persists() -> None:
     mutations.install("dynamic.package", "dynamic")
 
     mutations._catalog = {"dynamic.package": dynamic_package(version="2")}
-    updated = mutations.upgrade("dynamic")
+    updated = mutations.upgrade("dynamic", scope_id=ScopeId("server"))
 
     assert updated.package_version == "2"
     assert updated.descriptor.version == "2"
@@ -353,7 +353,7 @@ def test_upgrade_same_version_is_a_noop() -> None:
     mutations = coordinator(runtime, store)
     mutations.install("dynamic.package", "dynamic")
 
-    current = mutations.upgrade("dynamic")
+    current = mutations.upgrade("dynamic", scope_id=ScopeId("server"))
 
     assert current.package_version == "1"
     runtime.replace_plugin.assert_not_called()
@@ -366,7 +366,9 @@ def test_update_properties_replaces_plugin_and_persists() -> None:
     mutations = coordinator(runtime, store)
     mutations.install("dynamic.package", "dynamic")
 
-    updated = mutations.update_properties("dynamic", {"plugin.value": "new"})
+    updated = mutations.update_properties(
+        "dynamic", {"plugin.value": "new"}, scope_id=ScopeId("server")
+    )
 
     assert updated.descriptor.properties == {"plugin.value": "new"}
     runtime.replace_plugin.assert_called_once_with(updated.descriptor)
@@ -382,7 +384,7 @@ def test_upgrade_persistence_failure_rolls_back_runtime() -> None:
     mutations._catalog = {"dynamic.package": dynamic_package(version="2")}
     store.fail = True
     with pytest.raises(OSError, match="disk full"):
-        mutations.upgrade("dynamic")
+        mutations.upgrade("dynamic", scope_id=ScopeId("server"))
 
     assert mutations.registrations()[0].package_version == "1"
 
@@ -395,7 +397,7 @@ def test_uninstall_persistence_failure_rolls_back_runtime() -> None:
 
     store.fail = True
     with pytest.raises(OSError, match="disk full"):
-        mutations.uninstall("dynamic")
+        mutations.uninstall("dynamic", scope_id=ScopeId("server"))
 
     assert runtime.registry.get("dynamic") is not None
     assert mutations.registrations() == (registration,)
@@ -407,11 +409,11 @@ def test_unknown_mutation_targets_raise_key_error() -> None:
     mutations = coordinator(runtime, store)
 
     with pytest.raises(KeyError):
-        mutations.set_enabled("nope", True)
+        mutations.set_enabled("nope", True, scope_id=ScopeId("server"))
     with pytest.raises(KeyError):
-        mutations.upgrade("nope")
+        mutations.upgrade("nope", scope_id=ScopeId("server"))
     with pytest.raises(KeyError):
-        mutations.uninstall("nope")
+        mutations.uninstall("nope", scope_id=ScopeId("server"))
     with pytest.raises(KeyError):
         mutations.install("missing.package", "contribution")
     mutations._catalog = {"dynamic.package": dynamic_package()}
@@ -642,7 +644,7 @@ def test_set_enabled_noop_when_state_is_unchanged() -> None:
     mutations = coordinator(runtime, store)
     mutations.install("dynamic.package", "dynamic")
 
-    current = mutations.set_enabled("dynamic", True)
+    current = mutations.set_enabled("dynamic", True, scope_id=ScopeId("server"))
 
     assert current.enabled is True
     assert store.saves == 1
@@ -653,11 +655,11 @@ def test_set_enabled_enable_persistence_failure_rolls_back() -> None:
     store = CountingStore()
     mutations = coordinator(runtime, store)
     mutations.install("dynamic.package", "dynamic")
-    mutations.set_enabled("dynamic", False)
+    mutations.set_enabled("dynamic", False, scope_id=ScopeId("server"))
 
     store.fail = True
     with pytest.raises(OSError, match="disk full"):
-        mutations.set_enabled("dynamic", True)
+        mutations.set_enabled("dynamic", True, scope_id=ScopeId("server"))
 
     assert mutations.registrations()[0].enabled is False
     assert runtime.registry.get("dynamic").enabled is False
@@ -671,7 +673,7 @@ def test_set_enabled_disable_persistence_failure_rolls_back() -> None:
 
     store.fail = True
     with pytest.raises(OSError, match="disk full"):
-        mutations.set_enabled("dynamic", False)
+        mutations.set_enabled("dynamic", False, scope_id=ScopeId("server"))
 
     assert mutations.registrations()[0].enabled is True
     assert runtime.registry.get("dynamic").enabled is True
@@ -690,7 +692,7 @@ def test_upgrade_with_adapters_installs_them() -> None:
             exporting_package().contributions,
         )
     }
-    updated = mutations.upgrade("export")
+    updated = mutations.upgrade("export", scope_id=ScopeId("server"))
 
     assert updated.package_version == "2"
     assert runtime.instantiate_instance.call_count == 4
@@ -707,3 +709,37 @@ def test_install_export_fails_when_target_service_is_missing() -> None:
 
     assert mutations.registrations() == ()
     assert runtime.registry.get("export") is None
+
+
+def test_same_name_in_two_scopes_targets_only_the_given_scope() -> None:
+    server_reg = PersistedPluginRegistration(
+        "dynamic.package", "dynamic", "1", ScopeId("server"), "dynamic",
+        descriptor("dynamic"), True, "installed",
+    )
+    ui_reg = PersistedPluginRegistration(
+        "dynamic.package", "dynamic", "1", ScopeId("ui"), "dynamic",
+        descriptor("dynamic", scope="ui"), True, "installed",
+    )
+    store = CountingStore()
+    store.snapshot = RuntimeStateSnapshot(
+        1,
+        (
+            {"id": "root", "parent_id": None, "name": "root"},
+            {"id": "server", "parent_id": "root", "name": "server"},
+            {"id": "ui", "parent_id": "root", "name": "ui"},
+        ),
+        (server_reg, ui_reg),
+    )
+    runtime = manager()
+    runtime.registry.add(descriptor("dynamic"))
+    runtime.bound.add("dynamic")
+    mutations = RuntimeMutationCoordinator(runtime, store, PluginDiscovery(lambda: []))
+
+    updated = mutations.set_enabled("dynamic", False, scope_id=ScopeId("server"))
+
+    assert updated.scope_id == ScopeId("server")
+    assert mutations.registrations()[0].enabled is False
+    assert mutations.registrations()[1].enabled is True
+
+    with pytest.raises(KeyError, match="not found in scope"):
+        mutations.set_enabled("dynamic", False, scope_id=ScopeId("agent"))
