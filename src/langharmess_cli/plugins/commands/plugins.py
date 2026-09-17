@@ -31,6 +31,18 @@ def _coerce(value: str) -> Any:
         return value
 
 
+CONFIG_SCOPES = ("api", "cli")
+RUNTIME_SCOPES = ("root", "server", "ui", "agent")
+
+
+def _is_config_scope(value: str) -> bool:
+    return value in CONFIG_SCOPES or value.startswith("agent:")
+
+
+def _is_runtime_scope(value: str) -> bool:
+    return value in RUNTIME_SCOPES or value.startswith("agent:")
+
+
 @ComponentFactory("cli-plugins-command-factory")
 @Provides(CLICommandProvider)
 @Property("_plugin_name", "plugin.name", "plugin-command")
@@ -83,17 +95,30 @@ class PluginCommandPlugin:
                 self._post_raw(context, "/plugins/rescan", {})
                 payload = self._get_raw(context, "/plugins/discovered")
             elif args.action == "list":
+                if args.scope and not _is_runtime_scope(args.scope):
+                    raise ValueError(
+                        "list --scope must be root|server|ui|agent|agent:<id>"
+                    )
                 params = {"scope": args.scope} if args.scope else None
                 payload = self._get_raw(context, "/plugins/runtime", params=params)
             elif args.action == "config":
+                if args.scope and not _is_config_scope(args.scope):
+                    raise ValueError("config --scope must be api|cli|agent:<id>")
                 payload = self._get_raw(
                     context,
                     "/plugins",
                     params={"scope": args.scope} if args.scope else None,
                 )
             elif args.action == "runtime":
-                if len(args.values) < 3 or args.values[0] != "set":
-                    raise ValueError("runtime requires set PLUGIN_NAME KEY=VALUE")
+                if (
+                    len(args.values) < 3
+                    or args.values[0] != "set"
+                    or not _is_runtime_scope(args.scope or "")
+                ):
+                    raise ValueError(
+                        "runtime requires set PLUGIN_NAME KEY=VALUE "
+                        "--scope root|server|ui|agent|agent:<id>"
+                    )
                 properties = self._properties(args.values[2:])
                 payload = self._put_raw(
                     context,
@@ -114,8 +139,11 @@ class PluginCommandPlugin:
                     },
                 )
             elif args.action in {"enable", "disable"}:
-                if len(args.values) != 1 or not args.scope:
-                    raise ValueError(f"{args.action} requires PLUGIN_NAME --scope SCOPE")
+                if len(args.values) != 1 or not _is_runtime_scope(args.scope or ""):
+                    raise ValueError(
+                        f"{args.action} requires PLUGIN_NAME "
+                        "--scope root|server|ui|agent|agent:<id>"
+                    )
                 payload = self._put_raw(
                     context,
                     f"/plugins/runtime/{args.values[0]}/enabled",
@@ -123,14 +151,20 @@ class PluginCommandPlugin:
                     params={"scope": args.scope},
                 )
             elif args.action == "upgrade":
-                if len(args.values) != 1 or not args.scope:
-                    raise ValueError("upgrade requires PLUGIN_NAME --scope SCOPE")
+                if len(args.values) != 1 or not _is_runtime_scope(args.scope or ""):
+                    raise ValueError(
+                        "upgrade requires PLUGIN_NAME "
+                        "--scope root|server|ui|agent|agent:<id>"
+                    )
                 payload = self._post_raw(
                     context, f"/plugins/runtime/{args.values[0]}/upgrade", {}, params={"scope": args.scope}
                 )
             else:
-                if len(args.values) != 1 or not args.scope:
-                    raise ValueError("uninstall requires PLUGIN_NAME --scope SCOPE")
+                if len(args.values) != 1 or not _is_runtime_scope(args.scope or ""):
+                    raise ValueError(
+                        "uninstall requires PLUGIN_NAME "
+                        "--scope root|server|ui|agent|agent:<id>"
+                    )
                 payload = self._delete_raw(
                     context, f"/plugins/runtime/{args.values[0]}", params={"scope": args.scope}
                 )
