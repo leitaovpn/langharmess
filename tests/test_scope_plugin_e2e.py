@@ -143,7 +143,6 @@ def test_scope_and_plugin_full_lifecycle_with_best_and_aggregate_shadowing() -> 
     try:
         for descriptor in registry.list():
             manager.install_plugin(descriptor)
-        manager.ensure_scope(ScopeId("agent"), name="Agent")
         manager.ensure_scope(
             ScopeId("session"), name="Session", parent_id=ScopeId("agent")
         )
@@ -259,11 +258,6 @@ def test_runtime_scope_visibility_matrix_with_real_service_registry() -> None:
     manager.start()
     try:
         manager.install_plugin(tools_template)
-        manager.ensure_scope(ScopeId("ui"), name="UI")
-        manager.ensure_scope(ScopeId("server"), name="Server")
-        manager.ensure_scope(
-            ScopeId("agent"), name="Agent", parent_id=ScopeId("server")
-        )
         manager.ensure_scope(
             ScopeId("agent/a"), name="A", parent_id=ScopeId("agent")
         )
@@ -300,10 +294,9 @@ def test_runtime_scope_visibility_matrix_with_real_service_registry() -> None:
         assert visible("root") == {"root_other"}
         assert visible("ui") == {"root_other", "ui_tool"}
         assert visible("server") == {"root_other", "server_tool"}
-        assert visible("agent") == {"root_other", "server_tool", "agent_tool"}
+        assert visible("agent") == {"root_other", "agent_tool"}
         assert visible("agent/a") == {
             "root_other",
-            "server_tool",
             "agent_tool",
             "agent_a_tool",
         }

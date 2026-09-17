@@ -118,9 +118,6 @@ def make_manager() -> PluginManager:
 def install_templates(manager: PluginManager) -> None:
     for descriptor in manager.registry.list():
         manager.install_plugin(descriptor)
-    manager.ensure_scope(ScopeId("ui"), name="UI")
-    manager.ensure_scope(ScopeId("server"), name="Server")
-    manager.ensure_scope(ScopeId("agent"), name="Agent", parent_id=ScopeId("server"))
     manager.ensure_scope(ScopeId("agent/a"), name="A", parent_id=ScopeId("agent"))
 
 
