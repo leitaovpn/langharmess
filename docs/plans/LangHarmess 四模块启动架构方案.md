@@ -119,7 +119,7 @@ SPEC_UI_SDK = "ui.server_sdk"
 
 - `ServerServerProvider`
   - `set_agent(agent) -> None`
-  - `serve(host, port) -> None`
+  - `server(host, port) -> None`
 
 - `AgentServerProvider`
   - `list_agents()`

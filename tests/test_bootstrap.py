@@ -204,14 +204,14 @@ def test_run_assembles_real_ui_and_server_managers(
 
     calls = []
 
-    def serve(self, host: str, port: int) -> None:
+    def server(self, host: str, port: int) -> None:
         calls.append(("server", host, port))
 
     def run(self, config) -> int:
         calls.append(("ui", dict(config)))
         return 8
 
-    monkeypatch.setattr(ServerServerService, "serve", serve)
+    monkeypatch.setattr(ServerServerService, "server", server)
     monkeypatch.setattr(UIServerService, "run", run)
     base = {
         "server_ip": "127.0.0.2",

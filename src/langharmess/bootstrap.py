@@ -246,8 +246,9 @@ def _run(options: Namespace, remainder: list[str]) -> int:
             )
             if server_service is None:
                 raise BootstrapError("Server package did not provide server.server")
-            server_service.serve(options.server_ip, options.server_port)
+            server_service.server(options.server_ip, options.server_port)
             return 0
+
         ui_service = cast(UIServerProvider | None, manager.get_service(SPEC_UI_SERVER))
         if ui_service is None:
             raise BootstrapError("UI package did not provide ui.server")
