@@ -48,7 +48,7 @@ class ServerServerService:
     def set_agent(self, agent: Any) -> None:
         self._agent = agent
 
-    def serve(self, host: str, port: int) -> None:
+    def server(self, host: str, port: int) -> None:
         if self._api is None:
             raise RuntimeError("API server service is unavailable")
         app = self._api.build_app()

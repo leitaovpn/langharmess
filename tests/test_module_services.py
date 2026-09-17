@@ -99,7 +99,7 @@ def test_server_service_builds_app_and_exposes_agent(
         lambda target, **kwargs: captured.update(target=target, **kwargs),
     )
 
-    service.serve("0.0.0.0", 9123)
+    service.server("0.0.0.0", 9123)
 
     assert app.state.agent is agent
     assert captured == {
@@ -110,7 +110,7 @@ def test_server_service_builds_app_and_exposes_agent(
     }
     service._api = None
     with pytest.raises(RuntimeError, match="unavailable"):
-        service.serve("127.0.0.1", 1)
+        service.server("127.0.0.1", 1)
 
 
 def test_agent_server_delegates_and_reloads_after_replacement() -> None:
