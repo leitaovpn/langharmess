@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import httpx
 import pytest
 
+from langharmess_cli.contracts import InteractiveCommandSpec
 from langharmess_cli.plugins.commands.scope import ScopeCommandPlugin
 
 SCOPE_PAYLOAD = {
@@ -24,6 +26,16 @@ class Context:
     def __init__(self) -> None:
         self.base_url = "http://api"
         self.token = "secret"
+        self.commands: Mapping[str, InteractiveCommandSpec] = {}
+        self.user_id = "local_user"
+        self.agent_id = "simple_agent"
+        self.session_id: str | None = None
+
+    def list_providers(self) -> list[str]:
+        return []
+
+    def switch_provider(self, name: str) -> bool:
+        return False
 
     def refresh_status(self) -> None:
         return None

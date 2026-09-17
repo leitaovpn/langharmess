@@ -26,9 +26,15 @@ def test_start_seeds_builtin_scopes() -> None:
             SERVER_SCOPE_ID,
             AGENT_SCOPE_ID,
         }
-        assert tree.get(AGENT_SCOPE_ID).parent_id == ROOT_SCOPE_ID
-        assert tree.get(SERVER_SCOPE_ID).parent_id == ROOT_SCOPE_ID
-        assert tree.get(UI_SCOPE_ID).parent_id == ROOT_SCOPE_ID
+        agent = tree.get(AGENT_SCOPE_ID)
+        assert agent is not None
+        assert agent.parent_id == ROOT_SCOPE_ID
+        server = tree.get(SERVER_SCOPE_ID)
+        assert server is not None
+        assert server.parent_id == ROOT_SCOPE_ID
+        ui = tree.get(UI_SCOPE_ID)
+        assert ui is not None
+        assert ui.parent_id == ROOT_SCOPE_ID
     finally:
         manager.stop()
 
@@ -41,9 +47,15 @@ def test_seeding_is_idempotent_across_restarts() -> None:
     try:
         tree = manager.scope_tree
         assert len(tree.snapshot().scopes) == 4
-        assert tree.get(AGENT_SCOPE_ID).parent_id == ROOT_SCOPE_ID
-        assert tree.get(SERVER_SCOPE_ID).parent_id == ROOT_SCOPE_ID
-        assert tree.get(UI_SCOPE_ID).parent_id == ROOT_SCOPE_ID
+        agent = tree.get(AGENT_SCOPE_ID)
+        assert agent is not None
+        assert agent.parent_id == ROOT_SCOPE_ID
+        server = tree.get(SERVER_SCOPE_ID)
+        assert server is not None
+        assert server.parent_id == ROOT_SCOPE_ID
+        ui = tree.get(UI_SCOPE_ID)
+        assert ui is not None
+        assert ui.parent_id == ROOT_SCOPE_ID
     finally:
         manager.stop()
 
