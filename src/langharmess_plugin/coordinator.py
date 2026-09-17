@@ -105,9 +105,11 @@ class RuntimeMutationCoordinator:
                 raise
             return registration
 
-    def set_enabled(self, name: str, enabled: bool) -> PersistedPluginRegistration:
+    def set_enabled(
+        self, name: str, enabled: bool, *, scope_id: ScopeId
+    ) -> PersistedPluginRegistration:
         with self._lock:
-            index, current = self._registration(name)
+            index, current = self._registration(name, scope_id)
             if current.enabled == enabled:
                 return current
             if enabled:
@@ -145,11 +147,11 @@ class RuntimeMutationCoordinator:
             return updated
 
     def update_properties(
-        self, name: str, properties: dict[str, object]
+        self, name: str, properties: dict[str, object], *, scope_id: ScopeId
     ) -> PersistedPluginRegistration:
         """Replace a dynamic instance with merged properties and persist it."""
         with self._lock:
-            index, current = self._registration(name)
+            index, current = self._registration(name, scope_id)
             descriptor = replace(
                 current.descriptor,
                 properties={**current.descriptor.properties, **properties},
@@ -176,9 +178,9 @@ class RuntimeMutationCoordinator:
                 raise
             return updated
 
-    def upgrade(self, name: str) -> PersistedPluginRegistration:
+    def upgrade(self, name: str, *, scope_id: ScopeId) -> PersistedPluginRegistration:
         with self._lock:
-            index, current = self._registration(name)
+            index, current = self._registration(name, scope_id)
             package, contribution = self._find(
                 current.package_id, current.contribution_id
             )
@@ -208,9 +210,9 @@ class RuntimeMutationCoordinator:
                 raise
             return updated
 
-    def uninstall(self, name: str) -> None:
+    def uninstall(self, name: str, *, scope_id: ScopeId) -> None:
         with self._lock:
-            index, current = self._registration(name)
+            index, current = self._registration(name, scope_id)
             self._kill_adapters(name)
             self.manager.uninstall_plugin(name)
             self.manager.registry.remove(name)
@@ -330,12 +332,15 @@ class RuntimeMutationCoordinator:
                 raise RuntimeMutationError("Persisted scope tree contains an orphan")
 
     def _registration(
-        self, name: str
+        self, name: str, scope_id: ScopeId
     ) -> tuple[int, PersistedPluginRegistration]:
         for index, registration in enumerate(self._registrations):
-            if registration.descriptor.name == name:
+            if (
+                registration.descriptor.name == name
+                and registration.scope_id == scope_id
+            ):
                 return index, registration
-        raise KeyError(name)
+        raise KeyError(f"plugin {name} not found in scope {scope_id}")
 
     def _install_adapters(
         self,

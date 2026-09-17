@@ -204,20 +204,24 @@ def test_dynamic_discovery_full_lifecycle() -> None:
         assert installed.descriptor.name == "server-echo"
         assert "server_echo" in tool_names(manager, "agent")
 
-        disabled = coordinator.set_enabled("server-echo", False)
+        disabled = coordinator.set_enabled(
+            "server-echo", False, scope_id=ScopeId("server")
+        )
         assert disabled.enabled is False
         assert "server_echo" not in tool_names(manager, "agent")
 
-        enabled = coordinator.set_enabled("server-echo", True)
+        enabled = coordinator.set_enabled(
+            "server-echo", True, scope_id=ScopeId("server")
+        )
         assert enabled.enabled is True
         assert "server_echo" in tool_names(manager, "agent")
 
         coordinator._catalog["example.echo"] = server_echo_package("1.1.0")
-        upgraded = coordinator.upgrade("server-echo")
+        upgraded = coordinator.upgrade("server-echo", scope_id=ScopeId("server"))
         assert upgraded.package_version == "1.1.0"
         assert upgraded.descriptor.version == "1.1.0"
 
-        coordinator.uninstall("server-echo")
+        coordinator.uninstall("server-echo", scope_id=ScopeId("server"))
         assert coordinator.registrations() == ()
         assert "server_echo" not in tool_names(manager, "agent")
     finally:
