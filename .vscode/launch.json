@@ -9,7 +9,7 @@
             "name": "CLI: interactive",
             "type": "debugpy",
             "request": "launch",
-            "module": "langharmess_cli",
+            "module": "langharmess",
             "args": [],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal"
@@ -20,7 +20,7 @@
             "name": "CLI: custom args",
             "type": "debugpy",
             "request": "launch",
-            "module": "langharmess_cli",
+            "module": "langharmess",
             "args": ["health"],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal"
@@ -31,8 +31,8 @@
             "name": "API server",
             "type": "debugpy",
             "request": "launch",
-            "module": "langharmess_api",
-            "args": ["--host", "127.0.0.1", "--port", "8000"],
+            "module": "langharmess",
+            "args": ["--mode", "server"],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal"
         },

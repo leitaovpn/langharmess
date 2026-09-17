@@ -89,7 +89,7 @@ class PluginCommandPlugin:
                 payload = self._get_raw(
                     context,
                     "/plugins",
-                    params={"scope": args.scope or DEFAULT_CONFIG_SCOPE},
+                    params={"scope": args.scope} if args.scope else None,
                 )
             elif args.action == "runtime":
                 if len(args.values) < 3 or args.values[0] != "set":
@@ -99,10 +99,11 @@ class PluginCommandPlugin:
                     context,
                     f"/plugins/runtime/{args.values[1]}/properties",
                     {"properties": properties},
+                    params={"scope": args.scope} if args.scope else None,
                 )
             elif args.action == "install":
-                if len(args.values) != 2:
-                    raise ValueError("install requires PACKAGE_ID CONTRIBUTION_ID")
+                if len(args.values) != 2 or not args.scope:
+                    raise ValueError("install requires PACKAGE_ID CONTRIBUTION_ID --scope SCOPE")
                 payload = self._post_raw(
                     context,
                     "/plugins/install",
@@ -113,24 +114,25 @@ class PluginCommandPlugin:
                     },
                 )
             elif args.action in {"enable", "disable"}:
-                if len(args.values) != 1:
-                    raise ValueError(f"{args.action} requires PLUGIN_NAME")
+                if len(args.values) != 1 or not args.scope:
+                    raise ValueError(f"{args.action} requires PLUGIN_NAME --scope SCOPE")
                 payload = self._put_raw(
                     context,
                     f"/plugins/runtime/{args.values[0]}/enabled",
                     {"enabled": args.action == "enable"},
+                    params={"scope": args.scope},
                 )
             elif args.action == "upgrade":
-                if len(args.values) != 1:
-                    raise ValueError("upgrade requires PLUGIN_NAME")
+                if len(args.values) != 1 or not args.scope:
+                    raise ValueError("upgrade requires PLUGIN_NAME --scope SCOPE")
                 payload = self._post_raw(
-                    context, f"/plugins/runtime/{args.values[0]}/upgrade", {}
+                    context, f"/plugins/runtime/{args.values[0]}/upgrade", {}, params={"scope": args.scope}
                 )
             else:
-                if len(args.values) != 1:
-                    raise ValueError("uninstall requires PLUGIN_NAME")
+                if len(args.values) != 1 or not args.scope:
+                    raise ValueError("uninstall requires PLUGIN_NAME --scope SCOPE")
                 payload = self._delete_raw(
-                    context, f"/plugins/runtime/{args.values[0]}"
+                    context, f"/plugins/runtime/{args.values[0]}", params={"scope": args.scope}
                 )
         except (httpx.HTTPError, ValueError) as exc:
             print(f"Plugin request failed: {self._error_message(exc)}")
@@ -192,31 +194,40 @@ class PluginCommandPlugin:
         print(
             "usage: /plugins discover"
             " | /plugins list [runtime_scope]"
-            " | /plugins runtime set <plugin> KEY=VALUE [KEY=VALUE ...]"
+            " | /plugins runtime set <scope> <plugin> KEY=VALUE [KEY=VALUE ...]"
             " | /plugins config [config_scope]"
-            " | /plugins config enable|disable [config_scope] <plugin>"
-            " | /plugins history|rollback [config_scope] [version]"
-            " | /plugins install <package_id> <contribution_id> [scope_id]"
-            " | /plugins uninstall <plugin_name>"
-            " | /plugins set|enable|disable [scope] <plugin> [KEY=VALUE]"
+            " | /plugins config enable|disable <config_scope> <plugin>"
+            " | /plugins history <config_scope>"
+            " | /plugins rollback <config_scope> <version>"
+            " | /plugins install <package_id> <contribution_id> <scope>"
+            " | /plugins uninstall <scope> <plugin_name>"
+            " | /plugins set <config_scope> <plugin> KEY=VALUE"
+            " | /plugins enable|disable <runtime_scope> <plugin>"
         )
 
     def _list(self, context: InteractiveCommandContext, arguments: list[str]) -> None:
-        scope = self._runtime_scope(arguments)
-        payload = self._get(context, "/plugins/runtime", scope=scope)
+        scope = arguments[0] if arguments else None
+        payload = self._get_raw(
+            context, "/plugins/runtime", params={"scope": scope} if scope else None
+        )
         plugins = payload.get("plugins") or []
         if not plugins:
-            print(f"runtime scope {scope}: no registered plugins")
+            print(f"runtime scope {scope or 'all'}: no registered plugins")
             return
-        self._runtime_table(scope, plugins)
+        self._runtime_table(scope or "all", plugins)
 
     def _config(self, context: InteractiveCommandContext, arguments: list[str]) -> None:
         """Render persisted configuration overrides, distinct from runtime state."""
         if arguments and arguments[0] in {"enable", "disable"}:
             self._update(context, arguments[0], arguments[1:])
             return
-        scope = self._scope(arguments, index=0)
-        payload = self._get(context, "/plugins", scope=scope)
+        scope = arguments[0] if arguments else None
+        payload = self._get_raw(
+            context, "/plugins", params={"scope": scope} if scope else None
+        )
+        if scope is None:
+            self._config_all_table(payload.get("scopes") or [])
+            return
         plugins = payload.get("plugins") or {}
         if not plugins:
             print(f"configuration scope {scope}: no plugin overrides")
@@ -225,12 +236,12 @@ class PluginCommandPlugin:
 
     def _runtime(self, context: InteractiveCommandContext, arguments: list[str]) -> None:
         """Update properties of an installed runtime plugin instance."""
-        if len(arguments) < 3 or arguments[0] != "set":
+        if len(arguments) < 4 or arguments[0] != "set":
             self._usage()
             return
-        name = arguments[1]
+        scope, name = arguments[1], arguments[2]
         properties: dict[str, Any] = {}
-        for pair in arguments[2:]:
+        for pair in arguments[3:]:
             key, separator, value = pair.partition("=")
             if not separator or not key:
                 print(f"Expected KEY=VALUE, got: {pair}")
@@ -240,6 +251,7 @@ class PluginCommandPlugin:
             context,
             f"/plugins/runtime/{name}/properties",
             {"properties": properties},
+            params={"scope": scope},
         )
         self._registration_table("Runtime plugin properties updated", payload)
 
@@ -272,11 +284,10 @@ class PluginCommandPlugin:
     def _install(
         self, context: InteractiveCommandContext, arguments: list[str]
     ) -> None:
-        if len(arguments) < 2:
+        if len(arguments) != 3:
             self._usage()
             return
-        package_id, contribution_id = arguments[0], arguments[1]
-        scope_id = arguments[2] if len(arguments) > 2 else None
+        package_id, contribution_id, scope_id = arguments
         payload = self._post_raw(
             context,
             "/plugins/install",
@@ -291,31 +302,35 @@ class PluginCommandPlugin:
     def _set_runtime_enabled(
         self, context: InteractiveCommandContext, action: str, arguments: list[str]
     ) -> None:
-        if len(arguments) != 1:
+        if len(arguments) != 2:
             self._usage()
             return
-        name = arguments[0]
+        scope, name = arguments
         payload = self._put_raw(
             context,
             f"/plugins/runtime/{name}/enabled",
             {"enabled": action == "enable"},
+            params={"scope": scope},
         )
         self._registration_table("Runtime plugin updated", payload)
 
     def _uninstall(
         self, context: InteractiveCommandContext, arguments: list[str]
     ) -> None:
-        if len(arguments) != 1:
+        if len(arguments) != 2:
             self._usage()
             return
         payload = self._delete_raw(
-            context, f"/plugins/runtime/{arguments[0]}"
+            context, f"/plugins/runtime/{arguments[1]}", params={"scope": arguments[0]}
         )
-        self._table("Plugin removal", ("Plugin", "Removed"), ((arguments[0], payload.get("removed", False)),))
+        self._table("Plugin removal", ("Scope", "Plugin", "Removed"), ((arguments[0], arguments[1], payload.get("removed", False)),))
 
     def _update(
         self, context: InteractiveCommandContext, action: str, arguments: list[str]
     ) -> None:
+        if not arguments or not self._is_scope(arguments[0]):
+            print("Scope is required. Specify api, cli, or agent:<id>.")
+            return
         scope, plugin, rest = self._plugin_arguments(arguments)
         if plugin is None:
             self._usage()
@@ -436,6 +451,36 @@ class PluginCommandPlugin:
             ),
         )
 
+    def _config_all_table(self, configs: list[dict[str, Any]]) -> None:
+        rows = []
+        for config in configs:
+            scope = config.get("scope", "-")
+            version = config.get("version", "-")
+            for name, entry in (config.get("plugins") or {}).items():
+                rows.append(
+                    (
+                        scope,
+                        version,
+                        name,
+                        "enabled" if entry.get("enabled", True) else "disabled",
+                        " ".join(
+                            f"{key}={value}"
+                            for key, value in sorted(
+                                (entry.get("properties") or {}).items()
+                            )
+                        )
+                        or "-",
+                    )
+                )
+        if not rows:
+            print("configuration scopes: no plugin overrides")
+            return
+        self._table(
+            "Configuration overrides · all scopes",
+            ("Scope", "Version", "Plugin", "State", "Properties"),
+            rows,
+        )
+
     def _registration_table(self, title: str, payload: dict[str, Any]) -> None:
         self._table(
             title,
@@ -459,7 +504,10 @@ class PluginCommandPlugin:
             else:
                 print(f"runtime scope {scope or 'all'}: no registered plugins")
         elif action == "config":
-            self._config_table(scope or DEFAULT_CONFIG_SCOPE, payload)
+            if scope is None:
+                self._config_all_table(payload.get("scopes") or [])
+            else:
+                self._config_table(scope, payload)
         elif action == "discover":
             self._table("Discovered plugins", ("Package",), ((item.get("id", "-"),) for item in payload.get("packages") or []))
         else:
@@ -584,10 +632,11 @@ class PluginCommandPlugin:
         return dict(response.json())
 
     def _post_raw(
-        self, context: Any, path: str, body: dict[str, Any]
+        self, context: Any, path: str, body: dict[str, Any], *, params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         response = httpx.post(
             f"{context.base_url.rstrip('/')}{path}",
+            params=params,
             json=body,
             headers=self._headers(context),
             timeout=10.0,
@@ -596,10 +645,11 @@ class PluginCommandPlugin:
         return dict(response.json())
 
     def _put_raw(
-        self, context: Any, path: str, body: dict[str, Any]
+        self, context: Any, path: str, body: dict[str, Any], *, params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         response = httpx.put(
             f"{context.base_url.rstrip('/')}{path}",
+            params=params,
             json=body,
             headers=self._headers(context),
             timeout=10.0,
@@ -607,9 +657,12 @@ class PluginCommandPlugin:
         response.raise_for_status()
         return dict(response.json())
 
-    def _delete_raw(self, context: Any, path: str) -> dict[str, Any]:
+    def _delete_raw(
+        self, context: Any, path: str, *, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         response = httpx.delete(
             f"{context.base_url.rstrip('/')}{path}",
+            params=params,
             headers=self._headers(context),
             timeout=10.0,
         )

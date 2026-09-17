@@ -11,7 +11,7 @@ from langharmess_core.contracts import SystemPromptProvider
 @Provides(SystemPromptProvider)
 @Property("_plugin_name", "plugin.name", "system-prompt-plugin")
 @Property("_plugin_version", "plugin.version", "1.0.0")
-@Property("_system_prompt", "plugin.system_prompt", "")
+@Property("_system_prompt", "plugin.system_prompt", "你是一个阅读者，通过读取项目，给出改进建议")
 class TemplateSystemPromptPlugin:
     """Provides one piece of the agent system prompt."""
 
