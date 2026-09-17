@@ -79,5 +79,5 @@ def test_agent_templates_and_instances_form_two_levels() -> None:
         agent_loop_descriptor("alpha", []),
     ]
     assert {(item.scope, item.scope_parent) for item in instances} == {
-        ("agent/alpha", "agent")
+        ("agent:alpha", "agent")
     }

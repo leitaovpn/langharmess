@@ -259,18 +259,18 @@ def test_runtime_scope_visibility_matrix_with_real_service_registry() -> None:
     try:
         manager.install_plugin(tools_template)
         manager.ensure_scope(
-            ScopeId("agent/a"), name="A", parent_id=ScopeId("agent")
+            ScopeId("agent:a"), name="A", parent_id=ScopeId("agent")
         )
         manager.ensure_scope(
-            ScopeId("agent/b"), name="B", parent_id=ScopeId("agent")
+            ScopeId("agent:b"), name="B", parent_id=ScopeId("agent")
         )
         registrations = [
             ("root", root_other),
             ("ui", ui_tool),
             ("server", server_tool),
             ("agent", agent_tool),
-            ("agent/a", agent_a_tool),
-            ("agent/b", agent_b_tool),
+            ("agent:a", agent_a_tool),
+            ("agent:b", agent_b_tool),
         ]
         for scope, function in registrations:
             manager.instantiate_instance(
@@ -295,12 +295,12 @@ def test_runtime_scope_visibility_matrix_with_real_service_registry() -> None:
         assert visible("ui") == {"root_other", "ui_tool"}
         assert visible("server") == {"root_other", "server_tool"}
         assert visible("agent") == {"root_other", "agent_tool"}
-        assert visible("agent/a") == {
+        assert visible("agent:a") == {
             "root_other",
             "agent_tool",
             "agent_a_tool",
         }
-        assert "agent_b_tool" not in visible("agent/a")
-        assert "ui_tool" not in visible("agent/a")
+        assert "agent_b_tool" not in visible("agent:a")
+        assert "ui_tool" not in visible("agent:a")
     finally:
         manager.stop()
