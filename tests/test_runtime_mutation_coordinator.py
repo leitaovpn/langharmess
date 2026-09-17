@@ -96,7 +96,7 @@ def agent_instance_package() -> PluginPackage:
             PluginContribution(
                 "instance",
                 "agent_instance",
-                descriptor("instance", scope="agent", scope_parent="server"),
+                descriptor("instance", scope="agent", scope_parent="root"),
             ),
         ),
     )

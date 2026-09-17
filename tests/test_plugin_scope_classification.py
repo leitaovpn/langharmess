@@ -71,7 +71,7 @@ def test_agent_templates_and_instances_form_two_levels() -> None:
         agent_loop_template_descriptor(),
     ]
     assert {(item.scope, item.scope_parent) for item in templates} == {
-        ("agent", "server")
+        ("agent", "root")
     }
 
     instances = [
