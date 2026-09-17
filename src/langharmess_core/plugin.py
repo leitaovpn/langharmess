@@ -24,9 +24,9 @@ from langharmess_core.contracts import (
     SPEC_TOOL,
     SPEC_TRANSFORMERS,
 )
-from langharmess_plugin.scope_const import agent_instance_scope_id
 from langharmess_plugin.package import PluginContribution, PluginPackage
 from langharmess_plugin.registry import PluginDescriptor
+from langharmess_plugin.scope_const import agent_instance_scope_id
 
 AGENT_PLUGIN_CATALOG: dict[str, tuple[str, str, str]] = {
     "llm": (
