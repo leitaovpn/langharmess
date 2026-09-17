@@ -9,6 +9,8 @@ from typing import Any
 
 import httpx
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
+from rich.console import Console
+from rich.table import Table
 
 from langharmess_cli.contracts import (
     CLICommandProvider,
@@ -17,7 +19,8 @@ from langharmess_cli.contracts import (
     InteractiveCommandSpec,
 )
 
-DEFAULT_SCOPE = "api"
+DEFAULT_CONFIG_SCOPE = "api"
+DEFAULT_RUNTIME_SCOPE = "server"
 
 
 def _coerce(value: str) -> Any:
@@ -57,7 +60,17 @@ class PluginCommandPlugin:
     def _add_arguments(parser: ArgumentParser) -> None:
         parser.add_argument(
             "action",
-            choices=("discover", "list", "install", "enable", "disable", "upgrade", "uninstall"),
+            choices=(
+                "discover",
+                "list",
+                "runtime",
+                "config",
+                "install",
+                "enable",
+                "disable",
+                "upgrade",
+                "uninstall",
+            ),
         )
         parser.add_argument("values", nargs="*")
         parser.add_argument("--scope")
@@ -70,12 +83,23 @@ class PluginCommandPlugin:
                 self._post_raw(context, "/plugins/rescan", {})
                 payload = self._get_raw(context, "/plugins/discovered")
             elif args.action == "list":
-                if args.scope:
-                    payload = self._get_raw(
-                        context, "/plugins", params={"scope": args.scope}
-                    )
-                else:
-                    payload = self._get_raw(context, "/plugins/runtime")
+                params = {"scope": args.scope} if args.scope else None
+                payload = self._get_raw(context, "/plugins/runtime", params=params)
+            elif args.action == "config":
+                payload = self._get_raw(
+                    context,
+                    "/plugins",
+                    params={"scope": args.scope or DEFAULT_CONFIG_SCOPE},
+                )
+            elif args.action == "runtime":
+                if len(args.values) < 3 or args.values[0] != "set":
+                    raise ValueError("runtime requires set PLUGIN_NAME KEY=VALUE")
+                properties = self._properties(args.values[2:])
+                payload = self._put_raw(
+                    context,
+                    f"/plugins/runtime/{args.values[1]}/properties",
+                    {"properties": properties},
+                )
             elif args.action == "install":
                 if len(args.values) != 2:
                     raise ValueError("install requires PACKAGE_ID CONTRIBUTION_ID")
@@ -111,7 +135,7 @@ class PluginCommandPlugin:
         except (httpx.HTTPError, ValueError) as exc:
             print(f"Plugin request failed: {self._error_message(exc)}")
             return 1
-        print(json.dumps(payload, ensure_ascii=False))
+        self._render_noninteractive_result(args.action, args.scope, payload)
         return 0
 
     def get_interactive_commands(self) -> list[InteractiveCommandSpec]:
@@ -119,9 +143,9 @@ class PluginCommandPlugin:
             InteractiveCommandSpec(
                 name="plugins",
                 help=(
-                    "Plugin management: discover|list|install|uninstall|"
+                    "Plugin management: discover|list|runtime|config|install|uninstall|"
                     "set|enable|disable|history|rollback "
-                    "[scope] (scope: api, cli, or agent:<id>)"
+                    "[scope]; list accepts runtime scopes such as server, ui, agent, or agent:<id>"
                 ),
                 handler=self._handle,
             )
@@ -139,14 +163,20 @@ class PluginCommandPlugin:
         try:
             if action == "list":
                 self._list(context, arguments)
+            elif action == "config":
+                self._config(context, arguments)
+            elif action == "runtime":
+                self._runtime(context, arguments)
             elif action == "discover":
                 self._discover(context)
             elif action == "install":
                 self._install(context, arguments)
             elif action == "uninstall":
                 self._uninstall(context, arguments)
-            elif action in ("set", "enable", "disable"):
+            elif action == "set":
                 self._update(context, action, arguments)
+            elif action in ("enable", "disable"):
+                self._set_runtime_enabled(context, action, arguments)
             elif action == "history":
                 self._history(context, arguments)
             elif action == "rollback":
@@ -161,28 +191,57 @@ class PluginCommandPlugin:
     def _usage(self) -> None:
         print(
             "usage: /plugins discover"
-            " | /plugins list|history|rollback [scope] [version]"
+            " | /plugins list [runtime_scope]"
+            " | /plugins runtime set <plugin> KEY=VALUE [KEY=VALUE ...]"
+            " | /plugins config [config_scope]"
+            " | /plugins config enable|disable [config_scope] <plugin>"
+            " | /plugins history|rollback [config_scope] [version]"
             " | /plugins install <package_id> <contribution_id> [scope_id]"
             " | /plugins uninstall <plugin_name>"
             " | /plugins set|enable|disable [scope] <plugin> [KEY=VALUE]"
         )
 
     def _list(self, context: InteractiveCommandContext, arguments: list[str]) -> None:
+        scope = self._runtime_scope(arguments)
+        payload = self._get(context, "/plugins/runtime", scope=scope)
+        plugins = payload.get("plugins") or []
+        if not plugins:
+            print(f"runtime scope {scope}: no registered plugins")
+            return
+        self._runtime_table(scope, plugins)
+
+    def _config(self, context: InteractiveCommandContext, arguments: list[str]) -> None:
+        """Render persisted configuration overrides, distinct from runtime state."""
+        if arguments and arguments[0] in {"enable", "disable"}:
+            self._update(context, arguments[0], arguments[1:])
+            return
         scope = self._scope(arguments, index=0)
         payload = self._get(context, "/plugins", scope=scope)
-        print(f"scope {scope} · version {payload.get('version')}")
         plugins = payload.get("plugins") or {}
         if not plugins:
-            print("no plugin overrides")
+            print(f"configuration scope {scope}: no plugin overrides")
             return
-        for name in sorted(plugins):
-            entry = plugins[name] or {}
-            properties = entry.get("properties") or {}
-            pairs = " ".join(
-                f"{key}={value}" for key, value in sorted(properties.items())
-            )
-            state = "enabled" if entry.get("enabled", True) else "disabled"
-            print(f"  {name} · {state} · {pairs}".rstrip())
+        self._config_table(scope, payload)
+
+    def _runtime(self, context: InteractiveCommandContext, arguments: list[str]) -> None:
+        """Update properties of an installed runtime plugin instance."""
+        if len(arguments) < 3 or arguments[0] != "set":
+            self._usage()
+            return
+        name = arguments[1]
+        properties: dict[str, Any] = {}
+        for pair in arguments[2:]:
+            key, separator, value = pair.partition("=")
+            if not separator or not key:
+                print(f"Expected KEY=VALUE, got: {pair}")
+                return
+            properties[key] = _coerce(value)
+        payload = self._put_raw(
+            context,
+            f"/plugins/runtime/{name}/properties",
+            {"properties": properties},
+        )
+        self._registration_table("Runtime plugin properties updated", payload)
 
     def _discover(self, context: InteractiveCommandContext) -> None:
         self._post_raw(context, "/plugins/rescan", {})
@@ -191,17 +250,24 @@ class PluginCommandPlugin:
         if not packages:
             print("no discovered plugins")
             return
-        for package in packages:
-            source = package.get("source", "external")
-            print(f"{package.get('id')} {package.get('version')} [{source}]")
-            for contribution in package.get("contributions") or []:
-                print(
-                    "  "
-                    f"{contribution.get('id')} "
-                    f"{contribution.get('name')} "
-                    f"{contribution.get('specification')} "
-                    f"{contribution.get('module')}"
-                )
+        rows = [
+            (
+                package.get("id", "-"),
+                package.get("version", "-"),
+                package.get("source", "external"),
+                contribution.get("id", "-"),
+                contribution.get("name", "-"),
+                contribution.get("specification", "-"),
+                contribution.get("module", "-"),
+            )
+            for package in packages
+            for contribution in package.get("contributions") or [{}]
+        ]
+        self._table(
+            "Discovered plugins",
+            ("Package", "Version", "Source", "Contribution", "Name", "Spec", "Module"),
+            rows,
+        )
 
     def _install(
         self, context: InteractiveCommandContext, arguments: list[str]
@@ -220,7 +286,21 @@ class PluginCommandPlugin:
                 "scope_id": scope_id,
             },
         )
-        print(json.dumps(payload, ensure_ascii=False))
+        self._registration_table("Installed plugin", payload)
+
+    def _set_runtime_enabled(
+        self, context: InteractiveCommandContext, action: str, arguments: list[str]
+    ) -> None:
+        if len(arguments) != 1:
+            self._usage()
+            return
+        name = arguments[0]
+        payload = self._put_raw(
+            context,
+            f"/plugins/runtime/{name}/enabled",
+            {"enabled": action == "enable"},
+        )
+        self._registration_table("Runtime plugin updated", payload)
 
     def _uninstall(
         self, context: InteractiveCommandContext, arguments: list[str]
@@ -231,7 +311,7 @@ class PluginCommandPlugin:
         payload = self._delete_raw(
             context, f"/plugins/runtime/{arguments[0]}"
         )
-        print(json.dumps(payload, ensure_ascii=False))
+        self._table("Plugin removal", ("Plugin", "Removed"), ((arguments[0], payload.get("removed", False)),))
 
     def _update(
         self, context: InteractiveCommandContext, action: str, arguments: list[str]
@@ -270,11 +350,14 @@ class PluginCommandPlugin:
     ) -> None:
         scope = self._scope(arguments, index=0)
         payload = self._get(context, "/plugins/history", scope=scope)
-        for entry in payload.get("history") or []:
-            target = (
-                f" · target {entry['target_seq']}" if entry.get("target_seq") else ""
-            )
-            print(f"  {entry.get('seq')} {entry.get('action')} {entry.get('actor')}{target}")
+        self._table(
+            f"Configuration history · {scope}",
+            ("Version", "Action", "Actor", "Target version"),
+            (
+                (entry.get("seq"), entry.get("action"), entry.get("actor"), entry.get("target_seq", "-"))
+                for entry in payload.get("history") or []
+            ),
+        )
 
     def _rollback(
         self, context: InteractiveCommandContext, arguments: list[str]
@@ -282,12 +365,12 @@ class PluginCommandPlugin:
         if not arguments:
             self._usage()
             return
-        scope = DEFAULT_SCOPE
+        scope = DEFAULT_CONFIG_SCOPE
         version_text = arguments[0]
         if len(arguments) > 1:
             scope, version_text = arguments[0], arguments[1]
         if not self._is_scope(scope):
-            scope = DEFAULT_SCOPE
+            scope = DEFAULT_CONFIG_SCOPE
         try:
             version = int(version_text)
         except ValueError:
@@ -301,25 +384,118 @@ class PluginCommandPlugin:
     def _apply(self, payload: dict[str, Any]) -> None:
         applied = ", ".join(payload.get("applied") or []) or "-"
         restart = ", ".join(payload.get("restart_required") or []) or "-"
-        print(f"version {payload.get('version')} · applied: {applied}")
-        if payload.get("restart_required"):
-            print(f"restart required: {restart}")
+        self._table(
+            "Plugin configuration applied",
+            ("Version", "Applied", "Restart required"),
+            ((payload.get("version"), applied, restart),),
+        )
+
+    @staticmethod
+    def _table(
+        title: str, columns: tuple[str, ...], rows: Any
+    ) -> None:
+        table = Table(title=title, header_style="bold cyan")
+        for column in columns:
+            table.add_column(column, overflow="fold")
+        for row in rows:
+            table.add_row(*(str(value) for value in row))
+        Console().print(table)
+
+    def _runtime_table(self, scope: str, plugins: list[dict[str, Any]]) -> None:
+        self._table(
+            f"Runtime plugins · scope {scope}",
+            ("Name", "State", "Status", "Package / contribution", "Specification"),
+            (
+                (
+                    entry.get("name", "-"),
+                    "enabled" if entry.get("enabled", True) else "disabled",
+                    entry.get("status", "-"),
+                    f"{entry.get('package_id', '-')}/{entry.get('contribution_id', '-')}",
+                    entry.get("specification", "-"),
+                )
+                for entry in sorted(plugins, key=lambda item: str(item.get("name", "")))
+            ),
+        )
+
+    def _config_table(self, scope: str, payload: dict[str, Any]) -> None:
+        plugins = payload.get("plugins") or {}
+        self._table(
+            f"Configuration overrides · scope {scope} · version {payload.get('version')}",
+            ("Plugin", "State", "Properties"),
+            (
+                (
+                    name,
+                    "enabled" if entry.get("enabled", True) else "disabled",
+                    " ".join(
+                        f"{key}={value}"
+                        for key, value in sorted((entry.get("properties") or {}).items())
+                    )
+                    or "-",
+                )
+                for name, entry in sorted(plugins.items())
+            ),
+        )
+
+    def _registration_table(self, title: str, payload: dict[str, Any]) -> None:
+        self._table(
+            title,
+            ("Name", "Scope", "State", "Status", "Specification"),
+            ((
+                payload.get("name", "-"),
+                payload.get("scope_id", "-"),
+                "enabled" if payload.get("enabled", True) else "disabled",
+                payload.get("status", "-"),
+                payload.get("specification", "-"),
+            ),),
+        )
+
+    def _render_noninteractive_result(
+        self, action: str, scope: str | None, payload: dict[str, Any]
+    ) -> None:
+        if action == "list":
+            plugins = payload.get("plugins") or []
+            if plugins:
+                self._runtime_table(scope or "all", plugins)
+            else:
+                print(f"runtime scope {scope or 'all'}: no registered plugins")
+        elif action == "config":
+            self._config_table(scope or DEFAULT_CONFIG_SCOPE, payload)
+        elif action == "discover":
+            self._table("Discovered plugins", ("Package",), ((item.get("id", "-"),) for item in payload.get("packages") or []))
+        else:
+            self._registration_table("Plugin result", payload)
+
+    @staticmethod
+    def _properties(pairs: list[str]) -> dict[str, Any]:
+        properties: dict[str, Any] = {}
+        for pair in pairs:
+            key, separator, value = pair.partition("=")
+            if not separator or not key:
+                raise ValueError(f"Expected KEY=VALUE, got: {pair}")
+            properties[key] = _coerce(value)
+        return properties
 
     def _scope(self, arguments: list[str], *, index: int) -> str:
         if len(arguments) > index and arguments[index]:
             return arguments[index]
-        return DEFAULT_SCOPE
+        return DEFAULT_CONFIG_SCOPE
+
+    @staticmethod
+    def _runtime_scope(arguments: list[str]) -> str:
+        if arguments and arguments[0]:
+            return arguments[0]
+        return DEFAULT_RUNTIME_SCOPE
 
     def _plugin_arguments(
         self, arguments: list[str]
     ) -> tuple[str, str | None, list[str]]:
         if not arguments:
-            return DEFAULT_SCOPE, None, []
+            return DEFAULT_CONFIG_SCOPE, None, []
         if self._is_scope(arguments[0]):
             if len(arguments) < 2:
                 return arguments[0], None, []
             return arguments[0], arguments[1], arguments[2:]
-        return DEFAULT_SCOPE, arguments[0], arguments[1:]
+        return DEFAULT_CONFIG_SCOPE, arguments[0], arguments[1:]
 
     @staticmethod
     def _is_scope(value: str) -> bool:

@@ -139,6 +139,10 @@ class FakeDynamic:
         self.enabled.append((name, enabled))
         return FakeRegistration(name)
 
+    def update_properties(self, name, properties):
+        self.properties = (name, properties)
+        return FakeRegistration(name)
+
     def uninstall(self, name):
         self.uninstalled.append(name)
 
@@ -452,6 +456,12 @@ def test_dynamic_runtime_install_enable_upgrade_uninstall(tmp_path: Path) -> Non
     assert enable.status_code == 200
     assert plugin._dynamic.enabled == [("echo", False)]
 
+    properties = client.put(
+        "/plugins/runtime/echo/properties", json={"properties": {"plugin.value": "x"}}
+    )
+    assert properties.status_code == 200
+    assert plugin._dynamic.properties == ("echo", {"plugin.value": "x"})
+
     upgrade = client.post("/plugins/runtime/echo/upgrade")
     assert upgrade.status_code == 200
     assert plugin._dynamic.upgraded == ["echo"]
@@ -460,6 +470,21 @@ def test_dynamic_runtime_install_enable_upgrade_uninstall(tmp_path: Path) -> Non
     assert delete.status_code == 200
     assert delete.json() == {"removed": True}
     assert plugin._dynamic.uninstalled == ["echo"]
+
+
+def test_runtime_plugins_filters_by_scope(tmp_path: Path) -> None:
+    plugin = make_plugin(tmp_path)
+    agent_registration = FakeRegistration("agent-echo")
+    agent_registration.scope_id = "agent"
+    plugin._dynamic.registrations_list = (
+        FakeRegistration("server-echo"),
+        agent_registration,
+    )
+
+    response = make_client(plugin).get("/plugins/runtime", params={"scope": "server"})
+
+    assert response.status_code == 200
+    assert [item["name"] for item in response.json()["plugins"]] == ["server-echo"]
 
 
 def test_dynamic_endpoints_require_dynamic_manager(tmp_path: Path) -> None:

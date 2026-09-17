@@ -41,6 +41,10 @@ class DynamicInstallRequest(BaseModel):
     scope_id: str | None = None
 
 
+class DynamicPropertiesRequest(BaseModel):
+    properties: dict[str, Any]
+
+
 @ComponentFactory("api-plugins-route-factory")
 @Provides(RouteProvider)
 @Property("_plugin_name", "plugin.name", "plugins")
@@ -170,11 +174,16 @@ class PluginsRoutePlugin:
             }
 
         @router.get("/plugins/runtime")
-        def runtime_plugins() -> dict[str, Any]:
+        def runtime_plugins(scope: str | None = Query(None)) -> dict[str, Any]:
+            registrations = self._require_dynamic().registrations()
+            if scope is not None:
+                registrations = (
+                    item for item in registrations if str(item.scope_id) == scope
+                )
             return {
                 "plugins": [
                     self._registration_payload(item)
-                    for item in self._require_dynamic().registrations()
+                    for item in registrations
                 ]
             }
 
@@ -194,6 +203,18 @@ class PluginsRoutePlugin:
         def enable_plugin(name: str, enabled: bool = Body(..., embed=True)) -> dict[str, Any]:
             try:
                 registration = self._require_dynamic().set_enabled(name, enabled)
+            except (KeyError, ValueError, RuntimeError) as exc:
+                raise operation_error(exc) from exc
+            return self._registration_payload(registration)
+
+        @router.put("/plugins/runtime/{name}/properties")
+        def update_runtime_properties(
+            name: str, payload: DynamicPropertiesRequest
+        ) -> dict[str, Any]:
+            try:
+                registration = self._require_dynamic().update_properties(
+                    name, payload.properties
+                )
             except (KeyError, ValueError, RuntimeError) as exc:
                 raise operation_error(exc) from exc
             return self._registration_payload(registration)
