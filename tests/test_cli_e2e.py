@@ -99,6 +99,12 @@ def test_cli_reuses_running_api_server() -> None:
 
 def test_cli_interactive_mode(tmp_path: Path) -> None:
     port = free_port()
+    (tmp_path / "langharmess.toml").write_text(
+        '[providers.default]\nprotocol = "chat"\n'
+        'base_url = "https://example.test/v1"\n'
+        'model = "demo"\napi_key = "key"\n',
+        encoding="utf-8",
+    )
     result = subprocess.run(
         [
             sys.executable,
@@ -127,3 +133,30 @@ def test_cli_interactive_mode(tmp_path: Path) -> None:
     assert "API server app built" in server_log
     assert "Started server process" in server_log
     assert "GET /health" in server_log
+
+
+def test_cli_interactive_mode_errors_without_default_provider(
+    tmp_path: Path,
+) -> None:
+    port = free_port()
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "langharmess_cli",
+            "interactive",
+            "--dir",
+            str(tmp_path),
+            "--server-port",
+            str(port),
+        ],
+        env=ENV,
+        input="exit\n",
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 2
+    assert "No default model is configured" in result.stderr
+    assert (tmp_path / "langharmess.toml").is_file()

@@ -35,7 +35,7 @@ def test_packaging_scripts_are_executable_and_valid_bash() -> None:
     installer = (ROOT / "scripts/install.sh").read_text()
     assert 'CONFIG_DIR=${LANG_HARMESS_HOME:-"$HOME/.langharmess"}' in installer
     assert 'CONFIG_FILE="$CONFIG_DIR/langharmess.toml"' in installer
-    assert "[providers.deepseek-v4-flash]" in installer
+    assert "[providers.default]" in installer
     assert "[plugins.ui]" in installer
     assert "langharmess_api.sdk:package" in installer
     template = (ROOT / "src/langharmess_config/config/langharmess.toml").read_text()
