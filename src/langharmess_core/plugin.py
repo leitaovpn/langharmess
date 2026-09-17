@@ -13,8 +13,6 @@ from langharmess_core.contracts import (
     SPEC_AGENT_SERVER,
     SPEC_CACHE,
     SPEC_CHECKPOINTER,
-    SPEC_CONTEXT_SCHEMA,
-    SPEC_DEBUG,
     SPEC_INTERRUPT_AFTER,
     SPEC_INTERRUPT_BEFORE,
     SPEC_LLM,
@@ -22,8 +20,6 @@ from langharmess_core.contracts import (
     SPEC_NAME,
     SPEC_RESPONSE_FORMAT,
     SPEC_SESSION_INDEX,
-    SPEC_STATE_SCHEMA,
-    SPEC_STORE,
     SPEC_SYSTEM_PROMPT,
     SPEC_TOOL,
     SPEC_TRANSFORMERS,
@@ -51,74 +47,6 @@ AGENT_PLUGIN_CATALOG: dict[str, tuple[str, str, str]] = {
 }
 
 DEFAULT_AGENT_PLUGINS: tuple[str, ...] = ("tools", "name")
-
-DYNAMIC_PLUGIN_CATALOG: dict[str, tuple[str, str, str]] = {
-    "cache-plugin": (
-        "langharmess_core.plugins.cache.template_cache",
-        "cache-plugin-factory",
-        SPEC_CACHE,
-    ),
-    "checkpointer-plugin": (
-        "langharmess_core.plugins.checkpointer.template_checkpointer",
-        "checkpointer-plugin-factory",
-        SPEC_CHECKPOINTER,
-    ),
-    "context-schema-plugin": (
-        "langharmess_core.plugins.context_schema.template_context_schema",
-        "context-schema-plugin-factory",
-        SPEC_CONTEXT_SCHEMA,
-    ),
-    "debug-plugin": (
-        "langharmess_core.plugins.debug.template_debug",
-        "debug-plugin-factory",
-        SPEC_DEBUG,
-    ),
-    "interrupt-after-plugin": (
-        "langharmess_core.plugins.interrupt_after.template_interrupt_after",
-        "interrupt-after-plugin-factory",
-        SPEC_INTERRUPT_AFTER,
-    ),
-    "interrupt-before-plugin": (
-        "langharmess_core.plugins.interrupt_before.template_interrupt_before",
-        "interrupt-before-plugin-factory",
-        SPEC_INTERRUPT_BEFORE,
-    ),
-    "middleware-plugin": (
-        "langharmess_core.plugins.middleware.template_middleware",
-        "middleware-plugin-factory",
-        SPEC_MIDDLEWARE,
-    ),
-    "response-format-plugin": (
-        "langharmess_core.plugins.response_format.template_response_format",
-        "response-format-plugin-factory",
-        SPEC_RESPONSE_FORMAT,
-    ),
-    "state-schema-plugin": (
-        "langharmess_core.plugins.state_schema.template_state_schema",
-        "state-schema-plugin-factory",
-        SPEC_STATE_SCHEMA,
-    ),
-    "store-plugin": (
-        "langharmess_core.plugins.store.template_store",
-        "store-plugin-factory",
-        SPEC_STORE,
-    ),
-    "system-prompt-plugin": (
-        "langharmess_core.plugins.system_prompt.template_system_prompt",
-        "system-prompt-plugin-factory",
-        SPEC_SYSTEM_PROMPT,
-    ),
-    "tools-plugin": (
-        "langharmess_core.plugins.tools.tools",
-        "tools-plugin-factory",
-        SPEC_TOOL,
-    ),
-    "transformers-plugin": (
-        "langharmess_core.plugins.transformers.template_transformers",
-        "transformers-plugin-factory",
-        SPEC_TRANSFORMERS,
-    ),
-}
 
 AGENT_LOOP_MODULE = "langharmess_core.plugins.loop.agent_loop"
 TOOL_EXPORT_ADAPTER_MODULE = "langharmess_core.plugins.tools.export_adapter"
@@ -363,35 +291,5 @@ def builtin_package() -> PluginPackage:
                 "agent",
                 tool_export_adapter_template_descriptor(),
             ),
-        ),
-    )
-
-
-def dynamic_template_descriptor(plugin: str) -> PluginDescriptor:
-    """Install a dynamic bundle without instantiating it."""
-    module, factory, specification = DYNAMIC_PLUGIN_CATALOG[plugin]
-    return PluginDescriptor(
-        name=f"{plugin}-template",
-        version="1.0.0",
-        module=module,
-        factory=factory,
-        instance=f"{plugin}-template",
-        specification=specification,
-        enabled=False,
-        scope="agent",
-        scope_parent="server",
-    )
-
-
-def dynamic_package() -> PluginPackage:
-    """Describe the core plugins installable at runtime, beyond the built-in set."""
-    return PluginPackage(
-        id="dynamic.core",
-        version="1.0.0",
-        contributions=tuple(
-            PluginContribution(
-                f"{plugin}-template", "agent", dynamic_template_descriptor(plugin)
-            )
-            for plugin in DYNAMIC_PLUGIN_CATALOG
         ),
     )
