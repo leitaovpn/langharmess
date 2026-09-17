@@ -14,6 +14,11 @@ from langharmess_plugin.contracts import (
     ScopedPluginRegistrar,
 )
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
+from langharmess_plugin.scope_const import (
+    PLUGIN_KEY,
+    PLUGIN_SCOPE_CHAIN,
+    PLUGIN_SCOPE_ID,
+)
 from langharmess_plugin.scope_policy import PluginScopePolicy
 from langharmess_plugin.validation import (
     ContractViolationError,
@@ -25,9 +30,6 @@ from langharmess_scope import ROOT_SCOPE_ID, ScopeId, ScopeTree
 FILTERS_PROPERTY = "requires.filters"
 SERVICE_RANKING = "service.ranking"
 SCOPE_RANKING_STRIDE = 1_000_000
-PLUGIN_SCOPE_ID = "plugin.scope_id"
-PLUGIN_SCOPE_CHAIN = "plugin.scope_chain"
-PLUGIN_KEY = "plugin.key"
 PLUGIN_RANKING = "plugin.ranking"
 
 
