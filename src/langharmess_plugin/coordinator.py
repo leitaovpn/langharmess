@@ -198,6 +198,13 @@ class RuntimeMutationCoordinator:
                 self.rescan()
             self._restore_scopes()
             changed = False
+            kept: list[PersistedPluginRegistration] = []
+            for registration in self._registrations:
+                if str(registration.scope_id).startswith("agent/"):
+                    changed = True
+                    continue
+                kept.append(registration)
+            self._registrations = kept
             restored: list[PersistedPluginRegistration] = []
             for index, registration in enumerate(tuple(self._registrations)):
                 package = self._catalog.get(registration.package_id)
@@ -264,10 +271,15 @@ class RuntimeMutationCoordinator:
             ScopeId(str(item["id"])): item
             for item in self._loaded_scopes
             if item["id"] != str(ROOT_SCOPE_ID)
+            and not str(item["id"]).startswith("agent/")
         }
         while pending:
             progressed = False
             for scope_id, item in tuple(pending.items()):
+                if self.manager.scope_tree.get(scope_id) is not None:
+                    pending.pop(scope_id)
+                    progressed = True
+                    continue
                 parent = ScopeId(str(item["parent_id"]))
                 if self.manager.scope_tree.get(parent) is None:
                     continue
