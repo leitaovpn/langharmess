@@ -16,6 +16,9 @@ def test_console_script_and_packaging_dependencies_are_declared() -> None:
     assert project["entry-points"]["langharmess.config"]["config"] == (
         "langharmess_config.plugin:builtin_package"
     )
+    plugins = project["entry-points"]["langharmess.plugins"]
+    assert plugins["builtin-core"] == "langharmess_core.plugin:builtin_package"
+    assert plugins["dynamic-core"] == "langharmess_core.plugin:dynamic_package"
     assert {"build>=1.3.0", "pyinstaller>=6.16.0"} <= set(
         project["optional-dependencies"]["packaging"]
     )
