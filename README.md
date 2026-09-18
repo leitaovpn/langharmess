@@ -166,6 +166,29 @@ agent loop 的 LLM 调用:
 LLM 也可以自己 disable 自己的管理工具(需 confirm),重新开启由 CLI/API
 完成。重启后按持久化状态自动恢复。
 
+### agent 管理工具(agent-tools 包)
+
+`agent.tools` 是一个声明式包,把 agent 管理操作以 `ToolExport` 动态
+发现、注册成 LangChain 工具,供所有 agent loop 的 LLM 调用:
+
+| 工具 | 说明 |
+| --- | --- |
+| `list_agents` | 列出全部 agent 及 enabled 状态 |
+| `get_agent` | 按 agent_id 查单个 agent |
+| `create_agent` | 创建新 agent(自动物化 loop) |
+| `update_agent` | 改名/改描述/启停;`enabled=false` 必须传 `confirm='DISABLE'` |
+
+`delete_agent` 不暴露,删除只能由 operator 经 API/CLI 执行。安装方式
+与动态插件一致:
+
+```text
+/plugins install agent.tools agent-operations --scope agent
+/plugins enable agent-operations-export --scope agent
+```
+
+安装后适配器自动落 agent 作用域,所有 agent loop 重建即获得这 4 个
+工具;`/plugins disable` 立即移除。
+
 ### Other slash commands
 
 - `/model` — list configured providers; `/model <provider>` switches the
