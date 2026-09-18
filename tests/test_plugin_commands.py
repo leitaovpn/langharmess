@@ -631,8 +631,8 @@ def test_plugins_rollback_rejects_non_numeric_version(
     assert "usage" in capsys.readouterr().out.lower()
 
 
-def test_plugins_rollback_uses_default_scope_for_bare_version(
-    monkeypatch: pytest.MonkeyPatch,
+def test_plugins_rollback_requires_scope(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     calls: list[dict[str, Any]] = []
 
@@ -641,8 +641,11 @@ def test_plugins_rollback_uses_default_scope_for_bare_version(
         return Response(APPLY_RESULT)
 
     monkeypatch.setattr(httpx, "post", fake_post)
-    handler_for("plugins")(Context(), "rollback 2")
-    assert calls[0]["params"] == {"scope": "api"}
+    assert handler_for("plugins")(Context(), "rollback 2") is False
+    assert calls == []
+    output = capsys.readouterr().out
+    assert "Scope is required" in output
+    assert "usage" in output.lower()
 
 
 def test_plugins_list_without_overrides_and_apply_without_targets(
@@ -721,3 +724,58 @@ def test_noninteractive_rejects_bare_agent_scope(
         code, _ = run_command(monkeypatch, args, methods={})
         assert code == 1
         assert message in capsys.readouterr().out
+
+
+def test_plugins_history_requires_scope(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    def fake_get(url: str, **kwargs: Any) -> Response:
+        calls.append((url, kwargs))
+        return Response(HISTORY)
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    assert handler_for("plugins")(Context(), "history") is False
+    assert calls == []
+    output = capsys.readouterr().out
+    assert "Scope is required" in output
+
+
+def test_plugins_history_rejects_unknown_scope(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: Response(HISTORY))
+    assert handler_for("plugins")(Context(), "history mars") is False
+    output = capsys.readouterr().out
+    assert "Scope is required" in output
+    assert "usage" in output.lower()
+
+
+def test_plugins_runtime_operations_require_valid_scope(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    put_calls: list[tuple[str, dict[str, Any]]] = []
+    delete_calls: list[tuple[str, dict[str, Any]]] = []
+
+    def fake_put(url: str, **kwargs: Any) -> Response:
+        put_calls.append((url, kwargs))
+        return Response({"status": "installed"})
+
+    def fake_delete(url: str, **kwargs: Any) -> Response:
+        delete_calls.append((url, kwargs))
+        return Response({"removed": True})
+
+    monkeypatch.setattr(httpx, "put", fake_put)
+    monkeypatch.setattr(httpx, "delete", fake_delete)
+    for line in (
+        "enable mars echo",
+        "disable mars echo",
+        "uninstall mars echo",
+        "runtime set mars echo plugin.value=1",
+        "enable echo",
+    ):
+        assert handler_for("plugins")(Context(), line) is False
+        assert put_calls == []
+        assert delete_calls == []
+        assert "Scope is required" in capsys.readouterr().out
