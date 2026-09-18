@@ -19,9 +19,6 @@ from langharmess_cli.contracts import (
     InteractiveCommandSpec,
 )
 
-DEFAULT_CONFIG_SCOPE = "api"
-DEFAULT_RUNTIME_SCOPE = "server"
-
 
 def _coerce(value: str) -> Any:
     """Typed values when the text looks like JSON: 5 stays an int, abc a str."""
@@ -274,7 +271,12 @@ class PluginCommandPlugin:
 
     def _runtime(self, context: InteractiveCommandContext, arguments: list[str]) -> None:
         """Update properties of an installed runtime plugin instance."""
-        if len(arguments) < 4 or arguments[0] != "set":
+        if (
+            len(arguments) < 4
+            or arguments[0] != "set"
+            or not _is_runtime_scope(arguments[1])
+        ):
+            print("Scope is required. Specify root, server, ui, agent, or agent:<id>.")
             self._usage()
             return
         scope, name = arguments[1], arguments[2]
@@ -340,7 +342,8 @@ class PluginCommandPlugin:
     def _set_runtime_enabled(
         self, context: InteractiveCommandContext, action: str, arguments: list[str]
     ) -> None:
-        if len(arguments) != 2:
+        if len(arguments) != 2 or not _is_runtime_scope(arguments[0]):
+            print("Scope is required. Specify root, server, ui, agent, or agent:<id>.")
             self._usage()
             return
         scope, name = arguments
@@ -355,7 +358,8 @@ class PluginCommandPlugin:
     def _uninstall(
         self, context: InteractiveCommandContext, arguments: list[str]
     ) -> None:
-        if len(arguments) != 2:
+        if len(arguments) != 2 or not _is_runtime_scope(arguments[0]):
+            print("Scope is required. Specify root, server, ui, agent, or agent:<id>.")
             self._usage()
             return
         payload = self._delete_raw(
@@ -366,7 +370,7 @@ class PluginCommandPlugin:
     def _update(
         self, context: InteractiveCommandContext, action: str, arguments: list[str]
     ) -> None:
-        if not arguments or not self._is_scope(arguments[0]):
+        if not arguments or not _is_config_scope(arguments[0]):
             print("Scope is required. Specify api, cli, or agent:<id>.")
             return
         scope, plugin, rest = self._plugin_arguments(arguments)
@@ -401,7 +405,11 @@ class PluginCommandPlugin:
     def _history(
         self, context: InteractiveCommandContext, arguments: list[str]
     ) -> None:
-        scope = self._scope(arguments, index=0)
+        if not arguments or not _is_config_scope(arguments[0]):
+            print("Scope is required. Specify api, cli, or agent:<id>.")
+            self._usage()
+            return
+        scope = arguments[0]
         payload = self._get(context, "/plugins/history", scope=scope)
         self._table(
             f"Configuration history · {scope}",
@@ -415,15 +423,11 @@ class PluginCommandPlugin:
     def _rollback(
         self, context: InteractiveCommandContext, arguments: list[str]
     ) -> None:
-        if not arguments:
+        if len(arguments) != 2 or not _is_config_scope(arguments[0]):
+            print("Scope is required. Specify api, cli, or agent:<id>.")
             self._usage()
             return
-        scope = DEFAULT_CONFIG_SCOPE
-        version_text = arguments[0]
-        if len(arguments) > 1:
-            scope, version_text = arguments[0], arguments[1]
-        if not self._is_scope(scope):
-            scope = DEFAULT_CONFIG_SCOPE
+        scope, version_text = arguments
         try:
             version = int(version_text)
         except ValueError:
@@ -561,31 +565,12 @@ class PluginCommandPlugin:
             properties[key] = _coerce(value)
         return properties
 
-    def _scope(self, arguments: list[str], *, index: int) -> str:
-        if len(arguments) > index and arguments[index]:
-            return arguments[index]
-        return DEFAULT_CONFIG_SCOPE
-
-    @staticmethod
-    def _runtime_scope(arguments: list[str]) -> str:
-        if arguments and arguments[0]:
-            return arguments[0]
-        return DEFAULT_RUNTIME_SCOPE
-
     def _plugin_arguments(
         self, arguments: list[str]
     ) -> tuple[str, str | None, list[str]]:
-        if not arguments:
-            return DEFAULT_CONFIG_SCOPE, None, []
-        if self._is_scope(arguments[0]):
-            if len(arguments) < 2:
-                return arguments[0], None, []
-            return arguments[0], arguments[1], arguments[2:]
-        return DEFAULT_CONFIG_SCOPE, arguments[0], arguments[1:]
-
-    @staticmethod
-    def _is_scope(value: str) -> bool:
-        return value in ("api", "cli") or value.startswith("agent:")
+        if len(arguments) < 2:
+            return arguments[0], None, []
+        return arguments[0], arguments[1], arguments[2:]
 
     @staticmethod
     def _error_message(exc: Exception) -> str:
