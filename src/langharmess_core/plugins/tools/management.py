@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.tools import StructuredTool
 from pelix.ipopo.decorators import (
@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field, field_validator
 from langharmess_core.contracts import ToolProvider
 from langharmess_plugin.contracts import DynamicPluginManager
 from langharmess_plugin.validation import ContractGuard, is_runtime_scope
+from langharmess_scope import ScopeId
 from langharmess_scope.render import render_scope_tree
 
 SCOPE_HELP = (
@@ -57,6 +58,40 @@ class ListRuntimePluginsArgs(BaseModel):
         if value is not None and not is_runtime_scope(value):
             raise ValueError(f"Unknown runtime scope: {value!r}")
         return value
+
+
+class InstallPluginArgs(RuntimeScopeArgs):
+    package_id: str = Field(
+        min_length=1, description="Package id from discover_plugins."
+    )
+    contribution_id: str = Field(
+        min_length=1, description="Contribution id from discover_plugins."
+    )
+
+
+class NameScopeArgs(RuntimeScopeArgs):
+    name: str = Field(
+        min_length=1,
+        description="Exact registered plugin name from list_runtime_plugins.",
+    )
+
+
+class DisablePluginArgs(NameScopeArgs):
+    confirm: Literal["DISABLE"] = Field(
+        description="Must be the exact string 'DISABLE'."
+    )
+
+
+class UninstallPluginArgs(NameScopeArgs):
+    confirm: Literal["UNINSTALL"] = Field(
+        description="Must be the exact string 'UNINSTALL'."
+    )
+
+
+class UpdatePropertiesArgs(NameScopeArgs):
+    properties: dict[str, Any] = Field(
+        min_length=1, description="Non-empty mapping of property overrides."
+    )
 
 
 def _registration_summary(registration: Any) -> dict[str, Any]:
@@ -131,6 +166,12 @@ class ManagementToolsPlugin:
             self._scope_tree_tool(manager),
             self._list_tool(manager),
             self._discover_tool(manager),
+            self._install_tool(manager),
+            self._enable_tool(manager),
+            self._disable_tool(manager),
+            self._upgrade_tool(manager),
+            self._uninstall_tool(manager),
+            self._properties_tool(manager),
         ]
 
     def get_plugin_info(self) -> dict[str, str]:
@@ -216,4 +257,160 @@ class ManagementToolsPlugin:
                 "specification}]}]}, or {\"error\": ...}."
             ),
             args_schema=NoArgs,
+        )
+
+    @staticmethod
+    def _install_tool(manager: Any) -> StructuredTool:
+        def install_plugin(
+            package_id: str, contribution_id: str, scope: str
+        ) -> dict[str, Any]:
+            return _guard(
+                lambda: _registration_summary(
+                    manager.install(
+                        package_id,
+                        contribution_id,
+                        scope_id=ScopeId(scope),
+                    )
+                )
+            )
+
+        return StructuredTool.from_function(
+            func=install_plugin,
+            name="install_plugin",
+            description=(
+                "Install a discovered plugin contribution into a runtime "
+                "scope. Run discover_plugins first to get valid "
+                "package_id/contribution_id. Scope must be one of "
+                "root/server/ui/agent/agent:<id> and is required — omitting "
+                "or misspelling it fails instead of targeting the wrong "
+                "scope. Built-in packages cannot be installed. Installed "
+                "plugins start disabled; use enable_plugin to activate. "
+                "Example: install_plugin(package_id='dynamic.core', "
+                "contribution_id='management-tools-plugin-template', "
+                "scope='agent'). Returns a registration summary, or "
+                "{\"error\": ...}."
+            ),
+            args_schema=InstallPluginArgs,
+        )
+
+    @staticmethod
+    def _enable_tool(manager: Any) -> StructuredTool:
+        def enable_plugin(name: str, scope: str) -> dict[str, Any]:
+            return _guard(
+                lambda: _registration_summary(
+                    manager.set_enabled(name, True, scope_id=ScopeId(scope))
+                )
+            )
+
+        return StructuredTool.from_function(
+            func=enable_plugin,
+            name="enable_plugin",
+            description=(
+                "Enable a disabled runtime plugin in an explicit scope, "
+                "activating its components immediately — tools it provides "
+                "become available right away. name must be the exact "
+                "registered plugin name from list_runtime_plugins. Returns "
+                "a registration summary, or {\"error\": ...}."
+            ),
+            args_schema=NameScopeArgs,
+        )
+
+    @staticmethod
+    def _disable_tool(manager: Any) -> StructuredTool:
+        def disable_plugin(
+            name: str, scope: str, confirm: str
+        ) -> dict[str, Any]:
+            return _guard(
+                lambda: _registration_summary(
+                    manager.set_enabled(name, False, scope_id=ScopeId(scope))
+                )
+            )
+
+        return StructuredTool.from_function(
+            func=disable_plugin,
+            name="disable_plugin",
+            description=(
+                "Disable a runtime plugin in an explicit scope, unbinding "
+                "its components immediately — its tools disappear from the "
+                "agent loop. This includes disabling this management plugin "
+                "itself; do that only when the user asked for it, because "
+                "you cannot re-enable it afterwards. You MUST pass "
+                "confirm='DISABLE' exactly or the call fails. Returns a "
+                "registration summary, or {\"error\": ...}."
+            ),
+            args_schema=DisablePluginArgs,
+        )
+
+    @staticmethod
+    def _upgrade_tool(manager: Any) -> StructuredTool:
+        def upgrade_plugin(name: str, scope: str) -> dict[str, Any]:
+            return _guard(
+                lambda: _registration_summary(
+                    manager.upgrade(name, scope_id=ScopeId(scope))
+                )
+            )
+
+        return StructuredTool.from_function(
+            func=upgrade_plugin,
+            name="upgrade_plugin",
+            description=(
+                "Upgrade an installed runtime plugin in an explicit scope "
+                "to the latest discovered package version. Use "
+                "list_runtime_plugins first to confirm the status is "
+                "'upgrade_available'. Returns a registration summary, or "
+                "{\"error\": ...}."
+            ),
+            args_schema=NameScopeArgs,
+        )
+
+    @staticmethod
+    def _uninstall_tool(manager: Any) -> StructuredTool:
+        def uninstall_plugin(
+            name: str, scope: str, confirm: str
+        ) -> dict[str, Any]:
+            def action() -> dict[str, Any]:
+                manager.uninstall(name, scope_id=ScopeId(scope))
+                return {"removed": True}
+
+            return _guard(action)
+
+        return StructuredTool.from_function(
+            func=uninstall_plugin,
+            name="uninstall_plugin",
+            description=(
+                "Permanently uninstall a runtime plugin from an explicit "
+                "scope and delete its persisted registration; this cannot "
+                "be undone automatically. Use disable_plugin instead when "
+                "you only want to pause it. You MUST pass "
+                "confirm='UNINSTALL' exactly or the call fails. Returns "
+                "{\"removed\": true}, or {\"error\": ...}."
+            ),
+            args_schema=UninstallPluginArgs,
+        )
+
+    @staticmethod
+    def _properties_tool(manager: Any) -> StructuredTool:
+        def update_plugin_properties(
+            name: str, scope: str, properties: dict[str, Any]
+        ) -> dict[str, Any]:
+            return _guard(
+                lambda: _registration_summary(
+                    manager.update_properties(
+                        name, properties, scope_id=ScopeId(scope)
+                    )
+                )
+            )
+
+        return StructuredTool.from_function(
+            func=update_plugin_properties,
+            name="update_plugin_properties",
+            description=(
+                "Replace or add runtime properties of an installed plugin "
+                "instance in an explicit scope (the runtime 'set' "
+                "operation). properties must be a non-empty mapping of "
+                "key/value pairs. Use list_runtime_plugins first for the "
+                "exact registered name. Returns a registration summary, or "
+                "{\"error\": ...}."
+            ),
+            args_schema=UpdatePropertiesArgs,
         )
