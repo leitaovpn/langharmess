@@ -8,7 +8,10 @@ from unittest.mock import Mock
 import pytest
 
 from langharmess_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
-from langharmess_plugin.coordinator import RuntimeMutationCoordinator
+from langharmess_plugin.coordinator import (
+    RuntimeMutationCoordinator,
+    RuntimeMutationError,
+)
 from langharmess_plugin.discovery import PluginDiscovery
 from langharmess_plugin.package import PluginContribution, PluginPackage, ToolExport
 from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
@@ -98,6 +101,17 @@ def agent_instance_package() -> PluginPackage:
                 "agent_instance",
                 descriptor("instance", scope="agent", scope_parent="root"),
             ),
+        ),
+    )
+
+
+def same_module_package() -> PluginPackage:
+    return PluginPackage(
+        "dynamic.core",
+        "1",
+        (
+            PluginContribution("one", "server", descriptor("one")),
+            PluginContribution("two", "server", descriptor("two")),
         ),
     )
 
@@ -743,3 +757,25 @@ def test_same_name_in_two_scopes_targets_only_the_given_scope() -> None:
 
     with pytest.raises(KeyError, match="not found in scope"):
         mutations.set_enabled("dynamic", False, scope_id=ScopeId("agent"))
+
+
+def test_install_rejects_a_second_registration_sharing_a_module() -> None:
+    runtime = manager()
+    store = CountingStore()
+    mutations = coordinator(runtime, store, packages=(same_module_package(),))
+
+    mutations.install("dynamic.core", "one")
+
+    with pytest.raises(RuntimeMutationError, match="one plugin per module"):
+        mutations.install("dynamic.core", "two")
+
+
+def test_install_allows_same_module_after_uninstall() -> None:
+    runtime = manager()
+    store = CountingStore()
+    mutations = coordinator(runtime, store, packages=(same_module_package(),))
+
+    mutations.install("dynamic.core", "one")
+    mutations.uninstall("one", scope_id=ScopeId("server"))
+    mutations.install("dynamic.core", "two")
+    assert [item.descriptor.name for item in mutations.registrations()] == ["two"]

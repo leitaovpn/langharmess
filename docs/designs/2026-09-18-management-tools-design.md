@@ -90,13 +90,15 @@ optional=True)`，工具函数直接调用 coordinator 方法；`BindField` 回�
   scope 必须 `agent:<id>`，注册名按协调器惯例后缀为
   `management-tools-plugin-template@agent-<id>`，仅该 agent 的 loop 可见。
 
-**同 module 防呆**：两个贡献共用同一 module，Pelix 对同 module 的
-`install_bundle` 会去重返回同一 bundle，若同时安装两个贡献，卸载其一会
-连带停掉另一个的组件（注册记录与实际状态脱节）。因此：
+**同 module 防呆**：两个贡献共用同一 module。第三方包在多个作用域安装同一 module
+是既有受支持流程（Pelix 对同 module 的 `install_bundle` 去重返回同一 bundle），
+但 `dynamic.core` 内两个管理贡献同时安装是纯冗余（agent 已覆盖全部
+`agent:<id>`），且卸载其一会连带停掉共享 bundle 上另一个的组件。因此：
 
-- `coordinator.install` 增加前置守卫：新注册的
+- `coordinator.install` 增加前置守卫（仅 `dynamic.core` 包生效）：新注册的
   `descriptor.module` 已被**不同名**的现有注册占用时，抛
   `RuntimeMutationError`（消息说明同 module 二选一），保持事务回滚语义。
+  第三方包的同 module 多作用域安装不受影响。
 - 文档注明两者二选一（`agent` 已覆盖全部 `agent:<id>`）。
 
 ### 4. 工具清单、入参约束与提示词

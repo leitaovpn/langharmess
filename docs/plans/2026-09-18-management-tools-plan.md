@@ -268,7 +268,7 @@ git commit -m "refactor: move scope tree rendering into langharmess_scope"
 
 **Interfaces:**
 - Consumes: `PersistedPluginRegistration.descriptor.module`(Task 1/2 无关)。
-- Produces: `coordinator.install(...)` 在「新描述符的 module 已被**不同名**现有注册占用」时抛 `RuntimeMutationError`(消息含 `"one plugin per module"`),不落任何状态;Task 7 的 e2e 与后续安装路径依赖此行为。
+- Produces: `coordinator.install(...)` 在「新安装来自 `dynamic.core` 且其 module 已被**不同名**现有注册占用」时抛 `RuntimeMutationError`(消息含 `"one plugin per module"`),不落任何状态;第三方包的同 module 多作用域安装(既有 e2e `test_dynamic_discovery_install_visibility_and_restore` 覆盖的受支持流程)不受影响。Task 7 的 e2e 依赖此行为。
 
 - [ ] **Step 1: 写失败测试**
 
