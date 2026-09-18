@@ -372,6 +372,7 @@ class PluginCommandPlugin:
     ) -> None:
         if not arguments or not _is_config_scope(arguments[0]):
             print("Scope is required. Specify api, cli, or agent:<id>.")
+            self._usage()
             return
         scope, plugin, rest = self._plugin_arguments(arguments)
         if plugin is None:

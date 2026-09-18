@@ -19,13 +19,13 @@ echo "== dynamic plugin lifecycle =="
 "$CLI" --dir "$SMOKE_DIR" plugins discover \
   --server-port "$SERVER_PORT" --token secret
 "$CLI" --dir "$SMOKE_DIR" plugins install real.echo echo \
-  --server-port "$SERVER_PORT" --token secret
+  --scope server --server-port "$SERVER_PORT" --token secret
 "$CLI" --dir "$SMOKE_DIR" plugins disable real-echo \
-  --server-port "$SERVER_PORT" --token secret
+  --scope server --server-port "$SERVER_PORT" --token secret
 "$CLI" --dir "$SMOKE_DIR" plugins enable real-echo \
-  --server-port "$SERVER_PORT" --token secret
+  --scope server --server-port "$SERVER_PORT" --token secret
 "$CLI" --dir "$SMOKE_DIR" plugins uninstall real-echo \
-  --server-port "$SERVER_PORT" --token secret
+  --scope server --server-port "$SERVER_PORT" --token secret
 
 echo "== real LLM interactive flow =="
 printf '%s\n' \

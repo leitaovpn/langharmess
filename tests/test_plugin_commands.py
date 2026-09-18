@@ -554,14 +554,18 @@ def test_plugins_set_rejects_missing_pair(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert handler_for("plugins")(Context(), "set api-auth") is False
-    assert "Scope is required" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "Scope is required" in output
+    assert "usage" in output.lower()
 
 
 def test_plugins_set_rejects_malformed_pair(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert handler_for("plugins")(Context(), "set api-auth broken") is False
-    assert "Scope is required" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "Scope is required" in output
+    assert "usage" in output.lower()
 
 
 def test_plugins_history_lists_versions(
