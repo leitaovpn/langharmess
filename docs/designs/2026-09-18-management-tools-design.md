@@ -15,7 +15,7 @@
 
 ## 现状
 
-- agent loop（`langharmess_core/plugins/loop/agent_loop.py`）由 iPOPO 服务
+- agent loop（`langharness_core/plugins/loop/agent_loop.py`）由 iPOPO 服务
   装配，`ToolProvider` 服务经 scope 链（`agent:<id>` → agent → … → root）
   注入；任何服务 bind/unbind 触发 graph 重建，**工具集本身可动态增减**。
 - `/plugins`、`/scope` 是 CLI 交互命令，经 HTTP 调 API，最终落到 server
@@ -23,7 +23,7 @@
   运行时服务，root 作用域，见 `PluginManager.register_runtime_service`）。
   agent loop 同样运行在 server 进程，**工具可以进程内直接绑定
   `DynamicPluginManager` 协议服务**，无需 HTTP。
-- 动态插件目录：`langharmess_core/plugin.py` 的 `DYNAMIC_PLUGIN_CATALOG`
+- 动态插件目录：`langharness_core/plugin.py` 的 `DYNAMIC_PLUGIN_CATALOG`
   自动生成 `dynamic.core` 包的贡献（target 均为 `agent`），可被
   `/plugins install` 发现并按注册持久化、由 `restore()` 恢复。
 - coordinator 的 `install` 对 target `agent_instance` 的贡献会按 scope 后缀
@@ -56,7 +56,7 @@ optional=True)`，工具函数直接调用 coordinator 方法；`BindField` 回�
 
 ### 2. 新插件 `management-tools`
 
-新文件 `src/langharmess_core/plugins/tools/management.py`（仿
+新文件 `src/langharness_core/plugins/tools/management.py`（仿
 `plugins/tools/workspace.py` 写法）：
 
 - `@ComponentFactory("management-tools-plugin-factory")`
@@ -73,7 +73,7 @@ optional=True)`，工具函数直接调用 coordinator 方法；`BindField` 回�
 
 ```python
 "management-tools-plugin": (
-    "langharmess_core.plugins.tools.management",
+    "langharness_core.plugins.tools.management",
     "management-tools-plugin-factory",
     SPEC_TOOL,
 ),
@@ -146,12 +146,12 @@ optional=True)`，工具函数直接调用 coordinator 方法；`BindField` 回�
 
 ### 5. 两个共享 helper 收敛
 
-1. runtime scope 词汇：新增 `langharmess_plugin/validation.py` 的
+1. runtime scope 词汇：新增 `langharness_plugin/validation.py` 的
    `RUNTIME_SCOPES` 与 `is_runtime_scope(value) -> bool`；CLI
    `_is_runtime_scope`、API `_validate_runtime_scope` 与工具 schema
    validator 改为共用。
 2. scope 树渲染：把 CLI `commands/scope.py` 的 `_render_tree` 下沉为
-   `langharmess_scope` 的 `render_scope_tree(scopes) -> str`；
+   `langharness_scope` 的 `render_scope_tree(scopes) -> str`；
    `list_scope_tree` 与 CLI 共用（core 不 import cli，避免反向依赖）。
 
 ### 6. 动态开关路径（运营视角）
@@ -193,15 +193,15 @@ pytest，覆盖率 ≥95%）：
 
 ## 涉及文件
 
-- 新：`src/langharmess_core/plugins/tools/management.py`（组件 + 9 工具 +
+- 新：`src/langharness_core/plugins/tools/management.py`（组件 + 9 工具 +
   schemas）
-- 改：`src/langharmess_core/plugin.py`（目录条目 + agent_instance 贡献）
-- 改：`src/langharmess_plugin/coordinator.py`（同 module 守卫）
-- 改：`src/langharmess_plugin/validation.py`（共享 runtime scope helper）
-- 改：`src/langharmess_scope/`（`render_scope_tree`）
-- 改：`src/langharmess_api/plugins/routes/plugins.py`、
-  `src/langharmess_cli/plugins/commands/plugins.py`、
-  `src/langharmess_cli/plugins/commands/scope.py`（改用共享 helper）
+- 改：`src/langharness_core/plugin.py`（目录条目 + agent_instance 贡献）
+- 改：`src/langharness_plugin/coordinator.py`（同 module 守卫）
+- 改：`src/langharness_plugin/validation.py`（共享 runtime scope helper）
+- 改：`src/langharness_scope/`（`render_scope_tree`）
+- 改：`src/langharness_api/plugins/routes/plugins.py`、
+  `src/langharness_cli/plugins/commands/plugins.py`、
+  `src/langharness_cli/plugins/commands/scope.py`（改用共享 helper）
 - 新/改：单元与 e2e 测试
 - 改：`README.md`（交互命令章节补充管理工具用法）
 

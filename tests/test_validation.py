@@ -8,7 +8,7 @@ from typing import Any, Optional, Protocol, runtime_checkable
 
 import pytest
 
-from langharmess_plugin.validation import (
+from langharness_plugin.validation import (
     CONTRACTS,
     ContractGuard,
     ContractViolationError,
@@ -610,7 +610,7 @@ def test_guard_quarantines_aggregate_service(caplog: pytest.LogCaptureFixture) -
     service = Bad()
     owner._tools.append(service)
 
-    with caplog.at_level(logging.ERROR, logger="langharmess.contract"):
+    with caplog.at_level(logging.ERROR, logger="langharness.contract"):
         assert guard.admit(service) is False
 
     assert owner._tools == []
@@ -676,13 +676,13 @@ def test_guard_quarantine_ignores_unrelated_list_entries() -> None:
     "scope", ["root", "server", "ui", "agent", "agent:a", "agent:web-1"]
 )
 def test_is_runtime_scope_accepts_vocabulary(scope: str) -> None:
-    from langharmess_plugin.validation import is_runtime_scope
+    from langharness_plugin.validation import is_runtime_scope
 
     assert is_runtime_scope(scope) is True
 
 
 @pytest.mark.parametrize("scope", ["", "agent:", "api", "cli", "Agent"])
 def test_is_runtime_scope_rejects_other_values(scope: str) -> None:
-    from langharmess_plugin.validation import is_runtime_scope
+    from langharness_plugin.validation import is_runtime_scope
 
     assert is_runtime_scope(scope) is False

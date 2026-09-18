@@ -9,7 +9,7 @@ from typing import Any, cast
 
 import pytest
 
-from langharmess_core.contracts import (
+from langharness_core.contracts import (
     SPEC_AGENT_DIRECTORY,
     SPEC_AGENT_LOOP,
     SPEC_LLM,
@@ -17,12 +17,12 @@ from langharmess_core.contracts import (
     SPEC_TOOL,
     AgentDirectoryProvider,
 )
-from langharmess_core.plugins.agents.directory import AgentDirectoryPlugin
-from langharmess_plugin.contracts import SPEC_PLUGIN_SCOPE, ScopedPluginRegistrar
-from langharmess_plugin.registry import PluginDescriptor
-from langharmess_plugin.scope_const import AGENT_SCOPE_ID
-from langharmess_plugin.validation import contract_for, validate
-from langharmess_scope import ScopeId, ScopeTree
+from langharness_core.plugins.agents.directory import AgentDirectoryPlugin
+from langharness_plugin.contracts import SPEC_PLUGIN_SCOPE, ScopedPluginRegistrar
+from langharness_plugin.registry import PluginDescriptor
+from langharness_plugin.scope_const import AGENT_SCOPE_ID
+from langharness_plugin.validation import contract_for, validate
+from langharness_scope import ScopeId, ScopeTree
 
 
 def agent_record(
@@ -39,12 +39,12 @@ def agent_record(
 
 
 REQUIRED_MODULES = {
-    "langharmess_core.plugins.tools.workspace",
-    "langharmess_core.plugins.name.template_name",
-    "langharmess_core.plugins.loop.agent_loop",
+    "langharness_core.plugins.tools.workspace",
+    "langharness_core.plugins.name.template_name",
+    "langharness_core.plugins.loop.agent_loop",
 }
 
-LLM_MODULE = "langharmess_core.plugins.llm.llm"
+LLM_MODULE = "langharness_core.plugins.llm.llm"
 
 # The default fake has every module installed; tests that exercise the
 # wait-for-bundles path remove modules from this set explicitly.
@@ -178,7 +178,7 @@ class FakeConfigs:
         if self._default is None:
             raise ValueError(
                 "No default model is configured: add a "
-                "[providers.default] section to langharmess.toml"
+                "[providers.default] section to langharness.toml"
             )
         return dict(self._default)
 
@@ -215,7 +215,7 @@ def test_validate_materializes_default_plugins_and_loop() -> None:
         "agent-loop@simple_agent",
     }
     tools = instances["tools@simple_agent"]
-    assert tools.module == "langharmess_core.plugins.tools.workspace"
+    assert tools.module == "langharness_core.plugins.tools.workspace"
     assert tools.specification == SPEC_TOOL
     assert tools.properties["plugin.agent_id"] == "simple_agent"
     assert tools.properties["plugin.tools.root_dir"] == "."
@@ -277,7 +277,7 @@ def test_ensure_plugin_instance_creates_agent_scoped_llm() -> None:
     plugin.ensure_plugin_instance("simple_agent", "llm", properties)
 
     descriptor = plugin._scope.instances["llm@simple_agent"]
-    assert descriptor.module == "langharmess_core.plugins.llm.llm"
+    assert descriptor.module == "langharness_core.plugins.llm.llm"
     assert descriptor.specification == SPEC_LLM
     assert descriptor.properties == {**properties, "plugin.agent_id": "simple_agent"}
     assert plugin.list_agents()[0]["plugins"] == ["llm", "name", "tools"]
@@ -543,7 +543,7 @@ def test_materialize_creates_agent_scope_default_llm_from_providers_default() ->
     )
 
     default = plugin._scope.instances["llm@default"]
-    assert default.module == "langharmess_core.plugins.llm.llm"
+    assert default.module == "langharness_core.plugins.llm.llm"
     assert default.specification == SPEC_LLM
     assert default.properties == {
         "plugin.model.name": "default-model",

@@ -7,10 +7,10 @@ check:
 	$(PYTHON) -m mypy
 	$(PYTHON) -m pyright --pythonpath $(PYTHON)
 	$(PYTHON) -m pytest tests/test_imports.py -q
-	$(PYTHON) -m pytest -q --cov=langharmess --cov=langharmess_scope --cov=langharmess_config --cov=langharmess_logging --cov=langharmess_core --cov=langharmess_plugin --cov=langharmess_api --cov=langharmess_cli --cov-report=term-missing --cov-fail-under=95
+	$(PYTHON) -m pytest -q --cov=langharness --cov=langharness_scope --cov=langharness_config --cov=langharness_logging --cov=langharness_core --cov=langharness_plugin --cov=langharness_api --cov=langharness_cli --cov-report=term-missing --cov-fail-under=95
 
 test:
-	$(PYTHON) -m pytest -q --cov=langharmess --cov=langharmess_scope --cov=langharmess_config --cov=langharmess_logging --cov=langharmess_core --cov=langharmess_plugin --cov=langharmess_api --cov=langharmess_cli --cov-report=term-missing --cov-fail-under=95
+	$(PYTHON) -m pytest -q --cov=langharness --cov=langharness_scope --cov=langharness_config --cov=langharness_logging --cov=langharness_core --cov=langharness_plugin --cov=langharness_api --cov=langharness_cli --cov-report=term-missing --cov-fail-under=95
 
 install-hooks:
 	git config core.hooksPath .githooks

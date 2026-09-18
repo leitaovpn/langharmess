@@ -8,19 +8,19 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from langharmess_api.contracts import (
+from langharness_api.contracts import (
     SPEC_SERVER_SERVER,
     SPEC_UI_SDK,
     ServerServerProvider,
     UISdkProvider,
 )
-from langharmess_api.plugins.sdk.http import HttpUISdk
-from langharmess_api.plugins.server.runtime import ServerServerService
-from langharmess_api.sdk import package as sdk_package
-from langharmess_cli.contracts import SPEC_UI_SERVER, UIServerProvider
-from langharmess_cli.plugins.server import UIServerService
-from langharmess_core.contracts import SPEC_AGENT_SERVER, AgentServerProvider
-from langharmess_core.plugins.agents.server import AgentServerService
+from langharness_api.plugins.sdk.http import HttpUISdk
+from langharness_api.plugins.server.runtime import ServerServerService
+from langharness_api.sdk import package as sdk_package
+from langharness_cli.contracts import SPEC_UI_SERVER, UIServerProvider
+from langharness_cli.plugins.server import UIServerService
+from langharness_core.contracts import SPEC_AGENT_SERVER, AgentServerProvider
+from langharness_core.plugins.agents.server import AgentServerService
 
 
 def test_module_specifications_and_runtime_protocols() -> None:
@@ -36,7 +36,7 @@ def test_module_specifications_and_runtime_protocols() -> None:
 
 
 def test_ui_server_forwards_unified_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    import langharmess_cli.common.cli as cli_module
+    import langharness_cli.common.cli as cli_module
 
     captured = {}
     monkeypatch.setattr(
@@ -84,7 +84,7 @@ def test_ui_server_forwards_unified_settings(monkeypatch: pytest.MonkeyPatch) ->
 def test_server_service_builds_app_and_exposes_agent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import langharmess_api.plugins.server.runtime as runtime_module
+    import langharness_api.plugins.server.runtime as runtime_module
 
     app = SimpleNamespace(state=SimpleNamespace())
     captured = {}
@@ -149,7 +149,7 @@ def test_agent_server_delegates_and_reloads_after_replacement() -> None:
 
 
 def test_http_sdk_health_get_and_put(monkeypatch: pytest.MonkeyPatch) -> None:
-    import langharmess_api.plugins.sdk.http as sdk_module
+    import langharness_api.plugins.sdk.http as sdk_module
 
     class Response:
         status_code = 200
@@ -187,7 +187,7 @@ def test_http_sdk_health_get_and_put(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 async def test_http_sdk_streams_ndjson(monkeypatch: pytest.MonkeyPatch) -> None:
-    import langharmess_api.plugins.sdk.http as sdk_module
+    import langharness_api.plugins.sdk.http as sdk_module
 
     class StreamResponse:
         async def __aenter__(self):

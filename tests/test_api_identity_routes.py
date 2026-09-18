@@ -7,8 +7,8 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from langharmess_api.plugins.routes.agents import AgentsRoutePlugin
-from langharmess_api.plugins.routes.sessions import SessionsRoutePlugin
+from langharness_api.plugins.routes.agents import AgentsRoutePlugin
+from langharness_api.plugins.routes.sessions import SessionsRoutePlugin
 
 SESSION = {
     "user_id": "local_user",

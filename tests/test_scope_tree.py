@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from langharmess_scope import (
+from langharness_scope import (
     ROOT_SCOPE_ID,
     InMemoryScopeStore,
     ScopeConflictError,

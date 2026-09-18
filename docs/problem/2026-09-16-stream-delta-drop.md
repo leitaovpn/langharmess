@@ -25,7 +25,7 @@
 
 ## 根因
 
-`src/langharmess_core/plugins/loop/agent_loop.py:601`（`astream` 的消息转发）：
+`src/langharness_core/plugins/loop/agent_loop.py:601`（`astream` 的消息转发）：
 
 ```python
 previous = previous_content.get(message_id, "")

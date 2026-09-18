@@ -9,15 +9,15 @@ from unittest.mock import Mock
 
 import pytest
 
-import langharmess_plugin.plugin_manager as pm_module
-from langharmess_plugin.contracts import (
+import langharness_plugin.plugin_manager as pm_module
+from langharness_plugin.contracts import (
     SPEC_PLUGIN_SCOPE,
     PluginRegistrar,
     ScopedPluginRegistrar,
 )
-from langharmess_plugin.plugin_manager import PluginManager
-from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
-from langharmess_plugin.validation import contract_for, service_contract
+from langharness_plugin.plugin_manager import PluginManager
+from langharness_plugin.registry import PluginDescriptor, PluginRegistry
+from langharness_plugin.validation import contract_for, service_contract
 
 
 @service_contract("test.scope.service")

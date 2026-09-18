@@ -14,15 +14,15 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from langharmess_api.plugins.auth.auth import AuthPlugin
-from langharmess_api.plugins.db.db import DBPlugin
-from langharmess_api.plugins.rate_limit.rate_limit import (
+from langharness_api.plugins.auth.auth import AuthPlugin
+from langharness_api.plugins.db.db import DBPlugin
+from langharness_api.plugins.rate_limit.rate_limit import (
     RateLimitPlugin,
 )
-from langharmess_api.plugins.routes.health import HealthRoutePlugin
-from langharmess_api.plugins.routes.stream import StreamRoutePlugin
-from langharmess_core.common.dependencies import get_db_session
-from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop
+from langharness_api.plugins.routes.health import HealthRoutePlugin
+from langharness_api.plugins.routes.stream import StreamRoutePlugin
+from langharness_core.common.dependencies import get_db_session
+from langharness_core.plugins.loop.agent_loop import PluginAgentLoop
 
 
 def agent_record(

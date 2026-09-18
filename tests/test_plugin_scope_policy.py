@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from langharmess_plugin.scope_policy import (
+from langharness_plugin.scope_policy import (
     PluginCandidate,
     PluginScopePolicy,
     resolve_scoped_aggregate,
 )
-from langharmess_scope import ScopeId, ScopeTree
+from langharness_scope import ScopeId, ScopeTree
 
 
 def hierarchy() -> tuple[ScopeTree, ScopeId, ScopeId, ScopeId]:

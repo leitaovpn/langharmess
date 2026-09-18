@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from langharmess_plugin.config_store import (
+from langharness_plugin.config_store import (
     PluginConfigStore,
     apply_overrides,
 )
-from langharmess_plugin.registry import PluginDescriptor
+from langharness_plugin.registry import PluginDescriptor
 
 
 def make_store(tmp_path: Path, scope: str = "api") -> PluginConfigStore:
@@ -111,7 +111,7 @@ def test_apply_overrides_merges_enabled_and_properties() -> None:
     descriptor = PluginDescriptor(
         name="api-rate-limit",
         version="1.0.0",
-        module="langharmess_api.plugins.rate_limit.rate_limit",
+        module="langharness_api.plugins.rate_limit.rate_limit",
         factory="api-rate-limit-plugin-factory",
         instance="api-rate-limit",
         specification="api.plugin.rate_limit",
@@ -169,7 +169,7 @@ def test_clean_config_keeps_entries_without_properties(tmp_path: Path) -> None:
 
 
 def test_load_overrides_and_agent_configs_round_trip(tmp_path: Path) -> None:
-    from langharmess_plugin.config_store import (
+    from langharness_plugin.config_store import (
         agent_scope_configs,
         load_overrides,
         scope_path,

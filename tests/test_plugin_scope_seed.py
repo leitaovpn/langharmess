@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from langharmess_plugin.plugin_manager import PluginManager
-from langharmess_plugin.registry import PluginRegistry
-from langharmess_plugin.scope_const import (
+from langharness_plugin.plugin_manager import PluginManager
+from langharness_plugin.registry import PluginRegistry
+from langharness_plugin.scope_const import (
     AGENT_SCOPE_ID,
     ROOT_SCOPE_ID,
     SERVER_SCOPE_ID,
     UI_SCOPE_ID,
 )
-from langharmess_scope import ScopeId, ScopeTree
+from langharness_scope import ScopeId, ScopeTree
 
 
 def test_start_seeds_builtin_scopes() -> None:

@@ -27,7 +27,7 @@
 
 ## 词汇表
 
-- runtime scope（`langharmess_scope` scope 树 + 动态注册的 `scope_id`）：
+- runtime scope（`langharness_scope` scope 树 + 动态注册的 `scope_id`）：
   `root` / `server` / `ui` / `agent` / `agent:<id>`
 - config scope（`PluginConfigStore`，见 API `KNOWN_SCOPES`）：
   `api` / `cli` / `agent:<id>`
@@ -36,7 +36,7 @@
 
 ### 1. 协调器 + 协议层（根因修复）
 
-`src/langharmess_plugin/contracts.py` 的 `DynamicPluginManager` 协议，
+`src/langharness_plugin/contracts.py` 的 `DynamicPluginManager` 协议，
 四个变更方法增加必填 keyword-only 参数：
 
 ```python
@@ -48,7 +48,7 @@ def uninstall(self, name: str, *, scope_id: ScopeId) -> None: ...
 def upgrade(self, name: str, *, scope_id: ScopeId) -> PersistedPluginRegistration: ...
 ```
 
-`src/langharmess_plugin/coordinator.py`：
+`src/langharness_plugin/coordinator.py`：
 
 - `_registration(name)` 改为 `_registration(name, scope_id)`，同时匹配
   `registration.descriptor.name == name` 与
@@ -59,7 +59,7 @@ def upgrade(self, name: str, *, scope_id: ScopeId) -> PersistedPluginRegistratio
 
 ### 2. API 路由层
 
-`src/langharmess_api/plugins/routes/plugins.py`：
+`src/langharness_api/plugins/routes/plugins.py`：
 
 - 四个 runtime 变更端点增加必填 `scope: str = Query(...)`，先调用新 helper
   `_validate_runtime_scope(scope)`（合法值 `root` / `server` / `ui` /
@@ -73,7 +73,7 @@ def upgrade(self, name: str, *, scope_id: ScopeId) -> PersistedPluginRegistratio
 
 ### 3. CLI 层（非交互 + 交互）
 
-`src/langharmess_cli/plugins/commands/plugins.py`：
+`src/langharness_cli/plugins/commands/plugins.py`：
 
 统一原则：变更操作缺 scope → 打印
 `"Scope is required. Specify …"` 错误 + usage；非交互退出码 1，交互式返回

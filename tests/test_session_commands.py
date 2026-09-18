@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 import pytest
 
-from langharmess_cli.plugins.commands.session import SessionCommandPlugin
+from langharness_cli.plugins.commands.session import SessionCommandPlugin
 
 AGENTS = [
     {

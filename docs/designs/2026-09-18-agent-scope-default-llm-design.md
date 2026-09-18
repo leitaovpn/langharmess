@@ -46,12 +46,12 @@ scope 的实例遮蔽默认,移除后自动回落。
 
 ## 实现
 
-- `src/langharmess_core/plugin.py`:新增 `default_llm_descriptor(properties)`
+- `src/langharness_core/plugin.py`:新增 `default_llm_descriptor(properties)`
   ——llm 模块实例 `llm@default`,scope `"agent"`、scope_parent `"root"`。
-- `src/langharmess_core/plugins/agents/directory.py`:
+- `src/langharness_core/plugins/agents/directory.py`:
   - `@RequiresBest("_configs_service", Configs, optional=True,
     immediate_rebind=True)` + ContractGuard(import 自
-    `langharmess_config.contracts`,与 api 层同模式);字段名避开目录已有
+    `langharness_config.contracts`,与 api 层同模式);字段名避开目录已有
     的存储绑定配置 `_configs`。
   - `_materialize_all()` 先幂等调用 `_ensure_default_llm()`:读取
     `get_default_provider()`,映射字段后 `instantiate_instance(descriptor,

@@ -14,7 +14,7 @@
 - runtime scope 词汇表：`root` / `server` / `ui` / `agent` / `agent:<id>`
 - config scope 词汇表：`api` / `cli` / `agent:<id>`
 - 变更操作缺 scope：错误信息 + usage；非交互退出码 1，交互式返回 REPL（返回 False）
-- 提交必须使用**精确路径** `git add`，**绝不提交** `.vscode/launch.json` 与 `src/langharmess_core/plugins/system_prompt/template_system_prompt.py`（工作区中与本次无关的未提交改动）
+- 提交必须使用**精确路径** `git add`，**绝不提交** `.vscode/launch.json` 与 `src/langharness_core/plugins/system_prompt/template_system_prompt.py`（工作区中与本次无关的未提交改动）
 - **工作区基线**（未提交的本次特性相关改动，随各任务提交）：CLI/API 已做了部分 scope 透传与 config 聚合、usage 已更新；`tests/test_plugin_commands.py` 当前有 2 个失败（`test_noninteractive_enable_disable_upgrade_uninstall`、`test_plugins_lists_runtime_plugins_for_default_scope`），分别在 Task 3 / Task 5 修复
 - mypy strict 覆盖 `src`；协调器签名必须与协议完全一致（`ContractGuard` 会做签名内省校验，keyword-only 参数两边必须一致）
 
@@ -23,13 +23,13 @@
 ### Task 1: 协调器按 (scope_id, name) 精确查找
 
 **Files:**
-- Modify: `src/langharmess_plugin/contracts.py:83-93`
-- Modify: `src/langharmess_plugin/coordinator.py:108-228, 332-338`
+- Modify: `src/langharness_plugin/contracts.py:83-93`
+- Modify: `src/langharness_plugin/coordinator.py:108-228, 332-338`
 - Test: `tests/test_runtime_mutation_coordinator.py`（全部变更调用补 `scope_id`，新增同名跨 scope 用例）
 - Test: `tests/test_dynamic_plugin_e2e.py:207-220`（协调器调用补 `scope_id`）
 
 **Interfaces:**
-- Consumes: `ScopeId`（`langharmess_scope.model`，`NewType("ScopeId", str)`，已在此两文件导入）
+- Consumes: `ScopeId`（`langharness_scope.model`，`NewType("ScopeId", str)`，已在此两文件导入）
 - Produces:
   - `RuntimeMutationCoordinator.set_enabled(name: str, enabled: bool, *, scope_id: ScopeId) -> PersistedPluginRegistration`
   - `RuntimeMutationCoordinator.update_properties(name: str, properties: dict[str, object], *, scope_id: ScopeId) -> PersistedPluginRegistration`
@@ -187,7 +187,7 @@ Expected: FAIL，报 `TypeError: set_enabled() got an unexpected keyword argumen
 
 - [ ] **Step 3: 修改协议与协调器**
 
-`src/langharmess_plugin/contracts.py` 行 83-93 替换为：
+`src/langharness_plugin/contracts.py` 行 83-93 替换为：
 
 ```python
     def set_enabled(
@@ -205,7 +205,7 @@ Expected: FAIL，报 `TypeError: set_enabled() got an unexpected keyword argumen
     ) -> PersistedPluginRegistration: ...
 ```
 
-`src/langharmess_plugin/coordinator.py`：
+`src/langharness_plugin/coordinator.py`：
 
 - `set_enabled` 签名与查找（行 108-110）：
 
@@ -266,13 +266,13 @@ Expected: PASS
 
 - [ ] **Step 5: 类型检查**
 
-Run: `python -m mypy src/langharmess_plugin`
+Run: `python -m mypy src/langharness_plugin`
 Expected: 无错误（协议与实现签名一致）
 
 - [ ] **Step 6: 提交**
 
 ```bash
-git add src/langharmess_plugin/contracts.py src/langharmess_plugin/coordinator.py tests/test_runtime_mutation_coordinator.py tests/test_dynamic_plugin_e2e.py
+git add src/langharness_plugin/contracts.py src/langharness_plugin/coordinator.py tests/test_runtime_mutation_coordinator.py tests/test_dynamic_plugin_e2e.py
 git commit -m "feat: scope-aware runtime mutation lookup in coordinator"
 ```
 
@@ -281,11 +281,11 @@ git commit -m "feat: scope-aware runtime mutation lookup in coordinator"
 ### Task 2: API runtime 变更端点强制 scope
 
 **Files:**
-- Modify: `src/langharmess_api/plugins/routes/plugins.py:21-27, 192-254, 302-322`
+- Modify: `src/langharness_api/plugins/routes/plugins.py:21-27, 192-254, 302-322`
 - Test: `tests/test_plugin_config_routes.py:115-151, 433-533`（FakeDynamic 签名 + 既有用例更新 + 新用例）
 
 **Interfaces:**
-- Consumes: Task 1 的协调器签名（`set_enabled(name, enabled, *, scope_id)` 等）；`operation_error`（`langharmess_api/common/errors.py`，KeyError 时 `status_code=404` 且 code 为 `PLUGIN_NOT_FOUND`）
+- Consumes: Task 1 的协调器签名（`set_enabled(name, enabled, *, scope_id)` 等）；`operation_error`（`langharness_api/common/errors.py`，KeyError 时 `status_code=404` 且 code 为 `PLUGIN_NOT_FOUND`）
 - Produces:
   - 路由插件私有方法 `_validate_runtime_scope(self, scope: str) -> None`（非法抛 400 `Unknown runtime scope: {scope}`）
   - 四个 runtime 变更端点新增必填 `scope: str = Query(...)`
@@ -487,12 +487,12 @@ Expected: FAIL——`test_dynamic_runtime_install_enable_upgrade_uninstall` 报 
 
 - [ ] **Step 3: 修改 API 路由**
 
-`src/langharmess_api/plugins/routes/plugins.py`：
+`src/langharness_api/plugins/routes/plugins.py`：
 
-- 导入区（行 21-27 附近）补一行（放在 `from langharmess_plugin.contracts import ...` 之后）：
+- 导入区（行 21-27 附近）补一行（放在 `from langharness_plugin.contracts import ...` 之后）：
 
 ```python
-from langharmess_scope import ScopeId
+from langharness_scope import ScopeId
 ```
 
 - 常量（行 29 `KNOWN_SCOPES = ("api", "cli")` 之后）新增：
@@ -618,13 +618,13 @@ Expected: PASS
 
 - [ ] **Step 5: 类型检查**
 
-Run: `python -m mypy src/langharmess_api`
+Run: `python -m mypy src/langharness_api`
 Expected: 无错误
 
 - [ ] **Step 6: 提交**
 
 ```bash
-git add src/langharmess_api/plugins/routes/plugins.py tests/test_plugin_config_routes.py
+git add src/langharness_api/plugins/routes/plugins.py tests/test_plugin_config_routes.py
 git commit -m "feat: require scope on runtime mutation endpoints"
 ```
 
@@ -633,7 +633,7 @@ git commit -m "feat: require scope on runtime mutation endpoints"
 ### Task 3: 非交互 CLI 强制 scope
 
 **Files:**
-- Modify: `src/langharmess_cli/plugins/commands/plugins.py:22-23, 26-31, 82-136`
+- Modify: `src/langharness_cli/plugins/commands/plugins.py:22-23, 26-31, 82-136`
 - Test: `tests/test_plugin_commands.py:143-236`（修复基线失败 + 新用例）
 
 **Interfaces:**
@@ -765,7 +765,7 @@ Expected: `test_noninteractive_enable_disable_upgrade_uninstall` 与 `test_plugi
 
 - [ ] **Step 3: 实现非交互校验**
 
-`src/langharmess_cli/plugins/commands/plugins.py`：
+`src/langharness_cli/plugins/commands/plugins.py`：
 
 - `_coerce`（行 26-31）之后新增模块级 helper 与常量：
 
@@ -866,7 +866,7 @@ Expected: 全部 PASS（含修复后的 `test_noninteractive_enable_disable_upgr
 - [ ] **Step 5: 提交**
 
 ```bash
-git add src/langharmess_cli/plugins/commands/plugins.py tests/test_plugin_commands.py
+git add src/langharness_cli/plugins/commands/plugins.py tests/test_plugin_commands.py
 git commit -m "feat: enforce scope on non-interactive plugin mutations"
 ```
 
@@ -875,7 +875,7 @@ git commit -m "feat: enforce scope on non-interactive plugin mutations"
 ### Task 4: 交互式 CLI 强制 scope + 清理死代码
 
 **Files:**
-- Modify: `src/langharmess_cli/plugins/commands/plugins.py:22-23, 237-256, 302-397, 526-550`
+- Modify: `src/langharness_cli/plugins/commands/plugins.py:22-23, 237-256, 302-397, 526-550`
 - Test: `tests/test_plugin_commands.py:533-656`
 
 **Interfaces:**
@@ -975,7 +975,7 @@ Expected: 新用例 FAIL（`rollback 2` 仍走 api 缺省、`history` 仍走 api
 
 - [ ] **Step 3: 实现交互式校验**
 
-`src/langharmess_cli/plugins/commands/plugins.py`：
+`src/langharness_cli/plugins/commands/plugins.py`：
 
 - 删除行 22-23 两个常量：
 
@@ -1100,13 +1100,13 @@ Expected: 全部 PASS
 
 - [ ] **Step 5: 确认死代码清除**
 
-Run: `grep -rn "DEFAULT_CONFIG_SCOPE\|DEFAULT_RUNTIME_SCOPE\|_runtime_scope\|_is_scope\b" src/langharmess_cli/plugins/commands/plugins.py`
+Run: `grep -rn "DEFAULT_CONFIG_SCOPE\|DEFAULT_RUNTIME_SCOPE\|_runtime_scope\|_is_scope\b" src/langharness_cli/plugins/commands/plugins.py`
 Expected: 无输出
 
 - [ ] **Step 6: 提交**
 
 ```bash
-git add src/langharmess_cli/plugins/commands/plugins.py tests/test_plugin_commands.py
+git add src/langharness_cli/plugins/commands/plugins.py tests/test_plugin_commands.py
 git commit -m "feat: enforce scope on interactive plugin mutations"
 ```
 
@@ -1115,7 +1115,7 @@ git commit -m "feat: enforce scope on interactive plugin mutations"
 ### Task 5: 聚合 list 展示 Scope 列
 
 **Files:**
-- Modify: `src/langharmess_cli/plugins/commands/plugins.py:208-217, 419-433, 497-514`
+- Modify: `src/langharness_cli/plugins/commands/plugins.py:208-217, 419-433, 497-514`
 - Test: `tests/test_plugin_commands.py:258-292, 143-167`
 
 **Interfaces:**
@@ -1246,7 +1246,7 @@ Expected: 三个用例 FAIL（标题仍为 `scope all`、无 Scope 列）
 
 - [ ] **Step 3: 实现 Scope 列**
 
-`src/langharmess_cli/plugins/commands/plugins.py`：
+`src/langharness_cli/plugins/commands/plugins.py`：
 
 - `_runtime_table`（行 419-433）替换为：
 
@@ -1315,7 +1315,7 @@ Expected: 全部 PASS（基线两个失败至此全部修复）
 - [ ] **Step 5: 提交**
 
 ```bash
-git add src/langharmess_cli/plugins/commands/plugins.py tests/test_plugin_commands.py
+git add src/langharness_cli/plugins/commands/plugins.py tests/test_plugin_commands.py
 git commit -m "feat: show scope column when listing runtime plugins across scopes"
 ```
 
@@ -1350,7 +1350,7 @@ Expected: 仅协调器协议/实现定义与 API 路由的带 `scope_id=` 调用
 
 - [ ] **Step 4: 手动冒烟（可选）**
 
-Run: `python -m langharmess --mode server`（另开终端），然后：
+Run: `python -m langharness --mode server`（另开终端），然后：
 
 ```bash
 curl -s -X PUT "http://127.0.0.1:11534/plugins/runtime/x/enabled" -H "Authorization: Bearer secret" -H "Content-Type: application/json" -d '{"enabled": true}'

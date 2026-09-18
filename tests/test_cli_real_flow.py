@@ -22,11 +22,11 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from fixtures.dynamic_plugin import create_dynamic_plugin
 from fixtures.fake_llm_server import FakeLLMServer
-from langharmess_core.common.ids import thread_key
+from langharness_core.common.ids import thread_key
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-CLI = Path(sys.executable).with_name("langharmess")
+CLI = Path(sys.executable).with_name("langharness")
 
 
 def free_port() -> int:
@@ -38,7 +38,7 @@ def free_port() -> int:
 def cli_command(*args: str) -> list[str]:
     if CLI.exists():
         return [str(CLI), *args]
-    return [sys.executable, "-m", "langharmess_cli", *args]
+    return [sys.executable, "-m", "langharness_cli", *args]
 
 
 def make_env(tmp_path: Path, plugin_root: Path) -> dict[str, str]:
@@ -48,7 +48,7 @@ def make_env(tmp_path: Path, plugin_root: Path) -> dict[str, str]:
     if existing:
         paths.append(existing)
     env["PYTHONPATH"] = os.pathsep.join(paths)
-    env["LANG_HARMESS_DIR"] = str(tmp_path)
+    env["LANG_HARNESS_DIR"] = str(tmp_path)
     return env
 
 
@@ -76,7 +76,7 @@ def running_api(
             sys.executable,
             "-m",
             "uvicorn",
-            "langharmess_api.common.server:create_app",
+            "langharness_api.common.server:create_app",
             "--factory",
             "--host",
             "127.0.0.1",
@@ -137,7 +137,7 @@ def runtime_plugins(base_url: str) -> list[dict[str, Any]]:
 
 
 def write_fake_provider(tmp_path: Path, fake: FakeLLMServer) -> None:
-    (tmp_path / "langharmess.toml").write_text(
+    (tmp_path / "langharness.toml").write_text(
         "\n".join(
             [
                 "[providers.fake]",
@@ -431,7 +431,7 @@ def test_real_cli_memory_isolated_by_session(tmp_path: Path) -> None:
         )
         assert "alpha-session-one" not in _user_texts(other_session_request)
 
-        checkpoint_path = tmp_path / "langharmess_checkpoints.sqlite3"
+        checkpoint_path = tmp_path / "langharness_checkpoints.sqlite3"
         session_a_texts = asyncio.run(
             _checkpoint_texts(
                 checkpoint_path,
@@ -481,7 +481,7 @@ def test_real_cli_memory_isolated_by_agent_and_session_index_tracks_agents(
         )
         assert "alpha-agent-a-secret" not in _user_texts(switched_request)
 
-        checkpoint_path = tmp_path / "langharmess_checkpoints.sqlite3"
+        checkpoint_path = tmp_path / "langharness_checkpoints.sqlite3"
         agent_a_texts = asyncio.run(
             _checkpoint_texts(
                 checkpoint_path,
@@ -513,14 +513,14 @@ def test_real_cli_memory_isolated_by_agent_and_session_index_tracks_agents(
 
 @pytest.mark.real_llm
 def test_real_llm_smoke(tmp_path: Path) -> None:
-    provider = os.environ.get("LANG_HARMESS_REAL_LLM_PROVIDER")
+    provider = os.environ.get("LANG_HARNESS_REAL_LLM_PROVIDER")
     if not provider:
-        pytest.skip("set LANG_HARMESS_REAL_LLM_PROVIDER to run real LLM smoke")
+        pytest.skip("set LANG_HARNESS_REAL_LLM_PROVIDER to run real LLM smoke")
 
-    source = Path.home() / ".langharmess" / "langharmess.toml"
+    source = Path.home() / ".langharness" / "langharness.toml"
     if not source.exists():
         pytest.skip(f"real provider config not found: {source}")
-    shutil.copy(source, tmp_path / "langharmess.toml")
+    shutil.copy(source, tmp_path / "langharness.toml")
 
     plugin_root = create_dynamic_plugin(tmp_path / "dynamic")
     with running_api(tmp_path, plugin_root) as (base_url, port, _server):
@@ -542,7 +542,7 @@ def test_real_llm_smoke(tmp_path: Path) -> None:
                 "--session-id",
                 "real-session",
             ],
-            input_text="say langharmess-ok\nexit\n",
+            input_text="say langharness-ok\nexit\n",
             timeout=120.0,
         )
         assert result.returncode == 0, result.stderr

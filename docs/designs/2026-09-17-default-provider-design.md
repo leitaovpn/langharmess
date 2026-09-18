@@ -20,7 +20,7 @@
 
 ## 配置模板
 
-`src/langharmess_config/config/langharmess.toml` 与 `scripts/install.sh` 中
+`src/langharness_config/config/langharness.toml` 与 `scripts/install.sh` 中
 写入的模板：删除现有的激活占位段 `[providers.deepseek-v4-flash]`，改为注释
 示例（新装环境因此报错，提示用户配置）：
 
@@ -35,19 +35,19 @@
 
 ## 契约与实现
 
-- `Configs` 协议（`src/langharmess_config/contracts.py`）新增
+- `Configs` 协议（`src/langharness_config/contracts.py`）新增
   `get_default_provider() -> Mapping[str, Any]`。
-- `ConfigsPlugin`（`src/langharmess_config/plugins/configs.py`）：
+- `ConfigsPlugin`（`src/langharness_config/plugins/configs.py`）：
   - 抽取 `get_provider` 的校验逻辑为 `_validated_provider(name, provider)`
     私有辅助方法，`get_provider` 与 `get_default_provider` 共用。
   - `get_default_provider()`：读取 `providers.default`（经 `get_section`，
     保留 `[DEFAULT]` 合并语义）；缺失或为空时抛
-    `ValueError("No default model is configured: add a [providers.default] section to langharmess.toml")`；
+    `ValueError("No default model is configured: add a [providers.default] section to langharness.toml")`；
     否则按普通 provider 校验后返回。
   - `get_provider("default")` 抛
     `ValueError("Provider name 'default' is reserved for the default model")`。
   - `list_providers()` 排除 `default`。
-- `src/langharmess_cli/common/cli.py` 交互分支：
+- `src/langharness_cli/common/cli.py` 交互分支：
   - 无 `--provider` 且存在 configs 服务：调用 `get_default_provider()`，
     失败（ValueError）打印 stderr、返回 2；成功后用其
     model/api_key/base_url/protocol，`provider_name="default"`。

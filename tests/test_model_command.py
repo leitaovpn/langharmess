@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from langharmess_cli.common.interactive import InteractiveCLIRunner
-from langharmess_cli.plugins.commands.model import ModelCommandPlugin
+from langharness_cli.common.interactive import InteractiveCLIRunner
+from langharness_cli.plugins.commands.model import ModelCommandPlugin
 
 
 def test_model_command_lists_and_switches_providers(
@@ -62,7 +62,7 @@ def test_model_command_reports_unknown_provider(
 def test_model_command_survives_broken_provider_config(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from langharmess_config.plugins.configs import ConfigsPlugin
+    from langharness_config.plugins.configs import ConfigsPlugin
 
     configs = ConfigsPlugin()
     configs._providers = [

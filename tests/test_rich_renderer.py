@@ -9,9 +9,9 @@ from typing import Any
 import pytest
 from rich.console import Console
 
-import langharmess_cli.plugins.rich_renderer as renderer_module
-from langharmess_cli.contracts import InteractiveRenderer
-from langharmess_cli.plugins.rich_renderer import RichInteractiveRenderer
+import langharness_cli.plugins.rich_renderer as renderer_module
+from langharness_cli.contracts import InteractiveRenderer
+from langharness_cli.plugins.rich_renderer import RichInteractiveRenderer
 
 USAGE = {"type": "usage", "input_tokens": 10, "output_tokens": 2, "total_tokens": 12}
 
@@ -125,7 +125,7 @@ def test_renderer_renders_welcome_and_localized_errors() -> None:
     renderer.show_welcome("Use /help")
     renderer.show_error("broken")
     rendered = output.getvalue()
-    assert "langharmess" in rendered
+    assert "langharness" in rendered
     assert "Use /help" in rendered
     assert "Error: broken" in rendered
 

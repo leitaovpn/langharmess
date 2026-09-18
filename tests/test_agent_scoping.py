@@ -22,19 +22,19 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from langharmess_core.contracts import (
+from langharness_core.contracts import (
     SPEC_AGENT_DIRECTORY,
     SPEC_AGENT_LOOP,
     SPEC_LLM,
 )
-from langharmess_core.plugin import (
+from langharness_core.plugin import (
     agent_directory_descriptor,
     agent_loop_template_descriptor,
     agent_plugin_template_descriptor,
     agent_registry_descriptor,
 )
-from langharmess_plugin.plugin_manager import PluginManager
-from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
+from langharness_plugin.plugin_manager import PluginManager
+from langharness_plugin.registry import PluginDescriptor, PluginRegistry
 
 
 class StaticModel(BaseChatModel):
@@ -63,7 +63,7 @@ def llm_descriptor(agent_id: str, model: StaticModel) -> PluginDescriptor:
     return PluginDescriptor(
         name=f"llm-{agent_id}",
         version="1.0.0",
-        module="langharmess_core.plugins.llm.llm",
+        module="langharness_core.plugins.llm.llm",
         factory="llm-plugin-factory",
         instance=f"llm-{agent_id}",
         specification=SPEC_LLM,
@@ -78,7 +78,7 @@ def loop_descriptor(agent_id: str, *, llm_filter: str | None = None) -> PluginDe
     return PluginDescriptor(
         name=f"loop-{agent_id}",
         version="1.0.0",
-        module="langharmess_core.plugins.loop.agent_loop",
+        module="langharness_core.plugins.loop.agent_loop",
         factory="agent-loop-factory",
         instance=f"loop-{agent_id}",
         specification=SPEC_AGENT_LOOP,

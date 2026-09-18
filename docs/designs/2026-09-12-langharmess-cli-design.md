@@ -1,10 +1,10 @@
-# langharmess_cli 插件化 CLI 设计方案
+# langharness_cli 插件化 CLI 设计方案
 
 ## 目标
 
-在 `src/langharmess_cli` 中实现插件驱动的命令行工具：
+在 `src/langharness_cli` 中实现插件驱动的命令行工具：
 
-- 通过 CLI 调用 `langharmess_api` 提供的 API server
+- 通过 CLI 调用 `langharness_api` 提供的 API server
 - 命令行子命令由插件动态加载
 - CLI 执行前自动检测 API server 监听端口
 - 若 API server 未启动，则自动拉起
@@ -13,7 +13,7 @@
 ## 包结构
 
 ```text
-src/langharmess_cli/
+src/langharness_cli/
 ├── __init__.py
 ├── contracts.py
 ├── runner.py
@@ -118,7 +118,7 @@ class APIGuard:
 
 ## 实施顺序
 
-1. 创建 `langharmess_cli` 包与 contracts
+1. 创建 `langharness_cli` 包与 contracts
 2. TDD 实现 `APIGuard`
 3. TDD 实现 `CLIRunner`
 4. 实现 `TemplateHealthCommandPlugin`

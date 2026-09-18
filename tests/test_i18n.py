@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from langharmess_cli.common.i18n import LOCALES, STRINGS, get_locale, tr
+from langharness_cli.common.i18n import LOCALES, STRINGS, get_locale, tr
 
 
 def test_locales_are_english_and_chinese() -> None:
@@ -39,24 +39,24 @@ def test_tr_formats_placeholders() -> None:
 def test_get_locale_defaults_to_english(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("LANG_HARMESS_LOCALE", raising=False)
+    monkeypatch.delenv("LANG_HARNESS_LOCALE", raising=False)
     assert get_locale() == "en"
 
 
 def test_get_locale_reads_valid_env_value(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LANG_HARMESS_LOCALE", "zh")
+    monkeypatch.setenv("LANG_HARNESS_LOCALE", "zh")
     assert get_locale() == "zh"
 
 
 def test_get_locale_normalizes_case(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LANG_HARMESS_LOCALE", "ZH")
+    monkeypatch.setenv("LANG_HARNESS_LOCALE", "ZH")
     assert get_locale() == "zh"
 
 
 def test_get_locale_rejects_invalid_value(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LANG_HARMESS_LOCALE", "fr")
+    monkeypatch.setenv("LANG_HARNESS_LOCALE", "fr")
     assert get_locale() == "en"

@@ -1,8 +1,8 @@
-# langharmess_api 插件化 API Server 设计方案
+# langharness_api 插件化 API Server 设计方案
 
 ## 目标
 
-在 `src/langharmess_api` 中实现一个基于 FastAPI 的插件化 API Server，能力包括：
+在 `src/langharness_api` 中实现一个基于 FastAPI 的插件化 API Server，能力包括：
 
 - 身份鉴权插件
 - 限流插件
@@ -10,13 +10,13 @@
 - 每个 API 接口都是一个插件
 - 运行时动态扩展能力
 
-本方案复用现有 `langharmess_plugin` 的 `PluginManager` / `PluginRegistry` 和
-`langharmess_core` 的服务规范模式。
+本方案复用现有 `langharness_plugin` 的 `PluginManager` / `PluginRegistry` 和
+`langharness_core` 的服务规范模式。
 
 ## 包结构
 
 ```text
-src/langharmess_api/
+src/langharness_api/
 ├── __init__.py
 ├── contracts.py
 ├── app.py
@@ -93,7 +93,7 @@ class APIServerService:
 
 `build_app()` 流程：
 
-1. 创建 `FastAPI(title="langharmess_api", version="0.1.0")`
+1. 创建 `FastAPI(title="langharness_api", version="0.1.0")`
 2. 如果存在 DB 插件，注册 session dependency 到全局 override
 3. 如果存在鉴权插件，生成 auth dependency
 4. 如果存在限流插件，生成 rate-limit dependency
@@ -157,7 +157,7 @@ FastAPI app。
 
 ## 实施顺序
 
-1. 创建 `langharmess_api` 包与 contracts
+1. 创建 `langharness_api` 包与 contracts
 2. TDD 实现 API server 组装逻辑
 3. 实现四个模板插件
 4. 完成 e2e 测试
@@ -197,7 +197,7 @@ class DBProvider(Protocol):
 
 ## 开发边界
 
-- 不修改 `langharmess_core` / `langharmess_plugin` 现有行为
-- 新代码只落在 `src/langharmess_api`、测试和本设计文档
+- 不修改 `langharness_core` / `langharness_plugin` 现有行为
+- 新代码只落在 `src/langharness_api`、测试和本设计文档
 - 先 TDD，再实现；每个功能必须有 e2e 测试
 - 最终 `make check` 必须通过，覆盖率 >= 95%

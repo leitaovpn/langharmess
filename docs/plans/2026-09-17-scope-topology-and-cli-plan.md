@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 固定 scope 拓扑为 root→server/agent/ui、agent→agent:{id}(冒号格式),常量集中到 `langharmess_plugin/scope_const.py`,并新增 API `GET /scope` 与 CLI `/scope` 命令。
+**Goal:** 固定 scope 拓扑为 root→server/agent/ui、agent→agent:{id}(冒号格式),常量集中到 `langharness_plugin/scope_const.py`,并新增 API `GET /scope` 与 CLI `/scope` 命令。
 
 **Architecture:** `scope_const.py` 成为所有固定 SCOPE_ID 与元数据 key 的唯一权威来源;`PluginManager.start()` 全局种入固定拓扑;coordinator 恢复逻辑改为"已存在则跳过 + 过滤旧格式"实现旧数据自愈;API 新增 scopes 路由插件(绑定 `DynamicPluginManager`),CLI 新增 scope 命令插件(HTTP 客户端渲染缩进树)。
 
@@ -12,7 +12,7 @@
 
 **⚠ 重要环境事实:**
 - 本仓库 pre-commit 钩子每次 commit 会依次跑 ruff、mypy、pyright、`pytest tests/test_imports.py`(约 4.5 分钟)和全量 pytest + coverage(约 6.5 分钟,`--cov-fail-under=95`)。**每个任务必须全部绿了再 commit,且新增代码必须被测试覆盖,否则钩子会失败。** 不要用 `--no-verify` 跳过。
-- 工作区有用户未提交的改动(`src/langharmess_core/plugin.py` 等 6 个文件);所有编辑基于当前工作区内容,不要 revert。
+- 工作区有用户未提交的改动(`src/langharness_core/plugin.py` 等 6 个文件);所有编辑基于当前工作区内容,不要 revert。
 - Pelix 模块重载限制:涉及 bootstrap 的测试按模式拆分,不要在同一次 `_run` 里做跨模式的 monkeypatch(见既有测试习惯)。
 
 ---
@@ -21,24 +21,24 @@
 
 | 文件 | 责任 |
 |---|---|
-| `src/langharmess_plugin/scope_const.py`(新) | 固定 SCOPE_ID、元数据 key、`BUILTIN_SCOPES` 拓扑声明、`agent_instance_scope_id` |
-| `src/langharmess_plugin/plugin_manager.py` | 导入常量;`start()` 末尾调用 `_seed_builtin_scopes()` |
-| `src/langharmess_plugin/scope_policy.py` | 改从 scope_const 导入 `PLUGIN_SCOPE_ID`/`PLUGIN_KEY` |
-| `src/langharmess_plugin/contracts.py` | `DynamicPluginManager` 协议新增 `scopes()` |
-| `src/langharmess_plugin/coordinator.py` | 冒号格式、适配器 `scope_parent`、恢复迁移、`scopes()` 实现 |
-| `src/langharmess_core/scopes.py` | **删除**,消费方改导入 |
-| `src/langharmess_core/plugin.py`、`src/langharmess_core/plugins/agents/directory.py` | 改导入;agent 模板 `scope_parent` server→root |
-| `src/langharmess_api/plugins/routes/scopes.py`(新) | `GET /scope` 路由插件 |
-| `src/langharmess_api/plugin.py` | 注册 `api-scopes` 描述符与贡献项 |
-| `src/langharmess_cli/plugins/commands/scope.py`(新) | `/scope` 交互命令 + argparse 版 |
-| `src/langharmess_cli/plugin.py` | 注册 `cli-scope` 描述符与贡献项 |
+| `src/langharness_plugin/scope_const.py`(新) | 固定 SCOPE_ID、元数据 key、`BUILTIN_SCOPES` 拓扑声明、`agent_instance_scope_id` |
+| `src/langharness_plugin/plugin_manager.py` | 导入常量;`start()` 末尾调用 `_seed_builtin_scopes()` |
+| `src/langharness_plugin/scope_policy.py` | 改从 scope_const 导入 `PLUGIN_SCOPE_ID`/`PLUGIN_KEY` |
+| `src/langharness_plugin/contracts.py` | `DynamicPluginManager` 协议新增 `scopes()` |
+| `src/langharness_plugin/coordinator.py` | 冒号格式、适配器 `scope_parent`、恢复迁移、`scopes()` 实现 |
+| `src/langharness_core/scopes.py` | **删除**,消费方改导入 |
+| `src/langharness_core/plugin.py`、`src/langharness_core/plugins/agents/directory.py` | 改导入;agent 模板 `scope_parent` server→root |
+| `src/langharness_api/plugins/routes/scopes.py`(新) | `GET /scope` 路由插件 |
+| `src/langharness_api/plugin.py` | 注册 `api-scopes` 描述符与贡献项 |
+| `src/langharness_cli/plugins/commands/scope.py`(新) | `/scope` 交互命令 + argparse 版 |
+| `src/langharness_cli/plugin.py` | 注册 `cli-scope` 描述符与贡献项 |
 
 ---
 
 ### Task 1: 新建 scope_const.py(固定 SCOPE_ID 唯一权威来源)
 
 **Files:**
-- Create: `src/langharmess_plugin/scope_const.py`
+- Create: `src/langharness_plugin/scope_const.py`
 - Test: `tests/test_scope_const.py`(新)
 
 - [ ] **Step 1: 写失败测试**
@@ -50,7 +50,7 @@
 
 from __future__ import annotations
 
-from langharmess_plugin.scope_const import (
+from langharness_plugin.scope_const import (
     AGENT_SCOPE_ID,
     BUILTIN_SCOPES,
     PLUGIN_KEY,
@@ -61,7 +61,7 @@ from langharmess_plugin.scope_const import (
     UI_SCOPE_ID,
     agent_instance_scope_id,
 )
-from langharmess_scope import ScopeId
+from langharness_scope import ScopeId
 
 
 def test_builtin_scope_ids_are_canonical() -> None:
@@ -92,18 +92,18 @@ def test_plugin_metadata_keys_are_exported() -> None:
 - [ ] **Step 2: 运行确认失败**
 
 Run: `.venv/bin/python -m pytest tests/test_scope_const.py -q`
-Expected: FAIL,`ModuleNotFoundError: No module named 'langharmess_plugin.scope_const'`
+Expected: FAIL,`ModuleNotFoundError: No module named 'langharness_plugin.scope_const'`
 
 - [ ] **Step 3: 实现模块**
 
-创建 `src/langharmess_plugin/scope_const.py`:
+创建 `src/langharness_plugin/scope_const.py`:
 
 ```python
 """Canonical scope identifiers and scope-related plugin metadata keys."""
 
 from __future__ import annotations
 
-from langharmess_scope import ROOT_SCOPE_ID, ScopeId
+from langharness_scope import ROOT_SCOPE_ID, ScopeId
 
 UI_SCOPE_ID = ScopeId("ui")
 SERVER_SCOPE_ID = ScopeId("server")
@@ -146,7 +146,7 @@ Expected: PASS(4 passed)
 - [ ] **Step 5: Commit**(钩子约 11 分钟,耐心等待)
 
 ```bash
-git add src/langharmess_plugin/scope_const.py tests/test_scope_const.py
+git add src/langharness_plugin/scope_const.py tests/test_scope_const.py
 git commit -m "feat: centralize fixed scope ids and plugin metadata keys in scope_const"
 ```
 
@@ -155,12 +155,12 @@ git commit -m "feat: centralize fixed scope ids and plugin metadata keys in scop
 ### Task 2: scope_policy 与 plugin_manager 改从 scope_const 导入元数据 key
 
 **Files:**
-- Modify: `src/langharmess_plugin/scope_policy.py:1-12`
-- Modify: `src/langharmess_plugin/plugin_manager.py:1-35`
+- Modify: `src/langharness_plugin/scope_policy.py:1-12`
+- Modify: `src/langharness_plugin/plugin_manager.py:1-35`
 
 - [ ] **Step 1: 修改 scope_policy.py 导入与常量**
 
-`src/langharmess_plugin/scope_policy.py` 当前(第 1-12 行):
+`src/langharness_plugin/scope_policy.py` 当前(第 1-12 行):
 
 ```python
 """Plugin-specific visibility and shadowing rules over a generic scope tree."""
@@ -170,7 +170,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from langharmess_scope import ScopeId, ScopeTreeProvider
+from langharness_scope import ScopeId, ScopeTreeProvider
 
 PLUGIN_SCOPE_ID = "plugin.scope_id"
 PLUGIN_KEY = "plugin.key"
@@ -186,22 +186,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from langharmess_plugin.scope_const import PLUGIN_KEY, PLUGIN_SCOPE_ID
-from langharmess_scope import ScopeId, ScopeTreeProvider
+from langharness_plugin.scope_const import PLUGIN_KEY, PLUGIN_SCOPE_ID
+from langharness_scope import ScopeId, ScopeTreeProvider
 ```
 
 - [ ] **Step 2: 修改 plugin_manager.py 导入与常量**
 
-`src/langharmess_plugin/plugin_manager.py` 第 22-31 行当前:
+`src/langharness_plugin/plugin_manager.py` 第 22-31 行当前:
 
 ```python
-from langharmess_plugin.scope_policy import PluginScopePolicy
-from langharmess_plugin.validation import (
+from langharness_plugin.scope_policy import PluginScopePolicy
+from langharness_plugin.validation import (
     ContractViolationError,
     contract_for,
     validate,
 )
-from langharmess_scope import ROOT_SCOPE_ID, ScopeId, ScopeTree
+from langharness_scope import ROOT_SCOPE_ID, ScopeId, ScopeTree
 
 FILTERS_PROPERTY = "requires.filters"
 SERVICE_RANKING = "service.ranking"
@@ -215,18 +215,18 @@ PLUGIN_RANKING = "plugin.ranking"
 改为:
 
 ```python
-from langharmess_plugin.scope_const import (
+from langharness_plugin.scope_const import (
     PLUGIN_KEY,
     PLUGIN_SCOPE_CHAIN,
     PLUGIN_SCOPE_ID,
 )
-from langharmess_plugin.scope_policy import PluginScopePolicy
-from langharmess_plugin.validation import (
+from langharness_plugin.scope_policy import PluginScopePolicy
+from langharness_plugin.validation import (
     ContractViolationError,
     contract_for,
     validate,
 )
-from langharmess_scope import ROOT_SCOPE_ID, ScopeId, ScopeTree
+from langharness_scope import ROOT_SCOPE_ID, ScopeId, ScopeTree
 
 FILTERS_PROPERTY = "requires.filters"
 SERVICE_RANKING = "service.ranking"
@@ -242,7 +242,7 @@ Expected: PASS(行为不变,纯导入迁移)
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/langharmess_plugin/scope_policy.py src/langharmess_plugin/plugin_manager.py
+git add src/langharness_plugin/scope_policy.py src/langharness_plugin/plugin_manager.py
 git commit -m "refactor: import plugin metadata keys from scope_const"
 ```
 
@@ -251,7 +251,7 @@ git commit -m "refactor: import plugin metadata keys from scope_const"
 ### Task 3: PluginManager 全局种子(所有进程启动即种入固定拓扑)
 
 **Files:**
-- Modify: `src/langharmess_plugin/plugin_manager.py`(start() 与方法区)
+- Modify: `src/langharness_plugin/plugin_manager.py`(start() 与方法区)
 - Test: `tests/test_plugin_scope_seed.py`(新)
 - Modify: `tests/test_dynamic_plugin_e2e.py:117-124`(移除冗余 ensure)
 - Modify: `tests/test_scope_plugin_e2e.py:146,262-265`(移除冗余/冲突 ensure)
@@ -267,15 +267,15 @@ from __future__ import annotations
 
 import pytest
 
-from langharmess_plugin.plugin_manager import PluginManager
-from langharmess_plugin.registry import PluginRegistry
-from langharmess_plugin.scope_const import (
+from langharness_plugin.plugin_manager import PluginManager
+from langharness_plugin.registry import PluginRegistry
+from langharness_plugin.scope_const import (
     AGENT_SCOPE_ID,
     ROOT_SCOPE_ID,
     SERVER_SCOPE_ID,
     UI_SCOPE_ID,
 )
-from langharmess_scope import ScopeId, ScopeTree
+from langharness_scope import ScopeId, ScopeTree
 
 
 def test_start_seeds_builtin_scopes() -> None:
@@ -323,12 +323,12 @@ Expected: FAIL(第一个测试:启动后树里只有 root)
 
 - [ ] **Step 3: 实现种子逻辑**
 
-`src/langharmess_plugin/plugin_manager.py`:
+`src/langharness_plugin/plugin_manager.py`:
 
 (a) 导入处(第 22-31 行,Task 2 之后的样子)在 `PLUGIN_SCOPE_CHAIN,` 后加 `BUILTIN_SCOPES,`:
 
 ```python
-from langharmess_plugin.scope_const import (
+from langharness_plugin.scope_const import (
     BUILTIN_SCOPES,
     PLUGIN_KEY,
     PLUGIN_SCOPE_CHAIN,
@@ -418,7 +418,7 @@ Expected: PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/langharmess_plugin/plugin_manager.py tests/test_plugin_scope_seed.py tests/test_dynamic_plugin_e2e.py tests/test_scope_plugin_e2e.py
+git add src/langharness_plugin/plugin_manager.py tests/test_plugin_scope_seed.py tests/test_dynamic_plugin_e2e.py tests/test_scope_plugin_e2e.py
 git commit -m "feat: seed the fixed scope topology on PluginManager start"
 ```
 
@@ -427,9 +427,9 @@ git commit -m "feat: seed the fixed scope topology on PluginManager start"
 ### Task 4: agent 实例 scope 冒号格式迁移(agent/a → agent:a)
 
 **Files:**
-- Modify: `src/langharmess_plugin/coordinator.py:244-260,316,330`
-- Modify: `src/langharmess_core/plugin.py:31`、`src/langharmess_core/plugins/agents/directory.py:33`(改导入)
-- Delete: `src/langharmess_core/scopes.py`
+- Modify: `src/langharness_plugin/coordinator.py:244-260,316,330`
+- Modify: `src/langharness_core/plugin.py:31`、`src/langharness_core/plugins/agents/directory.py:33`(改导入)
+- Delete: `src/langharness_core/scopes.py`
 - Modify: `tests/test_imports.py:27,32-33`
 - Modify: `tests/test_runtime_mutation_coordinator.py:279,284,292,535`
 - Modify: `tests/test_dynamic_plugin_e2e.py:124,146,155,163,185,187`
@@ -439,7 +439,7 @@ git commit -m "feat: seed the fixed scope topology on PluginManager start"
 
 - [ ] **Step 1: 改 coordinator 格式判断**
 
-`src/langharmess_plugin/coordinator.py` 第 251-253 行当前:
+`src/langharness_plugin/coordinator.py` 第 251-253 行当前:
 
 ```python
         if scope_id is None or not str(scope_id).startswith("agent/"):
@@ -471,39 +471,39 @@ git commit -m "feat: seed the fixed scope topology on PluginManager start"
 
 - [ ] **Step 2: 切换消费方导入并删除 core/scopes.py**
 
-`src/langharmess_core/plugin.py` 第 31 行:
+`src/langharness_core/plugin.py` 第 31 行:
 
 ```python
-from langharmess_core.scopes import agent_instance_scope_id
+from langharness_core.scopes import agent_instance_scope_id
 ```
 
 改为:
 
 ```python
-from langharmess_plugin.scope_const import agent_instance_scope_id
+from langharness_plugin.scope_const import agent_instance_scope_id
 ```
 
-`src/langharmess_core/plugins/agents/directory.py` 第 33 行:
+`src/langharness_core/plugins/agents/directory.py` 第 33 行:
 
 ```python
-from langharmess_core.scopes import AGENT_SCOPE_ID, agent_instance_scope_id
+from langharness_core.scopes import AGENT_SCOPE_ID, agent_instance_scope_id
 ```
 
 改为:
 
 ```python
-from langharmess_plugin.scope_const import AGENT_SCOPE_ID, agent_instance_scope_id
+from langharness_plugin.scope_const import AGENT_SCOPE_ID, agent_instance_scope_id
 ```
 
 删除文件:
 
 ```bash
-git rm src/langharmess_core/scopes.py
+git rm src/langharness_core/scopes.py
 ```
 
 - [ ] **Step 3: 更新 test_imports.py 模块清单**
 
-`tests/test_imports.py` 删除第 27 行 `"langharmess_core.scopes",`;在 `"langharmess_plugin.scope_policy",` 之前插入 `"langharmess_plugin.scope_const",`。
+`tests/test_imports.py` 删除第 27 行 `"langharness_core.scopes",`;在 `"langharness_plugin.scope_policy",` 之前插入 `"langharness_plugin.scope_const",`。
 
 - [ ] **Step 4: 更新受影响测试的格式断言(逐个替换,共 6 个文件)**
 
@@ -557,7 +557,7 @@ Expected: PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/langharmess_plugin/coordinator.py src/langharmess_core/plugin.py src/langharmess_core/plugins/agents/directory.py src/langharmess_core/scopes.py tests/test_imports.py tests/test_runtime_mutation_coordinator.py tests/test_dynamic_plugin_e2e.py tests/test_scope_plugin_e2e.py tests/test_agent_directory.py tests/test_plugin_scope_classification.py
+git add src/langharness_plugin/coordinator.py src/langharness_core/plugin.py src/langharness_core/plugins/agents/directory.py src/langharness_core/scopes.py tests/test_imports.py tests/test_runtime_mutation_coordinator.py tests/test_dynamic_plugin_e2e.py tests/test_scope_plugin_e2e.py tests/test_agent_directory.py tests/test_plugin_scope_classification.py
 git commit -m "refactor: switch agent instance scope ids to agent:<id> colon format"
 ```
 
@@ -566,8 +566,8 @@ git commit -m "refactor: switch agent instance scope ids to agent:<id> colon for
 ### Task 5: agent 模板 scope_parent 由 server 改为 root(拓扑 root→agent)
 
 **Files:**
-- Modify: `src/langharmess_core/plugin.py`(4 处模板描述符)
-- Modify: `src/langharmess_plugin/coordinator.py:330`
+- Modify: `src/langharness_core/plugin.py`(4 处模板描述符)
+- Modify: `src/langharness_plugin/coordinator.py:330`
 - Modify: `tests/test_plugin_scope_classification.py`(templates 断言)
 - Modify: `tests/test_core_descriptors.py:154-155`
 - Modify: `tests/test_agent_directory.py:81-85,190-193`
@@ -576,7 +576,7 @@ git commit -m "refactor: switch agent instance scope ids to agent:<id> colon for
 
 - [ ] **Step 1: 修改 core/plugin.py 的 4 处模板描述符**
 
-`src/langharmess_core/plugin.py` 中恰好 4 处如下两行对(agent 模板描述符),全部把 `scope_parent="server"` 改为 `scope_parent="root"`(可对这两行整体做 replace-all,注意 `scope="agent"` 配对的才是目标,server 描述符的 `scope_parent="root"` 不受影响):
+`src/langharness_core/plugin.py` 中恰好 4 处如下两行对(agent 模板描述符),全部把 `scope_parent="server"` 改为 `scope_parent="root"`(可对这两行整体做 replace-all,注意 `scope="agent"` 配对的才是目标,server 描述符的 `scope_parent="root"` 不受影响):
 
 ```python
         scope="agent",
@@ -594,7 +594,7 @@ git commit -m "refactor: switch agent instance scope ids to agent:<id> colon for
 
 - [ ] **Step 2: 修改 coordinator 工具导出适配器的 scope_parent**
 
-`src/langharmess_plugin/coordinator.py` 第 330 行(Task 4 之后为):
+`src/langharness_plugin/coordinator.py` 第 330 行(Task 4 之后为):
 
 ```python
                 scope_parent="agent" if target_scope.startswith("agent:") else "server",
@@ -731,7 +731,7 @@ Expected: PASS
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/langharmess_core/plugin.py src/langharmess_plugin/coordinator.py tests/test_plugin_scope_classification.py tests/test_core_descriptors.py tests/test_agent_directory.py tests/test_scope_plugin_e2e.py tests/test_runtime_mutation_coordinator.py
+git add src/langharness_core/plugin.py src/langharness_plugin/coordinator.py tests/test_plugin_scope_classification.py tests/test_core_descriptors.py tests/test_agent_directory.py tests/test_scope_plugin_e2e.py tests/test_runtime_mutation_coordinator.py
 git commit -m "feat: hang agent templates under root instead of server"
 ```
 
@@ -740,7 +740,7 @@ git commit -m "feat: hang agent templates under root instead of server"
 ### Task 6: 恢复迁移 —— 已存在跳过 + 过滤旧格式 agent/<id>
 
 **Files:**
-- Modify: `src/langharmess_plugin/coordinator.py:194-231,262-282`
+- Modify: `src/langharness_plugin/coordinator.py:194-231,262-282`
 - Test: `tests/test_runtime_mutation_coordinator.py`(新增 2 个测试)
 
 - [ ] **Step 1: 写失败测试**
@@ -812,7 +812,7 @@ Expected: FAIL(第一个:恢复时 `ensure_scope` 因父级冲突抛 ValueError;
 
 - [ ] **Step 3: 修改 _restore_scopes(已存在跳过 + 旧格式过滤)**
 
-`src/langharmess_plugin/coordinator.py` 第 262-282 行当前:
+`src/langharness_plugin/coordinator.py` 第 262-282 行当前:
 
 ```python
     def _restore_scopes(self) -> None:
@@ -871,7 +871,7 @@ Expected: FAIL(第一个:恢复时 `ensure_scope` 因父级冲突抛 ValueError;
 
 - [ ] **Step 4: 修改 restore() 丢弃旧格式注册**
 
-`src/langharmess_plugin/coordinator.py` 第 199-201 行当前:
+`src/langharness_plugin/coordinator.py` 第 199-201 行当前:
 
 ```python
             self._restore_scopes()
@@ -902,7 +902,7 @@ Expected: PASS(含既有 orphan 测试 —— 其快照里 `agent:a` 的父级 `
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/langharmess_plugin/coordinator.py tests/test_runtime_mutation_coordinator.py
+git add src/langharness_plugin/coordinator.py tests/test_runtime_mutation_coordinator.py
 git commit -m "feat: self-heal restore skips preexisting scopes and legacy agent/<id> data"
 ```
 
@@ -911,26 +911,26 @@ git commit -m "feat: self-heal restore skips preexisting scopes and legacy agent
 ### Task 7: API GET /scope 路由
 
 **Files:**
-- Modify: `src/langharmess_plugin/contracts.py`(DynamicPluginManager 加 `scopes()`)
-- Modify: `src/langharmess_plugin/coordinator.py`(实现 `scopes()`)
-- Create: `src/langharmess_api/plugins/routes/scopes.py`
-- Modify: `src/langharmess_api/plugin.py`(描述符 + 贡献项)
+- Modify: `src/langharness_plugin/contracts.py`(DynamicPluginManager 加 `scopes()`)
+- Modify: `src/langharness_plugin/coordinator.py`(实现 `scopes()`)
+- Create: `src/langharness_api/plugins/routes/scopes.py`
+- Modify: `src/langharness_api/plugin.py`(描述符 + 贡献项)
 - Modify: `tests/test_plugin_scope_classification.py`(server 列表加入 api_scopes)
 - Modify: `tests/test_imports.py`(加入 routes.scopes)
 - Test: `tests/test_scope_routes.py`(新)
 
 - [ ] **Step 1: 扩展协议并写失败测试**
 
-`src/langharmess_plugin/contracts.py` 导入处:
+`src/langharness_plugin/contracts.py` 导入处:
 
 ```python
-from langharmess_scope import ScopeId
+from langharness_scope import ScopeId
 ```
 
 改为:
 
 ```python
-from langharmess_scope import Scope, ScopeId
+from langharness_scope import Scope, ScopeId
 ```
 
 `DynamicPluginManager` 协议末尾(`upgrade` 之后)加:
@@ -953,8 +953,8 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from langharmess_api.plugins.routes.scopes import ScopesRoutePlugin
-from langharmess_scope import Scope, ScopeId
+from langharness_api.plugins.routes.scopes import ScopesRoutePlugin
+from langharness_scope import Scope, ScopeId
 
 
 class FakeDynamic:
@@ -1026,20 +1026,20 @@ def test_plugin_info_is_exposed() -> None:
 - [ ] **Step 2: 运行确认失败**
 
 Run: `.venv/bin/python -m pytest tests/test_scope_routes.py -q`
-Expected: FAIL,`ModuleNotFoundError: No module named 'langharmess_api.plugins.routes.scopes'`
+Expected: FAIL,`ModuleNotFoundError: No module named 'langharness_api.plugins.routes.scopes'`
 
 - [ ] **Step 3: coordinator 实现 scopes()**
 
-`src/langharmess_plugin/coordinator.py` 导入:
+`src/langharness_plugin/coordinator.py` 导入:
 
 ```python
-from langharmess_scope import ROOT_SCOPE_ID, ScopeId
+from langharness_scope import ROOT_SCOPE_ID, ScopeId
 ```
 
 改为:
 
 ```python
-from langharmess_scope import ROOT_SCOPE_ID, Scope, ScopeId
+from langharness_scope import ROOT_SCOPE_ID, Scope, ScopeId
 ```
 
 `registrations()` 之后加:
@@ -1052,7 +1052,7 @@ from langharmess_scope import ROOT_SCOPE_ID, Scope, ScopeId
 
 - [ ] **Step 4: 创建路由插件**
 
-创建 `src/langharmess_api/plugins/routes/scopes.py`:
+创建 `src/langharness_api/plugins/routes/scopes.py`:
 
 ```python
 """Scope tree route: the runtime scope hierarchy."""
@@ -1071,10 +1071,10 @@ from pelix.ipopo.decorators import (
     UnbindField,
 )
 
-from langharmess_api.common.errors import http_error
-from langharmess_api.contracts import RouteProvider
-from langharmess_plugin.contracts import DynamicPluginManager
-from langharmess_plugin.validation import ContractGuard
+from langharness_api.common.errors import http_error
+from langharness_api.contracts import RouteProvider
+from langharness_plugin.contracts import DynamicPluginManager
+from langharness_plugin.validation import ContractGuard
 
 
 @ComponentFactory("api-scopes-route-factory")
@@ -1140,14 +1140,14 @@ class ScopesRoutePlugin:
 
 - [ ] **Step 5: 注册描述符与贡献项**
 
-`src/langharmess_api/plugin.py` 在 `api_plugins_descriptor` 之后新增:
+`src/langharness_api/plugin.py` 在 `api_plugins_descriptor` 之后新增:
 
 ```python
 def api_scopes_descriptor() -> PluginDescriptor:
     return PluginDescriptor(
         name="api-scopes",
         version="1.0.0",
-        module="langharmess_api.plugins.routes.scopes",
+        module="langharness_api.plugins.routes.scopes",
         factory="api-scopes-route-factory",
         instance="api-scopes",
         specification=SPEC_ROUTE,
@@ -1164,7 +1164,7 @@ def api_scopes_descriptor() -> PluginDescriptor:
 
 `tests/test_plugin_scope_classification.py`:导入列表加 `api_scopes_descriptor`,并在 `test_server_plugins_and_checkpointer_are_in_server_scope` 的 descriptors 列表里(如 `api_plugins_descriptor("/tmp/config"),` 之后)加 `api_scopes_descriptor(),`。
 
-`tests/test_imports.py` 在 `"langharmess_api.plugins.routes.plugins",` 与 `"langharmess_api.plugins.routes.sessions",` 之间插入 `"langharmess_api.plugins.routes.scopes",`。
+`tests/test_imports.py` 在 `"langharness_api.plugins.routes.plugins",` 与 `"langharness_api.plugins.routes.sessions",` 之间插入 `"langharness_api.plugins.routes.scopes",`。
 
 - [ ] **Step 6: 运行确认通过**
 
@@ -1174,7 +1174,7 @@ Expected: PASS
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/langharmess_plugin/contracts.py src/langharmess_plugin/coordinator.py src/langharmess_api/plugins/routes/scopes.py src/langharmess_api/plugin.py tests/test_scope_routes.py tests/test_plugin_scope_classification.py tests/test_imports.py
+git add src/langharness_plugin/contracts.py src/langharness_plugin/coordinator.py src/langharness_api/plugins/routes/scopes.py src/langharness_api/plugin.py tests/test_scope_routes.py tests/test_plugin_scope_classification.py tests/test_imports.py
 git commit -m "feat: serve the runtime scope tree at GET /scope"
 ```
 
@@ -1183,8 +1183,8 @@ git commit -m "feat: serve the runtime scope tree at GET /scope"
 ### Task 8: CLI /scope 交互命令
 
 **Files:**
-- Create: `src/langharmess_cli/plugins/commands/scope.py`
-- Modify: `src/langharmess_cli/plugin.py`(描述符 + 贡献项)
+- Create: `src/langharness_cli/plugins/commands/scope.py`
+- Modify: `src/langharness_cli/plugin.py`(描述符 + 贡献项)
 - Modify: `tests/test_cli.py:374-381`(安装集合加 cli-scope)
 - Modify: `tests/test_imports.py`(加入 commands.scope)
 - Test: `tests/test_scope_command.py`(新)
@@ -1203,7 +1203,7 @@ from typing import Any
 import httpx
 import pytest
 
-from langharmess_cli.plugins.commands.scope import ScopeCommandPlugin
+from langharness_cli.plugins.commands.scope import ScopeCommandPlugin
 
 SCOPE_PAYLOAD = {
     "scopes": [
@@ -1300,11 +1300,11 @@ def test_scope_reports_request_failures(
 - [ ] **Step 2: 运行确认失败**
 
 Run: `.venv/bin/python -m pytest tests/test_scope_command.py -q`
-Expected: FAIL,`ModuleNotFoundError: No module named 'langharmess_cli.plugins.commands.scope'`
+Expected: FAIL,`ModuleNotFoundError: No module named 'langharness_cli.plugins.commands.scope'`
 
 - [ ] **Step 3: 实现命令插件**
 
-创建 `src/langharmess_cli/plugins/commands/scope.py`:
+创建 `src/langharness_cli/plugins/commands/scope.py`:
 
 ```python
 """Scope tree command plugin."""
@@ -1318,7 +1318,7 @@ from typing import Any
 import httpx
 from pelix.ipopo.decorators import ComponentFactory, Property, Provides
 
-from langharmess_cli.contracts import (
+from langharness_cli.contracts import (
     CLICommandProvider,
     CommandSpec,
     InteractiveCommandContext,
@@ -1423,13 +1423,13 @@ def _render_tree(scopes: list[dict[str, Any]]) -> str:
 
 - [ ] **Step 4: 注册描述符与贡献项**
 
-`src/langharmess_cli/plugin.py` 的 `cli_descriptors()` 列表末尾(`cli-shell` 描述符之后)加:
+`src/langharness_cli/plugin.py` 的 `cli_descriptors()` 列表末尾(`cli-shell` 描述符之后)加:
 
 ```python
         PluginDescriptor(
             name="cli-scope",
             version="1.0.0",
-            module="langharmess_cli.plugins.commands.scope",
+            module="langharness_cli.plugins.commands.scope",
             factory="cli-scope-command-factory",
             instance="cli-scope",
             specification=SPEC_CLI_COMMAND,
@@ -1493,7 +1493,7 @@ def _render_tree(scopes: list[dict[str, Any]]) -> str:
 
 (注意保留文件中已有的 `"configs",` 与 `"ui-server",` 缩进原样。)
 
-`tests/test_imports.py` 在 `"langharmess_cli.plugins.commands.plugins",` 与 `"langharmess_cli.plugins.commands.session",` 之间插入 `"langharmess_cli.plugins.commands.scope",`。
+`tests/test_imports.py` 在 `"langharness_cli.plugins.commands.plugins",` 与 `"langharness_cli.plugins.commands.session",` 之间插入 `"langharness_cli.plugins.commands.scope",`。
 
 - [ ] **Step 6: 运行确认通过**
 
@@ -1503,7 +1503,7 @@ Expected: PASS
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/langharmess_cli/plugins/commands/scope.py src/langharmess_cli/plugin.py tests/test_scope_command.py tests/test_cli.py tests/test_imports.py
+git add src/langharness_cli/plugins/commands/scope.py src/langharness_cli/plugin.py tests/test_scope_command.py tests/test_cli.py tests/test_imports.py
 git commit -m "feat: add /scope command showing the runtime scope tree"
 ```
 
@@ -1520,14 +1520,14 @@ git commit -m "feat: add /scope command showing the runtime scope tree"
 .venv/bin/python -m mypy
 .venv/bin/python -m pyright --pythonpath .venv/bin/python
 .venv/bin/python -m pytest tests/test_imports.py -q
-.venv/bin/python -m pytest -q --cov=langharmess --cov=langharmess_scope --cov=langharmess_config --cov=langharmess_logging --cov=langharmess_core --cov=langharmess_plugin --cov=langharmess_api --cov=langharmess_cli --cov-report=term-missing --cov-fail-under=95
+.venv/bin/python -m pytest -q --cov=langharness --cov=langharness_scope --cov=langharness_config --cov=langharness_logging --cov=langharness_core --cov=langharness_plugin --cov=langharness_api --cov=langharness_cli --cov-report=term-missing --cov-fail-under=95
 ```
 
-Expected: 全部通过;coverage ≥ 95%(删除 `langharmess_core/scopes.py` 后基准约 96.3%,新增文件均有测试覆盖)。
+Expected: 全部通过;coverage ≥ 95%(删除 `langharness_core/scopes.py` 后基准约 96.3%,新增文件均有测试覆盖)。
 
 - [ ] **Step 2: 人工冒烟(可选,需运行中的服务)**
 
-启动服务端(另一终端):`.venv/bin/python -m langharmess --mode server --config-dir /tmp/smoke`
+启动服务端(另一终端):`.venv/bin/python -m langharness --mode server --config-dir /tmp/smoke`
 然后 `curl -H "Authorization: Bearer secret" http://127.0.0.1:11534/scope`,预期返回含 root/ui/server/agent 的 JSON;在交互模式里输入 `/scope`,预期输出缩进树。
 
 - [ ] **Step 3: 若 Step 1 全绿,无需再 commit(每个任务已各自提交);否则修复后按对应任务补 commit。**

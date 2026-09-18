@@ -9,7 +9,7 @@ from typing import Any
 from langchain_core.messages import AIMessageChunk
 from langchain_core.messages.ai import UsageMetadata
 
-from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop, _extract_usage
+from langharness_core.plugins.loop.agent_loop import PluginAgentLoop, _extract_usage
 
 USAGE: UsageMetadata = {"input_tokens": 10, "output_tokens": 2, "total_tokens": 12}
 

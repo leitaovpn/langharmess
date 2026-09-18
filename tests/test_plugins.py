@@ -7,15 +7,15 @@ import pytest
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from langchain_core.tools import StructuredTool
 
-import langharmess_core.plugins.llm.llm as llm_module
-from langharmess_core.plugins.llm.llm import LLMPlugin
-from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop
-from langharmess_core.plugins.middleware.human_approval import HumanApprovalPlugin
-from langharmess_core.plugins.middleware.template_middleware import (
+import langharness_core.plugins.llm.llm as llm_module
+from langharness_core.plugins.llm.llm import LLMPlugin
+from langharness_core.plugins.loop.agent_loop import PluginAgentLoop
+from langharness_core.plugins.middleware.human_approval import HumanApprovalPlugin
+from langharness_core.plugins.middleware.template_middleware import (
     TemplateMiddlewarePlugin,
 )
-from langharmess_core.plugins.tools.tools import ToolPlugin
-from langharmess_core.plugins.tools.workspace import WorkspaceToolsPlugin
+from langharness_core.plugins.tools.tools import ToolPlugin
+from langharness_core.plugins.tools.workspace import WorkspaceToolsPlugin
 
 
 def test_llm_plugin_uses_injected_model_instance() -> None:

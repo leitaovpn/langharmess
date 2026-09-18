@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-import langharmess_core.plugins.loop.agent_loop as agent_loop_module
-from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop
+import langharness_core.plugins.loop.agent_loop as agent_loop_module
+from langharness_core.plugins.loop.agent_loop import PluginAgentLoop
 
 
 class FakeTool:

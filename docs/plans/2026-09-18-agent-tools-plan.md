@@ -4,7 +4,7 @@
 
 **Goal:** 把 agent 管理操作(list/get/create/update)以 ToolExport 声明式包 `agent.tools` 动态发现、注册进所有 agent loop,带入参约束与提示词,不暴露 delete。
 
-**Architecture:** 新组件 `AgentOperationsExport`(`langharmess_core/plugins/agents/export.py`)实现 `ToolExportTarget.invoke_export` 分发到 `AgentRegistryProvider`;`agent_tools_package()` 声明 4 个 `ToolExport`(name/description/args_schema/destructive),经 `langharmess.plugins` 入口点被发现;install 时 coordinator `_install_adapters` 自动创建适配器落 agent 作用域,loop 重建后工具进入流程。
+**Architecture:** 新组件 `AgentOperationsExport`(`langharness_core/plugins/agents/export.py`)实现 `ToolExportTarget.invoke_export` 分发到 `AgentRegistryProvider`;`agent_tools_package()` 声明 4 个 `ToolExport`(name/description/args_schema/destructive),经 `langharness.plugins` 入口点被发现;install 时 coordinator `_install_adapters` 自动创建适配器落 agent 作用域,loop 重建后工具进入流程。
 
 **Tech Stack:** Python 3.13、Pelix/iPOPO、LangChain(langchain-core ≥1.6.2)、pydantic ≥2.13.5、pytest。
 
@@ -13,7 +13,7 @@
 - 质量门槛(AGENTS.md):每个 commit 必须过 `make check`(Ruff → mypy → Pyright → clean-process import 检查 → pytest),单元覆盖率 ≥95%。
 - TDD:先写失败测试,再写最小实现;每个任务独立 commit。
 - 生产代码 mypy strict、Pyright standard 不允许全局放宽;e2e 测试文件头已有 `# mypy: ignore-errors` 属既有豁免,不新增豁免。
-- 插件间通信只走 Pelix service spec(Protocol);描述符只在 `langharmess_core/plugin.py` 构建,组件实现在 `plugins/<topic>/<name>.py`。
+- 插件间通信只走 Pelix service spec(Protocol);描述符只在 `langharness_core/plugin.py` 构建,组件实现在 `plugins/<topic>/<name>.py`。
 - 文档(docs/、README)用中文,代码/命令用英文;commit message 风格 `feat:` / `test:` / `docs:`。
 - 设计文档:`docs/designs/2026-09-18-agent-tools-design.md`(已提交 c7b98d0)。
 
@@ -22,11 +22,11 @@
 ### Task 1: 导出服务 + schemas + 提示词常量
 
 **Files:**
-- Create: `src/langharmess_core/plugins/agents/export.py`
+- Create: `src/langharness_core/plugins/agents/export.py`
 - Test: `tests/test_agent_tools.py`(新建)
 
 **Interfaces:**
-- Consumes: `AgentRegistryProvider` 协议(`langharmess_core.contracts`)、`ToolExportTarget` / `SPEC_TOOL_EXPORT_TARGET`(`langharmess_plugin.contracts`)、`ContractGuard`。
+- Consumes: `AgentRegistryProvider` 协议(`langharness_core.contracts`)、`ToolExportTarget` / `SPEC_TOOL_EXPORT_TARGET`(`langharness_plugin.contracts`)、`ContractGuard`。
 - Produces(本文件,Task 2 复用):
   - `AGENT_ID_PATTERN = r"^[A-Za-z0-9._-]{1,64}$"`
   - schemas:`ListAgentsArgs`(空)、`GetAgentArgs`(agent_id)、`CreateAgentArgs`(agent_id/name?/description?)、`UpdateAgentArgs`(agent_id/name?/description?/enabled?/confirm: Literal["DISABLE"]|None,`model_validator` 强制 enabled=False → confirm=="DISABLE")
@@ -47,7 +47,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from langharmess_core.plugins.agents.export import (
+from langharness_core.plugins.agents.export import (
     AGENT_TOOL_EXPORTS,
     AgentOperationsExport,
     CreateAgentArgs,
@@ -201,11 +201,11 @@ def test_schemas_reject_invalid_agent_ids() -> None:
 - [ ] **Step 2: 运行测试确认失败**
 
 Run: `pytest tests/test_agent_tools.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'langharmess_core.plugins.agents.export'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'langharness_core.plugins.agents.export'`
 
 - [ ] **Step 3: 最小实现**
 
-新建 `src/langharmess_core/plugins/agents/export.py`:
+新建 `src/langharness_core/plugins/agents/export.py`:
 
 ```python
 """ToolExport service wrapping agent registry operations."""
@@ -224,10 +224,10 @@ from pelix.ipopo.decorators import (
 )
 from pydantic import BaseModel, Field, model_validator
 
-from langharmess_core.contracts import AgentRegistryProvider
-from langharmess_plugin.contracts import ToolExportTarget
-from langharmess_plugin.package import ToolExport
-from langharmess_plugin.validation import ContractGuard
+from langharness_core.contracts import AgentRegistryProvider
+from langharness_plugin.contracts import ToolExportTarget
+from langharness_plugin.package import ToolExport
+from langharness_plugin.validation import ContractGuard
 
 AGENT_ID_PATTERN = r"^[A-Za-z0-9._-]{1,64}$"
 AGENT_ID_HELP = "Agent id matching ^[A-Za-z0-9._-]{1,64}$."
@@ -383,7 +383,7 @@ Expected: 全绿。
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/langharmess_core/plugins/agents/export.py tests/test_agent_tools.py
+git add src/langharness_core/plugins/agents/export.py tests/test_agent_tools.py
 git commit -m "feat: add agent operations export service with tool schemas"
 ```
 
@@ -392,25 +392,25 @@ git commit -m "feat: add agent operations export service with tool schemas"
 ### Task 2: 包声明 + 入口点
 
 **Files:**
-- Modify: `src/langharmess_core/plugin.py`(`agent_tools_package`)
+- Modify: `src/langharness_core/plugin.py`(`agent_tools_package`)
 - Modify: `pyproject.toml`(entry point `agent-tools`)
 - Test: `tests/test_packaging.py`(追加断言)、`tests/test_agent_tools.py`(追加包结构断言)
 
 **Interfaces:**
-- Consumes: Task 1 的 `AGENT_TOOL_EXPORTS`;`SPEC_TOOL_EXPORT_TARGET`(`langharmess_plugin.contracts`,plugin.py 需新增该 import)。
-- Produces: `agent_tools_package() -> PluginPackage`(id `agent.tools`,贡献 id `agent-operations`,descriptor 名 `agent-operations-export`,target `agent`,enabled=True,scope `agent`);入口点 `agent-tools = "langharmess_core.plugin:agent_tools_package"`。Task 3 e2e 与 Task 4 README 依赖这些名字。
+- Consumes: Task 1 的 `AGENT_TOOL_EXPORTS`;`SPEC_TOOL_EXPORT_TARGET`(`langharness_plugin.contracts`,plugin.py 需新增该 import)。
+- Produces: `agent_tools_package() -> PluginPackage`(id `agent.tools`,贡献 id `agent-operations`,descriptor 名 `agent-operations-export`,target `agent`,enabled=True,scope `agent`);入口点 `agent-tools = "langharness_core.plugin:agent_tools_package"`。Task 3 e2e 与 Task 4 README 依赖这些名字。
 
 - [ ] **Step 1: 写失败测试**
 
 `tests/test_packaging.py` 的 `test_console_script_and_packaging_dependencies_are_declared` 中 `assert plugins["dynamic-core"] == ...` 之后追加:
 
 ```python
-    assert plugins["agent-tools"] == "langharmess_core.plugin:agent_tools_package"
+    assert plugins["agent-tools"] == "langharness_core.plugin:agent_tools_package"
 ```
 
 `tests/test_agent_tools.py` 末尾追加(文件头补
-`from langharmess_core.plugin import agent_tools_package`
-与 `from langharmess_plugin.contracts import SPEC_TOOL_EXPORT_TARGET`):
+`from langharness_core.plugin import agent_tools_package`
+与 `from langharness_plugin.contracts import SPEC_TOOL_EXPORT_TARGET`):
 
 ```python
 def test_agent_tools_package_declares_discoverable_contribution() -> None:
@@ -424,7 +424,7 @@ def test_agent_tools_package_declares_discoverable_contribution() -> None:
     descriptor = contribution.descriptor
     assert descriptor.name == "agent-operations-export"
     assert descriptor.instance == "agent-operations-export"
-    assert descriptor.module == "langharmess_core.plugins.agents.export"
+    assert descriptor.module == "langharness_core.plugins.agents.export"
     assert descriptor.factory == "agent-operations-export-factory"
     assert descriptor.specification == SPEC_TOOL_EXPORT_TARGET
     assert descriptor.enabled is True
@@ -439,18 +439,18 @@ Expected: FAIL——pyproject 断言失败(KeyError 'agent-tools')、`agent_tool
 
 - [ ] **Step 3: 最小实现**
 
-`src/langharmess_core/plugin.py`:
+`src/langharness_core/plugin.py`:
 
-1. 导入区追加(在 `langharmess_plugin.package` 导入行附近):
+1. 导入区追加(在 `langharness_plugin.package` 导入行附近):
 
 ```python
-from langharmess_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
+from langharness_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
 ```
 
    并在文件顶部(模块导入后)加:
 
 ```python
-from langharmess_core.plugins.agents.export import AGENT_TOOL_EXPORTS
+from langharness_core.plugins.agents.export import AGENT_TOOL_EXPORTS
 ```
 
 2. 文件末尾追加:
@@ -468,7 +468,7 @@ def agent_tools_package() -> PluginPackage:
                 PluginDescriptor(
                     name="agent-operations-export",
                     version="1.0.0",
-                    module="langharmess_core.plugins.agents.export",
+                    module="langharness_core.plugins.agents.export",
                     factory="agent-operations-export-factory",
                     instance="agent-operations-export",
                     specification=SPEC_TOOL_EXPORT_TARGET,
@@ -482,10 +482,10 @@ def agent_tools_package() -> PluginPackage:
     )
 ```
 
-`pyproject.toml` 的 `[project.entry-points."langharmess.plugins"]` 表内(按字母序,`builtin-*` 之前)加一行:
+`pyproject.toml` 的 `[project.entry-points."langharness.plugins"]` 表内(按字母序,`builtin-*` 之前)加一行:
 
 ```toml
-agent-tools = "langharmess_core.plugin:agent_tools_package"
+agent-tools = "langharness_core.plugin:agent_tools_package"
 ```
 
 - [ ] **Step 4: 运行测试确认通过**
@@ -501,7 +501,7 @@ Expected: 全绿。
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/langharmess_core/plugin.py pyproject.toml tests/test_packaging.py tests/test_agent_tools.py
+git add src/langharness_core/plugin.py pyproject.toml tests/test_packaging.py tests/test_agent_tools.py
 git commit -m "feat: declare the agent-tools package for dynamic discovery"
 ```
 
@@ -520,10 +520,10 @@ git commit -m "feat: declare the agent-tools package for dynamic discovery"
 
 `tests/test_dynamic_plugin_e2e.py`:
 
-1. 头部 `from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_LLM, SPEC_TOOL` 改为:
+1. 头部 `from langharness_core.contracts import SPEC_AGENT_LOOP, SPEC_LLM, SPEC_TOOL` 改为:
 
 ```python
-from langharmess_core.contracts import (
+from langharness_core.contracts import (
     SPEC_AGENT_LOOP,
     SPEC_AGENT_REGISTRY,
     SPEC_LLM,
@@ -531,7 +531,7 @@ from langharmess_core.contracts import (
 )
 ```
 
-   并在 `from langharmess_core.plugin import (...)` 的导入元组追加
+   并在 `from langharness_core.plugin import (...)` 的导入元组追加
    `agent_registry_descriptor`、`agent_tools_package`;文件头补
    `from pathlib import Path`。
 

@@ -9,8 +9,8 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from langharmess_api.plugins.routes.scopes import ScopesRoutePlugin
-from langharmess_scope import Scope, ScopeId
+from langharness_api.plugins.routes.scopes import ScopesRoutePlugin
+from langharness_scope import Scope, ScopeId
 
 
 class FakeDynamic:

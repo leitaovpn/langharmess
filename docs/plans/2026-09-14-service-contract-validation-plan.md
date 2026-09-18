@@ -4,7 +4,7 @@
 
 **Goal:** 让 iPOPO 服务在安装与绑定时按 Protocol 契约做运行时签名校验：安装侧违规硬拦（服务不注册），绑定侧违规软隔离（消费方继续运行）。
 
-**Architecture:** 新增 `langharmess_plugin/validation.py` 提供 `service_contract` 装饰器（把 Protocol 钉为 Pelix 规格名并登记进 `CONTRACTS`）、调用兼容性校验器（`describe`/`validate`）、`ContractViolationError` 与 `ContractGuard`。各模块 `contracts.py` 的 Protocol 加 pin；组件声明从 `SPEC_X` 字符串改为 Protocol 类；`PluginManager._instantiate` 做安装期硬校验；消费方在 BindField 回调里用 `ContractGuard` 隔离违规 provider。
+**Architecture:** 新增 `langharness_plugin/validation.py` 提供 `service_contract` 装饰器（把 Protocol 钉为 Pelix 规格名并登记进 `CONTRACTS`）、调用兼容性校验器（`describe`/`validate`）、`ContractViolationError` 与 `ContractGuard`。各模块 `contracts.py` 的 Protocol 加 pin；组件声明从 `SPEC_X` 字符串改为 Protocol 类；`PluginManager._instantiate` 做安装期硬校验；消费方在 BindField 回调里用 `ContractGuard` 隔离违规 provider。
 
 **Tech Stack:** Python 3.13、Pelix/iPOPO 3.x、pytest、ruff、mypy（strict）、pyright、pytest-cov（95% 门禁）。
 
@@ -32,9 +32,9 @@
 ## Task 1: `service_contract` 装饰器与契约注册表
 
 **Files:**
-- Create: `src/langharmess_plugin/validation.py`
+- Create: `src/langharness_plugin/validation.py`
 - Create: `tests/test_validation.py`
-- Modify: `tests/test_imports.py`（`PUBLIC_MODULES` 增加 `langharmess_plugin.validation`）
+- Modify: `tests/test_imports.py`（`PUBLIC_MODULES` 增加 `langharness_plugin.validation`）
 
 - [ ] **Step 1: 写失败测试**
 
@@ -49,7 +49,7 @@ from typing import Protocol, runtime_checkable
 
 import pytest
 
-from langharmess_plugin.validation import (
+from langharness_plugin.validation import (
     CONTRACTS,
     contract_for,
     service_contract,
@@ -104,11 +104,11 @@ def test_repinning_same_class_is_idempotent() -> None:
 - [ ] **Step 2: 跑测试确认失败**
 
 Run: `.venv/bin/python -m pytest tests/test_validation.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'langharmess_plugin.validation'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'langharness_plugin.validation'`
 
 - [ ] **Step 3: 写最小实现**
 
-创建 `src/langharmess_plugin/validation.py`：
+创建 `src/langharness_plugin/validation.py`：
 
 ```python
 """Runtime validation of service objects against their Protocol contracts."""
@@ -119,7 +119,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-LOGGER = logging.getLogger("langharmess.contract")
+LOGGER = logging.getLogger("langharness.contract")
 
 SPECIFICATION_FIELD = "__SPECIFICATION__"
 
@@ -150,10 +150,10 @@ def contract_for(specification: str) -> type[Any] | None:
 
 - [ ] **Step 4: 把新模块加进干净进程导入检查**
 
-在 `tests/test_imports.py` 的 `PUBLIC_MODULES` 里、`"langharmess_plugin.plugin_manager",` 之后插入一行：
+在 `tests/test_imports.py` 的 `PUBLIC_MODULES` 里、`"langharness_plugin.plugin_manager",` 之后插入一行：
 
 ```python
-    "langharmess_plugin.validation",
+    "langharness_plugin.validation",
 ```
 
 - [ ] **Step 5: 跑测试确认通过**
@@ -165,7 +165,7 @@ Expected: PASS
 
 ```bash
 make check
-git add src/langharmess_plugin/validation.py tests/test_validation.py tests/test_imports.py
+git add src/langharness_plugin/validation.py tests/test_validation.py tests/test_imports.py
 git commit -m "新增服务契约 pin 装饰器与运行时契约注册表"
 ```
 
@@ -174,7 +174,7 @@ git commit -m "新增服务契约 pin 装饰器与运行时契约注册表"
 ## Task 2: 契约签名提取 `describe()`
 
 **Files:**
-- Modify: `src/langharmess_plugin/validation.py`
+- Modify: `src/langharness_plugin/validation.py`
 - Modify: `tests/test_validation.py`
 
 - [ ] **Step 1: 写失败测试**
@@ -185,7 +185,7 @@ git commit -m "新增服务契约 pin 装饰器与运行时契约注册表"
 import inspect
 from typing import Any, AsyncIterator
 
-from langharmess_plugin.validation import describe
+from langharness_plugin.validation import describe
 
 
 class _Shape(Protocol):
@@ -258,7 +258,7 @@ Expected: FAIL — `ImportError: cannot import name 'describe'`
 
 - [ ] **Step 3: 写实现**
 
-在 `src/langharmess_plugin/validation.py` 扩展：把顶部 import 补成
+在 `src/langharness_plugin/validation.py` 扩展：把顶部 import 补成
 
 ```python
 import inspect
@@ -396,7 +396,7 @@ Expected: PASS
 
 ```bash
 make check
-git add src/langharmess_plugin/validation.py tests/test_validation.py
+git add src/langharness_plugin/validation.py tests/test_validation.py
 git commit -m "契约签名提取：describe 剥离 self、区分参数种类、解析字符串注解"
 ```
 
@@ -416,7 +416,7 @@ git commit -m "契约签名提取：describe 剥离 self、区分参数种类、
 >    `issubclass` 容忍子类。
 
 **Files:**
-- Modify: `src/langharmess_plugin/validation.py`
+- Modify: `src/langharness_plugin/validation.py`
 - Modify: `tests/test_validation.py`
 
 - [ ] **Step 1: 写失败测试**
@@ -425,7 +425,7 @@ git commit -m "契约签名提取：describe 剥离 self、区分参数种类、
 
 ```python
 from collections.abc import Callable, Mapping
-from langharmess_plugin.validation import validate
+from langharness_plugin.validation import validate
 
 
 class _NestedAny(Protocol):
@@ -494,7 +494,7 @@ Expected: FAIL — `ImportError: cannot import name 'validate'`
 
 - [ ] **Step 3: 写实现**
 
-在 `src/langharmess_plugin/validation.py` 中 `describe` 之前加入：
+在 `src/langharness_plugin/validation.py` 中 `describe` 之前加入：
 
 ```python
 def _origin(annotation: Any) -> Any:
@@ -656,7 +656,7 @@ Expected: PASS（`_NestedAny` 等测试里未实现方法的场景此时不会�
 
 ```bash
 make check
-git add src/langharmess_plugin/validation.py tests/test_validation.py
+git add src/langharness_plugin/validation.py tests/test_validation.py
 git commit -m "注解兼容判定：Any 全深度通配、union 归一、返回注解允许协变"
 ```
 
@@ -672,7 +672,7 @@ git commit -m "注解兼容判定：Any 全深度通配、union 归一、返回�
 > `inspect.Signature.bind` 模拟调用，列为后续可选优化。
 
 **Files:**
-- Modify: `src/langharmess_plugin/validation.py`
+- Modify: `src/langharness_plugin/validation.py`
 - Modify: `tests/test_validation.py`
 
 - [ ] **Step 1: 写失败测试**
@@ -872,7 +872,7 @@ Expected: PASS
 
 ```bash
 make check
-git add src/langharmess_plugin/validation.py tests/test_validation.py
+git add src/langharness_plugin/validation.py tests/test_validation.py
 git commit -m "契约校验补齐方法存在性与参数形状判定（含 *args/**kwargs 吸收）"
 ```
 
@@ -881,7 +881,7 @@ git commit -m "契约校验补齐方法存在性与参数形状判定（含 *arg
 ## Task 5: `ContractViolationError` 与消息格式
 
 **Files:**
-- Modify: `src/langharmess_plugin/validation.py`
+- Modify: `src/langharness_plugin/validation.py`
 - Modify: `tests/test_validation.py`
 
 - [ ] **Step 1: 写失败测试**
@@ -889,7 +889,7 @@ git commit -m "契约校验补齐方法存在性与参数形状判定（含 *arg
 追加到 `tests/test_validation.py`：
 
 ```python
-from langharmess_plugin.validation import (
+from langharness_plugin.validation import (
     ContractViolationError,
     format_violations,
 )
@@ -936,7 +936,7 @@ Expected: FAIL — `ImportError: cannot import name 'ContractViolationError'`
 
 - [ ] **Step 3: 写实现**
 
-在 `src/langharmess_plugin/validation.py` 的 `Violation` 之后加入：
+在 `src/langharness_plugin/validation.py` 的 `Violation` 之后加入：
 
 ```python
 def format_violations(violations: Iterable[Violation]) -> str:
@@ -978,7 +978,7 @@ Expected: PASS
 
 ```bash
 make check
-git add src/langharmess_plugin/validation.py tests/test_validation.py
+git add src/langharness_plugin/validation.py tests/test_validation.py
 git commit -m "新增 ContractViolationError：聚合违规并给出可归因消息"
 ```
 
@@ -987,7 +987,7 @@ git commit -m "新增 ContractViolationError：聚合违规并给出可归因消
 ## Task 6: `ContractGuard`（消费侧隔离）
 
 **Files:**
-- Modify: `src/langharmess_plugin/validation.py`
+- Modify: `src/langharness_plugin/validation.py`
 - Modify: `tests/test_validation.py`
 
 - [ ] **Step 1: 写失败测试**
@@ -997,7 +997,7 @@ git commit -m "新增 ContractViolationError：聚合违规并给出可归因消
 ```python
 import logging
 
-from langharmess_plugin.validation import ContractGuard
+from langharness_plugin.validation import ContractGuard
 
 
 class _Owner:
@@ -1033,7 +1033,7 @@ def test_guard_quarantines_aggregate_service(caplog: pytest.LogCaptureFixture) -
     service = Bad()
     owner._tools.append(service)
 
-    with caplog.at_level(logging.ERROR, logger="langharmess.contract"):
+    with caplog.at_level(logging.ERROR, logger="langharness.contract"):
         assert guard.admit(service) is False
 
     assert owner._tools == []
@@ -1102,7 +1102,7 @@ Expected: FAIL — `ImportError: cannot import name 'ContractGuard'`
 
 - [ ] **Step 3: 写实现**
 
-在 `src/langharmess_plugin/validation.py` 末尾加入：
+在 `src/langharness_plugin/validation.py` 末尾加入：
 
 ```python
 def _quarantine(owner: Any, field: str, service: Any) -> None:
@@ -1162,7 +1162,7 @@ Expected: PASS
 
 ```bash
 make check
-git add src/langharmess_plugin/validation.py tests/test_validation.py
+git add src/langharness_plugin/validation.py tests/test_validation.py
 git commit -m "新增 ContractGuard：绑定期校验并按身份隔离违规 provider"
 ```
 
@@ -1171,7 +1171,7 @@ git commit -m "新增 ContractGuard：绑定期校验并按身份隔离违规 pr
 ## Task 7: 安装侧硬拦（PluginManager）
 
 **Files:**
-- Modify: `src/langharmess_plugin/plugin_manager.py:133-141`
+- Modify: `src/langharness_plugin/plugin_manager.py:133-141`
 - Create: `tests/test_contract_enforcement.py`
 - Modify: `tests/test_plugin_manager_unit.py`（假规格名改到未 pin 的 `test.plugin.*`，避免 Mock 实例被校验）
 
@@ -1189,9 +1189,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from langharmess_plugin.plugin_manager import PluginManager
-from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
-from langharmess_plugin.validation import (
+from langharness_plugin.plugin_manager import PluginManager
+from langharness_plugin.registry import PluginDescriptor, PluginRegistry
+from langharness_plugin.validation import (
     ContractViolationError,
     service_contract,
 )
@@ -1278,12 +1278,12 @@ Expected: FAIL — `test_install_rejects_non_conforming_component` 不抛异常�
 
 - [ ] **Step 3: 写实现**
 
-`src/langharmess_plugin/plugin_manager.py`：
+`src/langharness_plugin/plugin_manager.py`：
 
 顶部 import 增加：
 
 ```python
-from langharmess_plugin.validation import (
+from langharness_plugin.validation import (
     ContractViolationError,
     contract_for,
     validate,
@@ -1325,7 +1325,7 @@ Expected: PASS
 
 ```bash
 make check
-git add src/langharmess_plugin/plugin_manager.py tests/test_contract_enforcement.py tests/test_plugin_manager_unit.py
+git add src/langharness_plugin/plugin_manager.py tests/test_contract_enforcement.py tests/test_plugin_manager_unit.py
 git commit -m "PluginManager 安装期硬校验契约：违规实例击杀且不进入绑定集"
 ```
 
@@ -1334,7 +1334,7 @@ git commit -m "PluginManager 安装期硬校验契约：违规实例击杀且不
 ## Task 8: 核心契约 pin 与 `AgentLoopProvider`
 
 **Files:**
-- Modify: `src/langharmess_core/contracts.py`
+- Modify: `src/langharness_core/contracts.py`
 - Modify: `tests/test_contracts.py`
 
 - [ ] **Step 1: 写失败测试**
@@ -1350,16 +1350,16 @@ from typing import Any
 
 import pytest
 
-from langharmess_core import contracts
-from langharmess_core.plugins.llm.llm import LLMPlugin
-from langharmess_core.plugins.middleware.template_middleware import (
+from langharness_core import contracts
+from langharness_core.plugins.llm.llm import LLMPlugin
+from langharness_core.plugins.middleware.template_middleware import (
     TemplateMiddlewarePlugin,
 )
-from langharmess_core.plugins.system_prompt.template_system_prompt import (
+from langharness_core.plugins.system_prompt.template_system_prompt import (
     TemplateSystemPromptPlugin,
 )
-from langharmess_core.plugins.tools.tools import ToolPlugin
-from langharmess_plugin.validation import contract_for, validate
+from langharness_core.plugins.tools.tools import ToolPlugin
+from langharness_plugin.validation import contract_for, validate
 
 PROTOCOLS = (
     (contracts.SPEC_LLM, contracts.LLMProvider, LLMPlugin),
@@ -1401,7 +1401,7 @@ def test_pin_does_not_pollute_protocol_members() -> None:
 
 
 def test_agent_loop_contract_is_pinned() -> None:
-    from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop
+    from langharness_core.plugins.loop.agent_loop import PluginAgentLoop
 
     assert contract_for(contracts.SPEC_AGENT_LOOP) is contracts.AgentLoopProvider
     assert validate(PluginAgentLoop(), contracts.AgentLoopProvider) == ()
@@ -1414,14 +1414,14 @@ Expected: FAIL — `contract_for(...)` 返回 None；`AgentLoopProvider` 不存�
 
 - [ ] **Step 3: 写实现**
 
-`src/langharmess_core/contracts.py`：
+`src/langharness_core/contracts.py`：
 
 顶部 import 增加：
 
 ```python
 from collections.abc import AsyncIterator
 
-from langharmess_plugin.validation import service_contract
+from langharness_plugin.validation import service_contract
 ```
 
 给每个 Protocol 加 `@service_contract(SPEC_X)` 装饰器（在 `@runtime_checkable` 之上），pin 值用同文件里已有的常量：
@@ -1480,7 +1480,7 @@ Expected: PASS（若 `validate(PluginAgentLoop(), AgentLoopProvider)` 报出额�
 
 ```bash
 make check
-git add src/langharmess_core/contracts.py tests/test_contracts.py
+git add src/langharness_core/contracts.py tests/test_contracts.py
 git commit -m "核心契约 pin 到 Protocol 类规格并补齐 AgentLoopProvider"
 ```
 
@@ -1497,29 +1497,29 @@ git commit -m "核心契约 pin 到 Protocol 类规格并补齐 AgentLoopProvide
 
 | 文件 | 替换 |
 | --- | --- |
-| `src/langharmess_core/plugins/llm/llm.py` | `SPEC_LLM` → `LLMProvider` |
-| `src/langharmess_core/plugins/tools/tools.py` | `SPEC_TOOL` → `ToolProvider` |
-| `src/langharmess_core/plugins/tools/workspace.py` | `SPEC_TOOL` → `ToolProvider` |
-| `src/langharmess_core/plugins/middleware/template_middleware.py` | `SPEC_MIDDLEWARE` → `MiddlewareProvider` |
-| `src/langharmess_core/plugins/system_prompt/template_system_prompt.py` | `SPEC_SYSTEM_PROMPT` → `SystemPromptProvider` |
-| `src/langharmess_core/plugins/response_format/template_response_format.py` | `SPEC_RESPONSE_FORMAT` → `ResponseFormatProvider` |
-| `src/langharmess_core/plugins/state_schema/template_state_schema.py` | `SPEC_STATE_SCHEMA` → `StateSchemaProvider` |
-| `src/langharmess_core/plugins/context_schema/template_context_schema.py` | `SPEC_CONTEXT_SCHEMA` → `ContextSchemaProvider` |
-| `src/langharmess_core/plugins/checkpointer/template_checkpointer.py` | `SPEC_CHECKPOINTER` → `CheckpointerProvider` |
-| `src/langharmess_core/plugins/checkpointer/sqlite.py` | `SPEC_CHECKPOINTER` → `CheckpointerProvider` |
-| `src/langharmess_core/plugins/store/template_store.py` | `SPEC_STORE` → `StoreProvider` |
-| `src/langharmess_core/plugins/interrupt_before/template_interrupt_before.py` | `SPEC_INTERRUPT_BEFORE` → `InterruptBeforeProvider` |
-| `src/langharmess_core/plugins/interrupt_after/template_interrupt_after.py` | `SPEC_INTERRUPT_AFTER` → `InterruptAfterProvider` |
-| `src/langharmess_core/plugins/debug/template_debug.py` | `SPEC_DEBUG` → `DebugProvider` |
-| `src/langharmess_core/plugins/name/template_name.py` | `SPEC_NAME` → `NameProvider` |
-| `src/langharmess_core/plugins/cache/template_cache.py` | `SPEC_CACHE` → `CacheProvider` |
-| `src/langharmess_core/plugins/transformers/template_transformers.py` | `SPEC_TRANSFORMERS` → `TransformersProvider` |
-| `src/langharmess_core/plugins/loop/agent_loop.py` | `SPEC_AGENT_LOOP` → `AgentLoopProvider`（`@Requires*` 的迁移在 Task 10 一起做，本步只改 `@Provides`） |
+| `src/langharness_core/plugins/llm/llm.py` | `SPEC_LLM` → `LLMProvider` |
+| `src/langharness_core/plugins/tools/tools.py` | `SPEC_TOOL` → `ToolProvider` |
+| `src/langharness_core/plugins/tools/workspace.py` | `SPEC_TOOL` → `ToolProvider` |
+| `src/langharness_core/plugins/middleware/template_middleware.py` | `SPEC_MIDDLEWARE` → `MiddlewareProvider` |
+| `src/langharness_core/plugins/system_prompt/template_system_prompt.py` | `SPEC_SYSTEM_PROMPT` → `SystemPromptProvider` |
+| `src/langharness_core/plugins/response_format/template_response_format.py` | `SPEC_RESPONSE_FORMAT` → `ResponseFormatProvider` |
+| `src/langharness_core/plugins/state_schema/template_state_schema.py` | `SPEC_STATE_SCHEMA` → `StateSchemaProvider` |
+| `src/langharness_core/plugins/context_schema/template_context_schema.py` | `SPEC_CONTEXT_SCHEMA` → `ContextSchemaProvider` |
+| `src/langharness_core/plugins/checkpointer/template_checkpointer.py` | `SPEC_CHECKPOINTER` → `CheckpointerProvider` |
+| `src/langharness_core/plugins/checkpointer/sqlite.py` | `SPEC_CHECKPOINTER` → `CheckpointerProvider` |
+| `src/langharness_core/plugins/store/template_store.py` | `SPEC_STORE` → `StoreProvider` |
+| `src/langharness_core/plugins/interrupt_before/template_interrupt_before.py` | `SPEC_INTERRUPT_BEFORE` → `InterruptBeforeProvider` |
+| `src/langharness_core/plugins/interrupt_after/template_interrupt_after.py` | `SPEC_INTERRUPT_AFTER` → `InterruptAfterProvider` |
+| `src/langharness_core/plugins/debug/template_debug.py` | `SPEC_DEBUG` → `DebugProvider` |
+| `src/langharness_core/plugins/name/template_name.py` | `SPEC_NAME` → `NameProvider` |
+| `src/langharness_core/plugins/cache/template_cache.py` | `SPEC_CACHE` → `CacheProvider` |
+| `src/langharness_core/plugins/transformers/template_transformers.py` | `SPEC_TRANSFORMERS` → `TransformersProvider` |
+| `src/langharness_core/plugins/loop/agent_loop.py` | `SPEC_AGENT_LOOP` → `AgentLoopProvider`（`@Requires*` 的迁移在 Task 10 一起做，本步只改 `@Provides`） |
 
 示例（`template_debug.py`）：
 
 ```python
-from langharmess_core.contracts import DebugProvider
+from langharness_core.contracts import DebugProvider
 
 @ComponentFactory("debug-plugin-factory")
 @Provides(DebugProvider)
@@ -1541,7 +1541,7 @@ Expected: PASS
 
 ```bash
 make check
-git add src/langharmess_core
+git add src/langharness_core
 git commit -m "核心插件声明迁移到 Protocol 类规格"
 ```
 
@@ -1550,12 +1550,12 @@ git commit -m "核心插件声明迁移到 Protocol 类规格"
 ## Task 10: agent loop 绑定守卫
 
 **Files:**
-- Modify: `src/langharmess_core/plugins/loop/agent_loop.py`
+- Modify: `src/langharness_core/plugins/loop/agent_loop.py`
 - Modify: `tests/test_e2e.py`
 
 - [ ] **Step 1: 写失败测试**
 
-追加到 `tests/test_e2e.py`（复用该文件的 `descriptors(tmp_path)` 与真实框架装配；注意在文件顶部 import 段补 `from typing import Any` 和 `from langharmess_core.contracts import ToolProvider`）：
+追加到 `tests/test_e2e.py`（复用该文件的 `descriptors(tmp_path)` 与真实框架装配；注意在文件顶部 import 段补 `from typing import Any` 和 `from langharness_core.contracts import ToolProvider`）：
 
 ```python
 def test_raw_registered_bad_provider_is_quarantined(tmp_path: Path) -> None:
@@ -1594,12 +1594,12 @@ Expected: FAIL — `AttributeError: 'PluginAgentLoop' object has no attribute '_
 
 - [ ] **Step 3: 写实现**
 
-`src/langharmess_core/plugins/loop/agent_loop.py`：
+`src/langharness_core/plugins/loop/agent_loop.py`：
 
 import 段把 15 个 `SPEC_*` 常量替换为对应 Protocol（`SPEC_AGENT_LOOP` → `AgentLoopProvider`），并加入：
 
 ```python
-from langharmess_plugin.validation import ContractGuard
+from langharness_plugin.validation import ContractGuard
 ```
 
 `__init__` 末尾（在 `self._graph` 之前）加入：
@@ -1706,7 +1706,7 @@ Expected: PASS
 
 ```bash
 make check
-git add src/langharmess_core/plugins/loop/agent_loop.py tests/test_e2e.py
+git add src/langharness_core/plugins/loop/agent_loop.py tests/test_e2e.py
 git commit -m "agent loop 绑定期守卫：违规 provider 隔离出聚合且不参与建图"
 ```
 
@@ -1715,12 +1715,12 @@ git commit -m "agent loop 绑定期守卫：违规 provider 隔离出聚合且�
 ## Task 11: API/CLI/Config/Logging/框架层契约 pin 与声明迁移
 
 **Files:**
-- Modify: `src/langharmess_api/contracts.py`、`src/langharmess_cli/contracts.py`、`src/langharmess_config/contracts.py`、`src/langharmess_logging/contracts.py`、`src/langharmess_plugin/contracts.py`
+- Modify: `src/langharness_api/contracts.py`、`src/langharness_cli/contracts.py`、`src/langharness_config/contracts.py`、`src/langharness_logging/contracts.py`、`src/langharness_plugin/contracts.py`
 - Modify: 对应插件的 `@Provides`/`@Requires*` 声明
 
 - [ ] **Step 1: pin 各模块协议**
 
-`langharmess_api/contracts.py`：给 `RouteProvider`/`AuthProvider`/`RateLimitProvider`/`DBProvider` 加 `@service_contract(SPEC_ROUTE/SPEC_AUTH/SPEC_RATE_LIMIT/SPEC_DB)`；新增并 pin：
+`langharness_api/contracts.py`：给 `RouteProvider`/`AuthProvider`/`RateLimitProvider`/`DBProvider` 加 `@service_contract(SPEC_ROUTE/SPEC_AUTH/SPEC_RATE_LIMIT/SPEC_DB)`；新增并 pin：
 
 ```python
 @service_contract(SPEC_API_SERVER)
@@ -1731,31 +1731,31 @@ class APIServerProvider(Protocol):
     def build_app(self) -> FastAPI: ...
 ```
 
-（import 增加 `from fastapi import FastAPI` 与 `from langharmess_plugin.validation import service_contract`。）
+（import 增加 `from fastapi import FastAPI` 与 `from langharness_plugin.validation import service_contract`。）
 
-`langharmess_cli/contracts.py`：pin `CLICommandProvider`（`SPEC_CLI_COMMAND`）、`InteractiveRenderer`（`SPEC_CLI_RENDERER`）；`InteractiveCommandContext` 不是服务契约，不 pin。
+`langharness_cli/contracts.py`：pin `CLICommandProvider`（`SPEC_CLI_COMMAND`）、`InteractiveRenderer`（`SPEC_CLI_RENDERER`）；`InteractiveCommandContext` 不是服务契约，不 pin。
 
-`langharmess_config/contracts.py`：pin `ConfigProvider`（`SPEC_CONFIG_PROVIDER`）、`Configs`（`SPEC_CONFIGS`）。
+`langharness_config/contracts.py`：pin `ConfigProvider`（`SPEC_CONFIG_PROVIDER`）、`Configs`（`SPEC_CONFIGS`）。
 
-`langharmess_logging/contracts.py`：pin `LogProvider`（`SPEC_LOG`）。
+`langharness_logging/contracts.py`：pin `LogProvider`（`SPEC_LOG`）。
 
-`langharmess_plugin/contracts.py`：pin `PluginRegistrar`（`SPEC_PLUGIN_REGISTRAR`）。
+`langharness_plugin/contracts.py`：pin `PluginRegistrar`（`SPEC_PLUGIN_REGISTRAR`）。
 
 - [ ] **Step 2: 迁移声明**
 
 | 文件 | 替换 |
 | --- | --- |
-| `src/langharmess_api/plugins/auth/auth.py` | `@Provides(SPEC_AUTH)` → `@Provides(AuthProvider)` |
-| `src/langharmess_api/plugins/rate_limit/rate_limit.py` | `SPEC_RATE_LIMIT` → `RateLimitProvider` |
-| `src/langharmess_api/plugins/db/db.py` | `SPEC_DB` → `DBProvider` |
-| `src/langharmess_api/plugins/routes/echo.py` / `health.py` / `stream.py` | `@Provides(SPEC_ROUTE)` → `@Provides(RouteProvider)` |
-| `src/langharmess_api/plugins/server/app.py` | `@Provides(SPEC_API_SERVER)` → `APIServerProvider`；`@Requires` 的 `SPEC_ROUTE`/`SPEC_AUTH`/`SPEC_RATE_LIMIT`/`SPEC_DB`/`SPEC_CONFIGS`/`SPEC_LOG` → `RouteProvider`/`AuthProvider`/`RateLimitProvider`/`DBProvider`/`Configs`/`LogProvider` |
-| `src/langharmess_api/plugins/routes/stream.py` | `@RequiresBest("_agent_loop", SPEC_AGENT_LOOP, ...)` → `AgentLoopProvider`；`@RequiresBest("_plugin_registrar", SPEC_PLUGIN_REGISTRAR, ...)` → `PluginRegistrar` |
-| `src/langharmess_config/plugins/configs.py` | `@Provides(SPEC_CONFIGS)` → `Configs`；`@Requires("_providers", SPEC_CONFIG_PROVIDER, ...)` → `ConfigProvider` |
-| `src/langharmess_config/plugins/toml.py` | `@Provides(SPEC_CONFIG_PROVIDER)` → `ConfigProvider` |
-| `src/langharmess_logging/plugins/log.py` | `@Provides(SPEC_LOG)` → `LogProvider` |
-| `src/langharmess_cli/plugins/commands/shell.py`、`model.py`、`health.py` | `@Provides(SPEC_CLI_COMMAND)` → `CLICommandProvider` |
-| `src/langharmess_cli/plugins/rich_renderer.py` | `@Provides(SPEC_CLI_RENDERER)` → `InteractiveRenderer` |
+| `src/langharness_api/plugins/auth/auth.py` | `@Provides(SPEC_AUTH)` → `@Provides(AuthProvider)` |
+| `src/langharness_api/plugins/rate_limit/rate_limit.py` | `SPEC_RATE_LIMIT` → `RateLimitProvider` |
+| `src/langharness_api/plugins/db/db.py` | `SPEC_DB` → `DBProvider` |
+| `src/langharness_api/plugins/routes/echo.py` / `health.py` / `stream.py` | `@Provides(SPEC_ROUTE)` → `@Provides(RouteProvider)` |
+| `src/langharness_api/plugins/server/app.py` | `@Provides(SPEC_API_SERVER)` → `APIServerProvider`；`@Requires` 的 `SPEC_ROUTE`/`SPEC_AUTH`/`SPEC_RATE_LIMIT`/`SPEC_DB`/`SPEC_CONFIGS`/`SPEC_LOG` → `RouteProvider`/`AuthProvider`/`RateLimitProvider`/`DBProvider`/`Configs`/`LogProvider` |
+| `src/langharness_api/plugins/routes/stream.py` | `@RequiresBest("_agent_loop", SPEC_AGENT_LOOP, ...)` → `AgentLoopProvider`；`@RequiresBest("_plugin_registrar", SPEC_PLUGIN_REGISTRAR, ...)` → `PluginRegistrar` |
+| `src/langharness_config/plugins/configs.py` | `@Provides(SPEC_CONFIGS)` → `Configs`；`@Requires("_providers", SPEC_CONFIG_PROVIDER, ...)` → `ConfigProvider` |
+| `src/langharness_config/plugins/toml.py` | `@Provides(SPEC_CONFIG_PROVIDER)` → `ConfigProvider` |
+| `src/langharness_logging/plugins/log.py` | `@Provides(SPEC_LOG)` → `LogProvider` |
+| `src/langharness_cli/plugins/commands/shell.py`、`model.py`、`health.py` | `@Provides(SPEC_CLI_COMMAND)` → `CLICommandProvider` |
+| `src/langharness_cli/plugins/rich_renderer.py` | `@Provides(SPEC_CLI_RENDERER)` → `InteractiveRenderer` |
 
 `PluginManager.start` 的注册改用类规格：
 
@@ -1774,7 +1774,7 @@ Expected: PASS
 
 ```bash
 make check
-git add src/langharmess_api src/langharmess_cli src/langharmess_config src/langharmess_logging src/langharmess_plugin
+git add src/langharness_api src/langharness_cli src/langharness_config src/langharness_logging src/langharness_plugin
 git commit -m "API/CLI/Config/Logging 契约 pin 并迁移服务声明到类规格"
 ```
 
@@ -1783,7 +1783,7 @@ git commit -m "API/CLI/Config/Logging 契约 pin 并迁移服务声明到类规�
 ## Task 12: API 侧守卫与 `/stream` 的 400 归因
 
 **Files:**
-- Modify: `src/langharmess_api/plugins/server/app.py`、`src/langharmess_api/plugins/routes/stream.py`、`src/langharmess_config/plugins/configs.py`
+- Modify: `src/langharness_api/plugins/server/app.py`、`src/langharness_api/plugins/routes/stream.py`、`src/langharness_config/plugins/configs.py`
 - Modify: `tests/test_contract_enforcement.py`
 
 - [ ] **Step 1: 写失败测试**
@@ -1794,9 +1794,9 @@ git commit -m "API/CLI/Config/Logging 契约 pin 并迁移服务声明到类规�
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from langharmess_api.plugins.server.app import APIServerService
-from langharmess_api.plugins.routes.stream import StreamRoutePlugin
-from langharmess_plugin.validation import ContractViolationError, Violation
+from langharness_api.plugins.server.app import APIServerService
+from langharness_api.plugins.routes.stream import StreamRoutePlugin
+from langharness_plugin.validation import ContractViolationError, Violation
 
 
 class _BadRoute:
@@ -1866,10 +1866,10 @@ Expected: FAIL — 守卫尚未接线
 
 - [ ] **Step 3: 写实现**
 
-`src/langharmess_api/plugins/server/app.py`：
+`src/langharness_api/plugins/server/app.py`：
 
 ```python
-from langharmess_plugin.validation import ContractGuard
+from langharness_plugin.validation import ContractGuard
 ```
 
 `__init__` 末尾：
@@ -1889,7 +1889,7 @@ from langharmess_plugin.validation import ContractGuard
 
 6 对 bind/unbind 回调按 agent loop 同样模式各插一行（bind 首行 `if not self._guards[field].admit(service): return`，unbind 首行 `self._guards[field].release(service)`）。
 
-`src/langharmess_config/plugins/configs.py`：`__init__` 加 `self._guard = ContractGuard(self, "_providers", ConfigProvider)`，并在其 `@Requires("_providers", ...)` 上加一对 BindField/UnbindField 回调（当前没有）：
+`src/langharness_config/plugins/configs.py`：`__init__` 加 `self._guard = ContractGuard(self, "_providers", ConfigProvider)`，并在其 `@Requires("_providers", ...)` 上加一对 BindField/UnbindField 回调（当前没有）：
 
 ```python
     @BindField("_providers", if_valid=True)
@@ -1902,10 +1902,10 @@ from langharmess_plugin.validation import ContractGuard
         self._guard.release(service)
 ```
 
-`src/langharmess_api/plugins/routes/stream.py`：加两个 guard 与回调插桩（`_agent_loop` → `AgentLoopProvider`、`_plugin_registrar` → `PluginRegistrar`），并在 `ensure_plugin` 外做 400 归因：
+`src/langharness_api/plugins/routes/stream.py`：加两个 guard 与回调插桩（`_agent_loop` → `AgentLoopProvider`、`_plugin_registrar` → `PluginRegistrar`），并在 `ensure_plugin` 外做 400 归因：
 
 ```python
-from langharmess_plugin.validation import ContractGuard, ContractViolationError
+from langharness_plugin.validation import ContractGuard, ContractViolationError
 ...
                 try:
                     self._plugin_registrar.ensure_plugin(
@@ -1924,7 +1924,7 @@ Expected: PASS
 
 ```bash
 make check
-git add src/langharmess_api src/langharmess_config tests/test_contract_enforcement.py
+git add src/langharness_api src/langharness_config tests/test_contract_enforcement.py
 git commit -m "API 侧服务绑定守卫，/stream 对不合约插件返回 400 归因"
 ```
 
@@ -1942,7 +1942,7 @@ git commit -m "API 侧服务绑定守卫，/stream 对不合约插件返回 400 
 
 from __future__ import annotations
 
-from langharmess_core.contracts import (
+from langharness_core.contracts import (
     SPEC_AGENT_LOOP,
     SPEC_LLM,
     SPEC_MIDDLEWARE,

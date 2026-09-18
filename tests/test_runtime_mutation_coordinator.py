@@ -7,20 +7,20 @@ from unittest.mock import Mock
 
 import pytest
 
-from langharmess_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
-from langharmess_plugin.coordinator import (
+from langharness_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
+from langharness_plugin.coordinator import (
     RuntimeMutationCoordinator,
     RuntimeMutationError,
 )
-from langharmess_plugin.discovery import PluginDiscovery
-from langharmess_plugin.package import PluginContribution, PluginPackage, ToolExport
-from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
-from langharmess_plugin.state_store import (
+from langharness_plugin.discovery import PluginDiscovery
+from langharness_plugin.package import PluginContribution, PluginPackage, ToolExport
+from langharness_plugin.registry import PluginDescriptor, PluginRegistry
+from langharness_plugin.state_store import (
     InMemoryRuntimeStateStore,
     PersistedPluginRegistration,
     RuntimeStateSnapshot,
 )
-from langharmess_scope import ROOT_SCOPE_ID, ScopeId, ScopeTree
+from langharness_scope import ROOT_SCOPE_ID, ScopeId, ScopeTree
 
 
 class EntryPoint:

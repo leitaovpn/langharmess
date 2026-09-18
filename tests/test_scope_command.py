@@ -8,8 +8,8 @@ from typing import Any
 import httpx
 import pytest
 
-from langharmess_cli.contracts import InteractiveCommandSpec
-from langharmess_cli.plugins.commands.scope import ScopeCommandPlugin
+from langharness_cli.contracts import InteractiveCommandSpec
+from langharness_cli.plugins.commands.scope import ScopeCommandPlugin
 
 SCOPE_PAYLOAD = {
     "scopes": [

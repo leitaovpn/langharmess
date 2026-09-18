@@ -12,12 +12,12 @@ from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import fragment_list_to_text
 
-import langharmess_cli.plugins.commands.health as health_module
-from langharmess_cli.common.interactive import InteractiveCLIRunner
-from langharmess_cli.contracts import InteractiveCommandSpec
-from langharmess_cli.plugins.commands.health import HealthCommandPlugin
-from langharmess_cli.plugins.commands.shell import ShellCommandPlugin
-from langharmess_cli.plugins.rich_renderer import RichInteractiveRenderer
+import langharness_cli.plugins.commands.health as health_module
+from langharness_cli.common.interactive import InteractiveCLIRunner
+from langharness_cli.contracts import InteractiveCommandSpec
+from langharness_cli.plugins.commands.health import HealthCommandPlugin
+from langharness_cli.plugins.commands.shell import ShellCommandPlugin
+from langharness_cli.plugins.rich_renderer import RichInteractiveRenderer
 
 
 def test_interactive_command_spec() -> None:
@@ -60,7 +60,7 @@ def test_interactive_runner_stream_request(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.delenv("LANG_HARMESS_STREAM_USAGE", raising=False)
+    monkeypatch.delenv("LANG_HARNESS_STREAM_USAGE", raising=False)
 
     class FakeStreamResponse:
         def __enter__(self):
@@ -89,7 +89,7 @@ def test_interactive_runner_stream_request(
         captured.update(kwargs)
         return FakeStreamResponse()
 
-    monkeypatch.setattr("langharmess_cli.common.interactive.httpx.stream", fake_stream)
+    monkeypatch.setattr("langharness_cli.common.interactive.httpx.stream", fake_stream)
     runner = InteractiveCLIRunner(
         base_url="http://127.0.0.1:8000",
         token="secret",
@@ -143,7 +143,7 @@ def test_interactive_runner_sends_explicit_identity(
         captured.update(kwargs)
         return stream_response([])
 
-    monkeypatch.setattr("langharmess_cli.common.interactive.httpx.stream", fake_stream)
+    monkeypatch.setattr("langharness_cli.common.interactive.httpx.stream", fake_stream)
     runner = InteractiveCLIRunner(
         base_url="http://api",
         token="secret",
@@ -167,7 +167,7 @@ def test_interactive_runner_omits_session_id_until_server_assigns_one(
         captured.update(kwargs)
         return stream_response([])
 
-    monkeypatch.setattr("langharmess_cli.common.interactive.httpx.stream", fake_stream)
+    monkeypatch.setattr("langharness_cli.common.interactive.httpx.stream", fake_stream)
     runner = InteractiveCLIRunner(
         base_url="http://api", token="secret", commands=[], session_id=None
     )
@@ -179,7 +179,7 @@ def test_interactive_runner_adopts_session_event(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "langharmess_cli.common.interactive.httpx.stream",
+        "langharness_cli.common.interactive.httpx.stream",
         lambda *a, **k: stream_response(
             [
                 {
@@ -498,7 +498,7 @@ def test_runner_localizes_cancelled_in_zh(monkeypatch: pytest.MonkeyPatch) -> No
             raise KeyboardInterrupt
 
     monkeypatch.setattr(
-        "langharmess_cli.common.interactive.httpx.stream", lambda *a, **k: Response()
+        "langharness_cli.common.interactive.httpx.stream", lambda *a, **k: Response()
     )
     renderer = RecordingRenderer()
     runner = InteractiveCLIRunner(
@@ -536,7 +536,7 @@ def test_runner_forwards_usage_events_to_renderer(
             return [json.dumps(usage)]
 
     monkeypatch.setattr(
-        "langharmess_cli.common.interactive.httpx.stream", lambda *a, **k: FakeStreamResponse()
+        "langharness_cli.common.interactive.httpx.stream", lambda *a, **k: FakeStreamResponse()
     )
     renderer = RecordingRenderer()
     runner = InteractiveCLIRunner(
@@ -568,8 +568,8 @@ def test_runner_sends_stream_usage_escape_hatch(
         captured.update(kwargs)
         return FakeStreamResponse()
 
-    monkeypatch.setattr("langharmess_cli.common.interactive.httpx.stream", fake_stream)
-    monkeypatch.setenv("LANG_HARMESS_STREAM_USAGE", "false")
+    monkeypatch.setattr("langharness_cli.common.interactive.httpx.stream", fake_stream)
+    monkeypatch.setenv("LANG_HARNESS_STREAM_USAGE", "false")
     runner = InteractiveCLIRunner(base_url="http://api", token="secret", commands=[])
     runner.do_stream("hi")
     assert captured["json"]["stream_usage"] is False
@@ -604,7 +604,7 @@ def approval_fake_stream(
 def approval_runner(monkeypatch, answers: list[str], request: dict, lines: list[dict] = None):
     requests = []
     monkeypatch.setattr(
-        "langharmess_cli.common.interactive.httpx.stream",
+        "langharness_cli.common.interactive.httpx.stream",
         approval_fake_stream(requests, request, lines),
     )
     answers_iter = iter(answers)
@@ -718,7 +718,7 @@ def test_approval_resume_response_events_are_rendered(monkeypatch) -> None:
     """Events streamed by the resume turn (e.g. tool output) reach the renderer."""
     requests = []
     monkeypatch.setattr(
-        "langharmess_cli.common.interactive.httpx.stream",
+        "langharness_cli.common.interactive.httpx.stream",
         approval_fake_stream(
             requests,
             APPROVAL_REQUEST,

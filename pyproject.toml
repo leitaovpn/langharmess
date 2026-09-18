@@ -3,7 +3,7 @@ requires = ["setuptools>=80"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "langharmess-core"
+name = "langharness-core"
 version = "0.1.0"
 description = "Plugin-driven LangChain agent on Pelix/iPOPO"
 readme = "README.md"
@@ -27,19 +27,19 @@ dependencies = [
 ]
 
 [project.scripts]
-langharmess = "langharmess.__main__:main"
+langharness = "langharness.__main__:main"
 
-[project.entry-points."langharmess.config"]
-config = "langharmess_config.plugin:builtin_package"
+[project.entry-points."langharness.config"]
+config = "langharness_config.plugin:builtin_package"
 
-[project.entry-points."langharmess.plugins"]
-agent-tools = "langharmess_core.plugin:agent_tools_package"
-builtin-api = "langharmess_api.plugin:builtin_package"
-builtin-cli = "langharmess_cli.plugin:builtin_package"
-builtin-config = "langharmess_config.plugin:builtin_package"
-builtin-core = "langharmess_core.plugin:builtin_package"
-builtin-logging = "langharmess_logging.plugin:builtin_package"
-dynamic-core = "langharmess_core.plugin:dynamic_package"
+[project.entry-points."langharness.plugins"]
+agent-tools = "langharness_core.plugin:agent_tools_package"
+builtin-api = "langharness_api.plugin:builtin_package"
+builtin-cli = "langharness_cli.plugin:builtin_package"
+builtin-config = "langharness_config.plugin:builtin_package"
+builtin-core = "langharness_core.plugin:builtin_package"
+builtin-logging = "langharness_logging.plugin:builtin_package"
+dynamic-core = "langharness_core.plugin:dynamic_package"
 
 [project.optional-dependencies]
 dev = [
@@ -59,7 +59,7 @@ packaging = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-langharmess_config = ["config/langharmess.toml"]
+langharness_config = ["config/langharness.toml"]
 
 [tool.ruff]
 target-version = "py313"
@@ -94,14 +94,14 @@ markers = [
 
 [tool.coverage.run]
 source = [
-    "langharmess",
-    "langharmess_scope",
-    "langharmess_config",
-    "langharmess_logging",
-    "langharmess_core",
-    "langharmess_plugin",
-    "langharmess_api",
-    "langharmess_cli",
+    "langharness",
+    "langharness_scope",
+    "langharness_config",
+    "langharness_logging",
+    "langharness_core",
+    "langharness_plugin",
+    "langharness_api",
+    "langharness_cli",
 ]
 branch = true
 

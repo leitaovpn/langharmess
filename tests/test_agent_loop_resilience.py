@@ -18,17 +18,17 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-import langharmess_core.plugins.loop.agent_loop as agent_loop_module
-from langharmess_core.contracts import SPEC_AGENT_DIRECTORY
-from langharmess_core.plugin import (
+import langharness_core.plugins.loop.agent_loop as agent_loop_module
+from langharness_core.contracts import SPEC_AGENT_DIRECTORY
+from langharness_core.plugin import (
     agent_directory_descriptor,
     agent_loop_template_descriptor,
     agent_plugin_template_descriptor,
     agent_registry_descriptor,
 )
-from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop
-from langharmess_plugin.plugin_manager import PluginManager
-from langharmess_plugin.registry import PluginRegistry
+from langharness_core.plugins.loop.agent_loop import PluginAgentLoop
+from langharness_plugin.plugin_manager import PluginManager
+from langharness_plugin.registry import PluginRegistry
 
 
 class StaticModel(BaseChatModel):

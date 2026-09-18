@@ -17,7 +17,7 @@ from pelix.ipopo.decorators import (
     Validate,
 )
 
-from langharmess_plugin.validation import ContractGuard
+from langharness_plugin.validation import ContractGuard
 from plugin_demo.contracts import (
     SPEC_AGENT_LOOP,
     LLMProvider,

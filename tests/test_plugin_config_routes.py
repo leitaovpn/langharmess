@@ -11,8 +11,8 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from langharmess_api.plugins.routes.plugins import PluginsRoutePlugin
-from langharmess_plugin.config_store import PluginConfigStore, scope_path
+from langharness_api.plugins.routes.plugins import PluginsRoutePlugin
+from langharness_plugin.config_store import PluginConfigStore, scope_path
 
 
 class FakeScopeRegistrar:

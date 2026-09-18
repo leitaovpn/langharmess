@@ -35,7 +35,7 @@ iPOPO 支持用 Protocol/类声明服务规格，但不做任何运行时方法�
 
 ## 组件一：契约声明（`service_contract`）
 
-新增 `src/langharmess_plugin/validation.py`（框架层，纯 Python，不 import
+新增 `src/langharness_plugin/validation.py`（框架层，纯 Python，不 import
 iPOPO/pelix）：
 
 ```python
@@ -121,7 +121,7 @@ self._bound.add(descriptor.name)
 
 ## 组件四：绑定侧兜底（ContractGuard）
 
-`ContractGuard` 与本方案其他工具同在 `langharmess_plugin/validation.py`，纯
+`ContractGuard` 与本方案其他工具同在 `langharness_plugin/validation.py`，纯
 Python 不依赖 iPOPO。绕过 PluginManager 直接注册的服务没有安装侧校验，
 消费方在 bind 回调兜底：
 
@@ -148,9 +148,9 @@ configs 1 个。
 
 ## 迁移清单
 
-- contracts.py 加 pin：`langharmess_core` 15 个、`langharmess_api` 4 个、
-  `langharmess_cli` 2 个、`langharmess_config` 2 个、`langharmess_logging` 1 个、
-  `langharmess_plugin`（`PluginRegistrar`）1 个；补 `AgentLoopProvider`、
+- contracts.py 加 pin：`langharness_core` 15 个、`langharness_api` 4 个、
+  `langharness_cli` 2 个、`langharness_config` 2 个、`langharness_logging` 1 个、
+  `langharness_plugin`（`PluginRegistrar`）1 个；补 `AgentLoopProvider`、
   `APIServerProvider`；`examples/plugin_demo/contracts.py` 同步。
 - 声明替换 `SPEC_X → Protocol 类`：src 32 处 `@Provides`、24 处
   `@Requires/@RequiresBest`，examples 7 处。

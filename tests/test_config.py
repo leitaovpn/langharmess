@@ -7,16 +7,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from langharmess_config.contracts import SPEC_CONFIGS
-from langharmess_config.plugin import config_descriptors
-from langharmess_config.plugins.configs import ConfigsPlugin
-from langharmess_config.plugins.toml import TOMLConfigPlugin
-from langharmess_plugin.plugin_manager import PluginManager
-from langharmess_plugin.registry import PluginRegistry
+from langharness_config.contracts import SPEC_CONFIGS
+from langharness_config.plugin import config_descriptors
+from langharness_config.plugins.configs import ConfigsPlugin
+from langharness_config.plugins.toml import TOMLConfigPlugin
+from langharness_plugin.plugin_manager import PluginManager
+from langharness_plugin.registry import PluginRegistry
 
 
 def test_toml_config_plugin_creates_and_reads_user_config(tmp_path: Path) -> None:
-    path = tmp_path / ".langharmess" / "langharmess.toml"
+    path = tmp_path / ".langharness" / "langharness.toml"
     plugin = TOMLConfigPlugin()
     plugin._config_path = str(path)
 
@@ -28,7 +28,7 @@ def test_toml_config_plugin_creates_and_reads_user_config(tmp_path: Path) -> Non
 
 
 def test_toml_config_plugin_reads_toml_strings(tmp_path: Path) -> None:
-    path = tmp_path / "langharmess.toml"
+    path = tmp_path / "langharness.toml"
     path.write_text(
         '[providers.demo]\nbase_url = "https://example.test/v1"\nmodel = "demo"\n',
         encoding="utf-8",
@@ -132,7 +132,7 @@ def test_configs_requires_a_non_empty_provider_model() -> None:
 
 
 def test_configs_service_aggregates_toml_plugin_in_ipopo(tmp_path: Path) -> None:
-    (tmp_path / "langharmess.toml").write_text(
+    (tmp_path / "langharness.toml").write_text(
         '[providers.default]\nbase_url = "https://example.test/v1"\n'
         'model = "default-model"\napi_key = "k"\n',
         encoding="utf-8",

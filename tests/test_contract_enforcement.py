@@ -9,11 +9,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from langharmess_api.plugins.routes.stream import StreamRoutePlugin
-from langharmess_api.plugins.server.app import APIServerService
-from langharmess_plugin.plugin_manager import PluginManager
-from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
-from langharmess_plugin.validation import (
+from langharness_api.plugins.routes.stream import StreamRoutePlugin
+from langharness_api.plugins.server.app import APIServerService
+from langharness_plugin.plugin_manager import PluginManager
+from langharness_plugin.registry import PluginDescriptor, PluginRegistry
+from langharness_plugin.validation import (
     ContractViolationError,
     Violation,
     service_contract,
