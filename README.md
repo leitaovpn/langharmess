@@ -131,6 +131,41 @@ root
     └── agent:<agent_id>
 ```
 
+### 管理工具(给 agent loop 用的 plugin/scope 操作)
+
+`management-tools` 是一个可动态安装的 `agent.plugin.tools` 插件,把
+`/plugins`(运行时面)与 `/scope` 的操作包装成 9 个 LangChain 工具,供
+agent loop 的 LLM 调用:
+
+| 工具 | 说明 |
+| --- | --- |
+| `list_scope_tree` | 查看运行时作用域树 |
+| `list_runtime_plugins` | 列出已装运行时插件(可按 scope 过滤) |
+| `discover_plugins` | 重新扫描并列出可发现包 |
+| `install_plugin` | 安装发现的插件贡献(必须显式 scope,初始 disabled) |
+| `enable_plugin` / `disable_plugin` | 按 (name, scope) 启停插件 |
+| `upgrade_plugin` | 升级到包最新版本 |
+| `uninstall_plugin` | 卸载并删除持久化注册 |
+| `update_plugin_properties` | 更新运行时属性(runtime set) |
+
+每个工具的 description 写明用途、使用时机与 scope 约束;危险操作带
+入参级确认:`disable_plugin` 必须传 `confirm='DISABLE'`,
+`uninstall_plugin` 必须传 `confirm='UNINSTALL'`。
+
+开关完全复用现有动态插件机制:
+
+```text
+/plugins install dynamic.core management-tools-plugin-template --scope agent
+/plugins enable management-tools-plugin-template --scope agent
+/plugins disable management-tools-plugin-template --scope agent
+```
+
+装到 `agent` 作用域时所有 agent loop 可见;装 `management-tools-plugin-instance`
+到 `agent:<id>` 时仅该 agent 可见(注册名带 `@agent-<id>` 后缀,用
+`/plugins list` 查准确名字)。两种贡献共用同一模块,**二选一安装**;
+LLM 也可以自己 disable 自己的管理工具(需 confirm),重新开启由 CLI/API
+完成。重启后按持久化状态自动恢复。
+
 ### Other slash commands
 
 - `/model` — list configured providers; `/model <provider>` switches the
