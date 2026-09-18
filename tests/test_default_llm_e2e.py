@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
@@ -84,12 +85,14 @@ def _manager(tmp_path: Any) -> PluginManager:
     registry = PluginRegistry(
         [
             *config_descriptors(str(tmp_path)),
+            agent_registry_descriptor(str(tmp_path)),
+            agent_directory_descriptor(),
+            # Templates install after the directory in the real bootstrap, so
+            # the default LLM must wait for the llm bundle instead of failing.
             agent_plugin_template_descriptor("llm"),
             agent_plugin_template_descriptor("tools"),
             agent_plugin_template_descriptor("name"),
             agent_loop_template_descriptor(),
-            agent_registry_descriptor(str(tmp_path)),
-            agent_directory_descriptor(),
         ]
     )
     manager = PluginManager(registry)
@@ -133,5 +136,28 @@ def test_loop_inherits_agent_scope_default_llm_and_shadowing(tmp_path: Any) -> N
         assert restored is not None
         assert restored._llm_provider._plugin_scope_id == "agent"
         assert restored._llm_provider._model_name == "default-model"
+    finally:
+        manager.stop()
+
+
+def test_empty_llm_binding_gets_default_fields_and_builds_without_errors(
+    tmp_path: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    manager = _manager(tmp_path)
+    try:
+        directory = manager.get_service(SPEC_AGENT_DIRECTORY)
+        assert directory is not None
+        directory.apply_agent_config(
+            "alpha", {"llm": {"enabled": True, "properties": {}}}
+        )
+
+        loop = directory.get_loop("alpha")
+        assert loop is not None
+        assert loop._llm_provider is not None
+        assert loop._llm_provider._plugin_scope_id == "agent:alpha"
+        assert loop._llm_provider._model_name == "default-model"
+        assert loop._graph is not None
+        assert "Agent graph rebuild failed" not in caplog.text
+        assert "Could not create the default LLM" not in caplog.text
     finally:
         manager.stop()

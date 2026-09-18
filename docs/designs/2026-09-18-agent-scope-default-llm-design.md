@@ -15,10 +15,23 @@ scope 的实例遮蔽默认,移除后自动回落。
     loop,由 `resolve_scoped_best` 按最近 scope + plugin_key 选出。
 - agent 自己的 llm(`llm@<agent_id>`,scope `agent:<id>`)距离为 0,遮蔽
   scope `agent` 的默认(距离 1);agent 实例被 kill 后 loop 回落到默认。
+- agent 存储的 llm 绑定按字段 gap-fill:缺失字段由 `providers.default`
+  补齐(存储值优先);绑定最终仍无 `plugin.model.name` 且无
+  `plugin.model.instance` 时不创建实例,loop 直接继承 scope 默认。
+  `ensure_plugin_instance`(/stream 路径)同样 gap-fill 并跳过无配置创建。
 - `/stream` 行为不变:不传 model 且 agent 无存储 llm 配置时仍返回 400;
   传入的 payload 仍按现有逻辑生成 agent 自己的 llm 实例。
-- `providers.default` 缺失或校验失败:记录 warning,不创建默认实例,
+- `providers.default` 缺失或校验失败:记录一次 warning,不创建默认实例,
   行为与本次改动前一致(loop 无 llm 直到有实例产生)。
+
+## 加载期静默(无报错保证)
+
+- 默认实例等待 llm bundle 安装(bootstrap 中 directory 先于 llm-template
+  安装),之后任一 materialize 触发点补建。
+- 有 llm 绑定的 agent 同样等待 llm bundle,不会过早失败。
+- loop `_rebuild` 在主线程无事件循环且存在 checkpointer 时延迟建图
+  (AsyncSqliteSaver 只能在 API 事件循环上创建),首次
+  `astream`/`invoke` 在运行中的循环上惰性重建。
 
 ## 字段映射
 

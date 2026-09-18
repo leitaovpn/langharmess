@@ -44,6 +44,12 @@ REQUIRED_MODULES = {
     "langharmess_core.plugins.loop.agent_loop",
 }
 
+LLM_MODULE = "langharmess_core.plugins.llm.llm"
+
+# The default fake has every module installed; tests that exercise the
+# wait-for-bundles path remove modules from this set explicitly.
+INSTALLED_MODULES = REQUIRED_MODULES | {LLM_MODULE}
+
 
 class FakeScope:
     def __init__(
@@ -54,7 +60,7 @@ class FakeScope:
         self.killed: list[str] = []
         self.services: dict[tuple[str, str | None], Any] = {}
         self.fail_on = fail_on
-        self.modules = REQUIRED_MODULES if modules is None else modules
+        self.modules = INSTALLED_MODULES if modules is None else modules
         self.tree = ScopeTree()
 
     def installed_modules(self) -> set[str]:
@@ -596,3 +602,110 @@ def test_agent_specific_llm_coexists_with_agent_scope_default() -> None:
     assert own.properties["plugin.agent_id"] == "simple_agent"
     assert own.properties["plugin.model.name"] == "agent-model"
     assert "llm@default" in plugin._scope.instances
+
+
+DEFAULT_PROVIDER = {
+    "model": "default-model",
+    "api_key": "default-key",
+    "base_url": "https://default.example/v1",
+    "protocol": "chat",
+}
+
+DEFAULT_PROVIDER_MAPPED = {
+    "plugin.model.name": "default-model",
+    "plugin.model.api_key": "default-key",
+    "plugin.model.base_url": "https://default.example/v1",
+    "plugin.model.protocol": "chat",
+}
+
+
+def test_default_llm_waits_for_llm_bundle_then_creates(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    scope = FakeScope(modules=REQUIRED_MODULES - {LLM_MODULE})
+    plugin = make_directory(configs=FakeConfigs(DEFAULT_PROVIDER), scope=scope)
+    assert "llm@default" not in plugin._scope.instances
+
+    scope.modules.add(LLM_MODULE)
+    plugin._materialize_all()
+
+    assert "llm@default" in plugin._scope.instances
+    assert "Could not create the default LLM" not in caplog.text
+
+
+def test_empty_llm_binding_inherits_providers_default() -> None:
+    plugin = make_directory(configs=FakeConfigs(DEFAULT_PROVIDER))
+    plugin.apply_agent_config(
+        "simple_agent", {"llm": {"enabled": True, "properties": {}}}
+    )
+
+    descriptor = plugin._scope.instances["llm@simple_agent"]
+    assert descriptor.properties == {**DEFAULT_PROVIDER_MAPPED, "plugin.agent_id": "simple_agent"}
+
+
+def test_empty_llm_binding_without_default_is_skipped() -> None:
+    plugin = make_directory(configs=FakeConfigs(None))
+    plugin.apply_agent_config(
+        "simple_agent", {"llm": {"enabled": True, "properties": {}}}
+    )
+
+    assert "llm@simple_agent" not in plugin._scope.instances
+    assert "agent-loop@simple_agent" in plugin._scope.instances
+
+
+def test_partial_llm_binding_fills_missing_fields_from_default() -> None:
+    plugin = make_directory(configs=FakeConfigs(DEFAULT_PROVIDER))
+    plugin.apply_agent_config(
+        "simple_agent",
+        {"llm": {"enabled": True, "properties": {"plugin.model.name": "stored"}}},
+    )
+
+    descriptor = plugin._scope.instances["llm@simple_agent"]
+    assert descriptor.properties["plugin.model.name"] == "stored"
+    assert descriptor.properties["plugin.model.api_key"] == "default-key"
+    assert (
+        descriptor.properties["plugin.model.base_url"]
+        == "https://default.example/v1"
+    )
+    assert descriptor.properties["plugin.model.protocol"] == "chat"
+
+
+def test_llm_binding_materialization_waits_for_llm_bundle() -> None:
+    scope = FakeScope(modules=REQUIRED_MODULES - {LLM_MODULE})
+    plugin = make_directory(configs=FakeConfigs(DEFAULT_PROVIDER), scope=scope)
+    plugin.apply_agent_config(
+        "simple_agent", {"llm": {"enabled": True, "properties": {}}}
+    )
+
+    assert plugin._scope.instances == {}
+    assert "simple_agent" not in plugin._failed
+
+    scope.modules.add(LLM_MODULE)
+    plugin._materialize_all()
+
+    assert "llm@simple_agent" in plugin._scope.instances
+    assert "llm@default" in plugin._scope.instances
+
+
+def test_ensure_plugin_instance_fills_missing_fields_from_default() -> None:
+    plugin = make_directory(configs=FakeConfigs(DEFAULT_PROVIDER))
+
+    plugin.ensure_plugin_instance(
+        "simple_agent", "llm", {"plugin.model.name": "request-model"}
+    )
+
+    descriptor = plugin._scope.instances["llm@simple_agent"]
+    assert descriptor.properties["plugin.model.name"] == "request-model"
+    assert descriptor.properties["plugin.model.api_key"] == "default-key"
+    assert (
+        descriptor.properties["plugin.model.base_url"]
+        == "https://default.example/v1"
+    )
+
+
+def test_ensure_plugin_instance_skips_unconfigured() -> None:
+    plugin = make_directory(configs=FakeConfigs(None))
+
+    plugin.ensure_plugin_instance("simple_agent", "llm", {})
+
+    assert "llm@simple_agent" not in plugin._scope.instances
