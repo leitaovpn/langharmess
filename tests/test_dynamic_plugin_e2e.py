@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -12,10 +13,17 @@ from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import BaseModel
 
-from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_LLM, SPEC_TOOL
+from langharmess_core.contracts import (
+    SPEC_AGENT_LOOP,
+    SPEC_AGENT_REGISTRY,
+    SPEC_LLM,
+    SPEC_TOOL,
+)
 from langharmess_core.plugin import (
     agent_loop_descriptor,
     agent_loop_template_descriptor,
+    agent_registry_descriptor,
+    agent_tools_package,
     dynamic_package,
     tool_export_adapter_template_descriptor,
 )
@@ -257,6 +265,8 @@ MANAGEMENT_TOOLS = {
     "update_plugin_properties",
 }
 
+AGENT_TOOLS = {"list_agents", "get_agent", "create_agent", "update_agent"}
+
 
 class StaticModel(BaseChatModel):
     response: str = "ok"
@@ -453,5 +463,103 @@ def test_management_tools_reach_an_agent_loop_and_leave_on_disable() -> None:
             "management-tools-plugin-template", False, scope_id=ScopeId("agent")
         )
         assert MANAGEMENT_TOOLS.isdisjoint(loop_tool_names(manager))
+    finally:
+        manager.stop()
+
+
+def test_agent_tools_install_enable_disable_visibility() -> None:
+    manager = make_manager()
+    try:
+        install_templates(manager)
+        store = InMemoryRuntimeStateStore()
+        discovery = PluginDiscovery(
+            lambda: [EntryPoint(agent_tools_package(), "agent-tools")]
+        )
+        coordinator = RuntimeMutationCoordinator(manager, store, discovery)
+        coordinator.rescan()
+
+        registration = coordinator.install(
+            "agent.tools", "agent-operations", scope_id=ScopeId("agent")
+        )
+        assert registration.descriptor.name == "agent-operations-export"
+        assert AGENT_TOOLS <= set(tool_names(manager, "agent"))
+        assert AGENT_TOOLS.isdisjoint(tool_names(manager, "ui"))
+
+        disabled = coordinator.set_enabled(
+            "agent-operations-export", False, scope_id=ScopeId("agent")
+        )
+        assert disabled.enabled is False
+        assert AGENT_TOOLS.isdisjoint(tool_names(manager, "agent"))
+
+        enabled = coordinator.set_enabled(
+            "agent-operations-export", True, scope_id=ScopeId("agent")
+        )
+        assert enabled.enabled is True
+        assert AGENT_TOOLS <= set(tool_names(manager, "agent"))
+    finally:
+        manager.stop()
+
+
+def test_agent_tools_reach_an_agent_loop() -> None:
+    manager = make_loop_manager()
+    try:
+        install_templates(manager)
+        materialize_loop(manager)
+        store = InMemoryRuntimeStateStore()
+        discovery = PluginDiscovery(
+            lambda: [EntryPoint(agent_tools_package(), "agent-tools")]
+        )
+        coordinator = RuntimeMutationCoordinator(manager, store, discovery)
+        coordinator.rescan()
+
+        assert AGENT_TOOLS.isdisjoint(loop_tool_names(manager))
+
+        coordinator.install(
+            "agent.tools", "agent-operations", scope_id=ScopeId("agent")
+        )
+        assert AGENT_TOOLS <= set(loop_tool_names(manager))
+    finally:
+        manager.stop()
+
+
+def test_agent_tools_create_agent_through_real_registry(tmp_path: Path) -> None:
+    manager = make_loop_manager()
+    try:
+        install_templates(manager)
+        manager.install_plugin(agent_registry_descriptor(str(tmp_path)))
+        store = InMemoryRuntimeStateStore()
+        discovery = PluginDiscovery(
+            lambda: [EntryPoint(agent_tools_package(), "agent-tools")]
+        )
+        coordinator = RuntimeMutationCoordinator(manager, store, discovery)
+        coordinator.rescan()
+        coordinator.install(
+            "agent.tools", "agent-operations", scope_id=ScopeId("agent")
+        )
+
+        providers = manager.find_services(
+            SPEC_TOOL, manager.scope_filter(ScopeId("agent"))
+        )
+        create_tool = next(
+            tool
+            for provider in providers
+            for tool in provider.get_tools()
+            if tool.name == "create_agent"
+        )
+        result = create_tool.invoke(
+            {
+                "agent_id": "billing",
+                "name": "Billing",
+                "description": "Handles invoices",
+            }
+        )
+        assert result["id"] == "billing"
+
+        registry = manager.find_service(SPEC_AGENT_REGISTRY)
+        assert registry is not None
+        assert [item["id"] for item in registry.list_agents()] == [
+            "simple_agent",
+            "billing",
+        ]
     finally:
         manager.stop()
