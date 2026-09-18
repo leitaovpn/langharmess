@@ -573,3 +573,105 @@ def test_runner_sends_stream_usage_escape_hatch(
     runner = InteractiveCLIRunner(base_url="http://api", token="secret", commands=[])
     runner.do_stream("hi")
     assert captured["json"]["stream_usage"] is False
+
+
+APPROVAL_REQUEST = {
+    "action_requests": [
+        {"name": "write_file", "args": {"file_path": "/tmp/x.txt", "text": "hi"}}
+    ],
+    "review_configs": [],
+}
+
+
+def approval_fake_stream(requests: list, request: dict, lines: list[dict] = None) -> object:
+    """Serve the approval event on /stream and capture both HTTP calls."""
+
+    def fake_stream(*args, **kwargs):
+        requests.append({"args": args, "kwargs": kwargs})
+        if args[1].endswith("/stream"):
+            return stream_response(
+                [{"type": "approval_required", "request": request}]
+                if lines is None
+                else lines
+            )
+        return stream_response([])
+
+    return fake_stream
+
+
+def approval_runner(monkeypatch, answers: list[str], request: dict, lines: list[dict] = None):
+    requests = []
+    monkeypatch.setattr(
+        "langharmess_cli.common.interactive.httpx.stream",
+        approval_fake_stream(requests, request, lines),
+    )
+    answers_iter = iter(answers)
+    prompts = []
+
+    def fake_input(prompt: str) -> str:
+        prompts.append(prompt)
+        return next(answers_iter)
+
+    monkeypatch.setattr("builtins.input", fake_input)
+    runner = InteractiveCLIRunner(
+        base_url="http://api", token="secret", commands=[], session_id="s1"
+    )
+    runner.do_stream("write a file")
+    return runner, requests, prompts
+
+
+def test_approval_approve_sends_structured_decision(monkeypatch) -> None:
+    """The resume payload must carry the LangChain HITLResponse shape, not a
+    bare 'approve' string."""
+    _, requests, _ = approval_runner(monkeypatch, ["y"], APPROVAL_REQUEST)
+
+    assert len(requests) == 2
+    assert requests[1]["kwargs"]["json"]["decision"] == {
+        "decisions": [{"type": "approve"}]
+    }
+
+
+def test_approval_prompt_names_the_tool(monkeypatch) -> None:
+    """The approval prompt shows the tool name from the action request."""
+    _, requests, prompts = approval_runner(monkeypatch, ["n"], APPROVAL_REQUEST)
+
+    assert "write_file" in prompts[0]
+    assert requests[1]["kwargs"]["json"]["decision"] == {
+        "decisions": [{"type": "reject"}]
+    }
+
+
+def test_approval_edit_sends_edited_action(monkeypatch) -> None:
+    _, requests, _ = approval_runner(
+        monkeypatch,
+        ["e", '{"file_path": "/tmp/y.txt", "text": "hello"}'],
+        APPROVAL_REQUEST,
+    )
+
+    assert requests[1]["kwargs"]["json"]["decision"] == {
+        "decisions": [
+            {
+                "type": "edit",
+                "edited_action": {
+                    "name": "write_file",
+                    "args": {"file_path": "/tmp/y.txt", "text": "hello"},
+                },
+            }
+        ]
+    }
+
+
+def test_approval_decision_count_matches_action_requests(monkeypatch) -> None:
+    """The middleware requires one decision per interrupted tool call."""
+    request = {
+        "action_requests": [
+            {"name": "write_file", "args": {"file_path": "/tmp/x.txt", "text": "hi"}},
+            {"name": "bash", "args": {"commands": "pwd"}},
+        ],
+        "review_configs": [],
+    }
+    _, requests, _ = approval_runner(monkeypatch, ["y"], request)
+
+    assert requests[1]["kwargs"]["json"]["decision"] == {
+        "decisions": [{"type": "approve"}, {"type": "approve"}]
+    }

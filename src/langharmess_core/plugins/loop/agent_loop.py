@@ -104,6 +104,18 @@ def _strip_orphan_tool_use(message: Any) -> None:
     ]
 
 
+def _iter_interrupts(container: Any) -> Iterator[Any]:
+    """Yield the value payload of every interrupt carried by a stream chunk.
+
+    The ``__interrupt__`` entry holds a tuple of ``Interrupt`` objects; its
+    value field carries the human-facing request payload.
+    """
+    if not isinstance(container, dict):
+        return
+    for interrupt in container.get("__interrupt__", ()):
+        yield getattr(interrupt, "value", interrupt)
+
+
 @ComponentFactory("agent-loop-factory")
 @Provides(AgentLoopProvider)
 @HiddenProperty("_scope_chain", "plugin.scope_chain", None)
@@ -641,14 +653,17 @@ class PluginAgentLoop:
                     yield {"type": "assistant", "content": delta}
                 continue
 
+            # LangGraph emits interrupts either at the top level of the updates
+            # chunk ({"__interrupt__": (Interrupt(...),)}) or nested under the
+            # node name ({"tools": {"__interrupt__": (...), "messages": [...]}}).
+            # The interrupt container is a tuple, never a node-update dict.
+            for interrupt in _iter_interrupts(chunk):
+                yield {"type": "approval_required", "request": interrupt}
             for update in chunk.values():
-                if update is None:
+                if not isinstance(update, dict):
                     continue
-                interrupts = update.get("__interrupt__") if isinstance(update, dict) else None
-                if interrupts:
-                    for interrupt in interrupts:
-                        value = getattr(interrupt, "value", interrupt)
-                        yield {"type": "approval_required", "request": value}
+                for interrupt in _iter_interrupts(update):
+                    yield {"type": "approval_required", "request": interrupt}
                 for updated_message in update.get("messages", []):
                     _strip_orphan_tool_use(updated_message)
                     if isinstance(updated_message, ToolMessage):

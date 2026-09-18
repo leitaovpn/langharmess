@@ -149,11 +149,23 @@ class InteractiveCLIRunner:
                     if self._apply_session_event(event):
                         continue
                     if event.get("type") == "approval_required":
-                        request = event.get("request", {})
-                        tool = request.get("name", "tool") if isinstance(request, dict) else "tool"
-                        choice = input(f"Approve {tool}? [y]es/[n]o/[e]dit: ").strip().lower()
-                        decision = "approve" if choice in {"", "y", "yes"} else "reject"
-                        self._resume_approval(decision)
+                        request = event.get("request") or {}
+                        action_requests = (
+                            request.get("action_requests") or []
+                            if isinstance(request, dict)
+                            else []
+                        )
+                        tools = [
+                            str(action.get("name", "tool"))
+                            for action in action_requests
+                            if isinstance(action, dict)
+                        ]
+                        choice = input(
+                            f"Approve {', '.join(tools) or 'tool'}? [y]es/[n]o/[e]dit: "
+                        ).strip().lower()
+                        self._resume_approval(
+                            self._build_approval_decisions(action_requests, choice)
+                        )
                         continue
                     self.renderer.render_event(event)
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
@@ -163,7 +175,36 @@ class InteractiveCLIRunner:
         finally:
             self.renderer.finish_response()
 
-    def _resume_approval(self, decision: str) -> None:
+    @staticmethod
+    def _build_approval_decisions(
+        action_requests: list[dict[str, Any]], choice: str
+    ) -> dict[str, Any]:
+        """Translate the CLI answer into a LangChain HITLResponse payload.
+
+        The server-side middleware validates that one decision is sent per
+        interrupted tool call, in the same order as the action requests.
+        """
+        if choice in {"", "y", "yes"}:
+            return {"decisions": [{"type": "approve"} for _ in action_requests]}
+        if choice in {"e", "edit"}:
+            decisions: list[dict[str, Any]] = []
+            for action in action_requests:
+                name = str(action.get("name", "tool"))
+                edited = input(f"New args for {name} (JSON): ").strip()
+                try:
+                    args = json.loads(edited) if edited else action.get("args") or {}
+                except json.JSONDecodeError:
+                    decisions.append(
+                        {"type": "reject", "message": "Invalid edited args JSON"}
+                    )
+                    continue
+                decisions.append(
+                    {"type": "edit", "edited_action": {"name": name, "args": args}}
+                )
+            return {"decisions": decisions}
+        return {"decisions": [{"type": "reject"} for _ in action_requests]}
+
+    def _resume_approval(self, decision: dict[str, Any]) -> None:
         payload = {"input": "", "decision": decision, "session_id": self.session_id,
                    "user_id": self.user_id, "agent_id": self.agent_id,
                    "model": self.model, "protocol": self.model_protocol,
