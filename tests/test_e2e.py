@@ -425,7 +425,11 @@ def test_plugin_lifecycle_and_agent_invocation(
         for descriptor in parameter_descriptors:
             manager.install_plugin(descriptor)
 
-        loop._rebuild()
+        # With a checkpointer the graph builds on the API event loop.
+        async def rebuild_on_loop() -> None:
+            loop._rebuild()
+
+        asyncio.run(rebuild_on_loop())
 
         assert captured_kwargs["response_format"] is response_format
         assert captured_kwargs["state_schema"] is state_schema

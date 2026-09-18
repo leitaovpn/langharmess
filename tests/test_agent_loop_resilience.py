@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+from types import SimpleNamespace
 from typing import Any
 
+import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
+import langharmess_core.plugins.loop.agent_loop as agent_loop_module
 from langharmess_core.contracts import SPEC_AGENT_DIRECTORY
 from langharmess_core.plugin import (
     agent_directory_descriptor,
@@ -56,6 +59,72 @@ class BrokenLLM:
 
     def get_plugin_info(self) -> dict[str, str]:
         return {"name": "broken-llm", "version": "1.0.0"}
+
+
+class LoopBoundCheckpointer:
+    """A provider that can only build its saver on a running event loop."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def get_checkpointer(self) -> Any:
+        self.calls += 1
+        asyncio.get_running_loop()
+        return object()
+
+
+def test_rebuild_defers_when_checkpointer_needs_an_event_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loop = PluginAgentLoop()
+    loop._llm_provider = SimpleNamespace(
+        get_model=lambda: object(),
+        get_plugin_info=lambda: {"name": "fake-llm", "version": "1.0.0"},
+    )
+    checkpointer = LoopBoundCheckpointer()
+    loop._checkpointer_provider = checkpointer
+    built: list[dict[str, Any]] = []
+
+    def fake_create_agent(model: Any, **kwargs: Any) -> Any:
+        built.append(kwargs)
+        return object()
+
+    monkeypatch.setattr(agent_loop_module, "create_agent", fake_create_agent)
+
+    loop._rebuild()
+
+    # Without a running loop the graph build is deferred, not failed.
+    assert loop._graph is None
+    assert checkpointer.calls == 0
+    assert built == []
+
+
+def test_rebuild_on_running_loop_builds_with_the_checkpointer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loop = PluginAgentLoop()
+    loop._llm_provider = SimpleNamespace(
+        get_model=lambda: object(),
+        get_plugin_info=lambda: {"name": "fake-llm", "version": "1.0.0"},
+    )
+    checkpointer = LoopBoundCheckpointer()
+    loop._checkpointer_provider = checkpointer
+    built: list[dict[str, Any]] = []
+
+    def fake_create_agent(model: Any, **kwargs: Any) -> Any:
+        built.append(kwargs)
+        return object()
+
+    monkeypatch.setattr(agent_loop_module, "create_agent", fake_create_agent)
+
+    async def scenario() -> None:
+        loop._rebuild()
+
+    asyncio.run(scenario())
+
+    assert loop._graph is not None
+    assert checkpointer.calls == 1
+    assert "checkpointer" in built[0]
 
 
 def test_rebuild_survives_llm_get_model_failure() -> None:

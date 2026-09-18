@@ -33,7 +33,7 @@ from langharmess_core.plugins.agents.export import AGENT_TOOL_EXPORTS
 from langharmess_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
 from langharmess_plugin.package import PluginContribution, PluginPackage
 from langharmess_plugin.registry import PluginDescriptor
-from langharmess_plugin.scope_const import agent_instance_scope_id
+from langharmess_plugin.scope_const import AGENT_SCOPE_ID, agent_instance_scope_id
 
 AGENT_PLUGIN_CATALOG: dict[str, tuple[str, str, str]] = {
     "llm": (
@@ -199,6 +199,28 @@ def agent_plugin_template_descriptor(plugin: str) -> PluginDescriptor:
         specification=specification,
         enabled=False,
         scope="agent",
+        scope_parent="root",
+    )
+
+
+def default_llm_descriptor(properties: dict[str, Any]) -> PluginDescriptor:
+    """Describe the agent-scope fallback LLM seeded from providers.default.
+
+    The instance carries no ``plugin.agent_id``, so it never matches an agent
+    loop's ``_llm_provider`` filter; loops pick it up through the scoped
+    ``_scoped_llm_providers`` visibility filter and an agent-specific LLM
+    shadows it by nearest-scope selection.
+    """
+    module, factory, specification = AGENT_PLUGIN_CATALOG["llm"]
+    return PluginDescriptor(
+        name="llm@default",
+        version="1.0.0",
+        module=module,
+        factory=factory,
+        instance="llm@default",
+        specification=specification,
+        properties=properties,
+        scope=str(AGENT_SCOPE_ID),
         scope_parent="root",
     )
 

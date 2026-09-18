@@ -62,7 +62,9 @@ Uncomment and fill in `[providers.default]` to select the model interactive
 mode uses at startup. Without it, interactive mode fails with an error;
 `--provider <name>` selects one of the other configured providers instead.
 `default` is a reserved provider name: it is hidden from `/model` and cannot
-be selected with `--provider` or `/model`.
+be selected with `--provider` or `/model`. The server also seeds an
+agent-scope default LLM plugin from `[providers.default]`; an agent's own
+LLM (stored config or `/stream` payload) shadows it while it exists.
 
 Optionally select a configured model provider and override the common data
 directory:

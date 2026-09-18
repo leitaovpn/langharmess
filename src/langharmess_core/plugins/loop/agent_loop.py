@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator, Iterator
 from contextlib import contextmanager
@@ -537,6 +538,16 @@ class PluginAgentLoop:
             if model is None:
                 self._graph = None
                 return
+            if self._checkpointer_provider is not None:
+                try:
+                    asyncio.get_running_loop()
+                except RuntimeError:
+                    # The async checkpointer can only be created on the API
+                    # event loop; defer the graph build until the first
+                    # request, which rebuilds lazily on a running loop.
+                    LOGGER.debug("Graph build deferred to the API event loop")
+                    self._graph = None
+                    return
             self._graph = create_agent(
                 model,
                 tools=self._collect_tools(),
@@ -576,6 +587,8 @@ class PluginAgentLoop:
 
     def invoke(self, message: str, *, thread_id: str | None = None) -> Any:
         if self._graph is None:
+            self._rebuild()
+        if self._graph is None:
             raise RuntimeError("Agent graph is not built; no LLM plugin is available")
         config = {"configurable": {"thread_id": thread_id}} if thread_id else None
         return self._graph.invoke(
@@ -585,6 +598,8 @@ class PluginAgentLoop:
     async def astream(
         self, message: str, *, thread_id: str | None = None
     ) -> AsyncIterator[dict[str, Any]]:
+        if self._graph is None:
+            self._rebuild()
         if self._graph is None:
             raise RuntimeError("Agent graph is not built; no LLM plugin is available")
         config = {"configurable": {"thread_id": thread_id}} if thread_id else None
