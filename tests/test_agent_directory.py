@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, cast
 
 import pytest
@@ -19,6 +20,7 @@ from langharmess_core.contracts import (
 from langharmess_core.plugins.agents.directory import AgentDirectoryPlugin
 from langharmess_plugin.contracts import SPEC_PLUGIN_SCOPE, ScopedPluginRegistrar
 from langharmess_plugin.registry import PluginDescriptor
+from langharmess_plugin.scope_const import AGENT_SCOPE_ID
 from langharmess_plugin.validation import contract_for, validate
 from langharmess_scope import ScopeId, ScopeTree
 
@@ -48,6 +50,7 @@ class FakeScope:
         self, *, fail_on: str | None = None, modules: set[str] | None = None
     ) -> None:
         self.instances: dict[str, PluginDescriptor] = {}
+        self.instance_scopes: dict[str, str] = {}
         self.killed: list[str] = []
         self.services: dict[tuple[str, str | None], Any] = {}
         self.fail_on = fail_on
@@ -67,8 +70,12 @@ class FakeScope:
         if self.fail_on is not None and descriptor.instance == self.fail_on:
             raise ValueError(f"cannot instantiate {descriptor.instance}")
         if descriptor.instance in self.instances:
-            raise ValueError(f"Instance {descriptor.instance!r} is already instantiated")
+            raise ValueError(
+                f"Instance {descriptor.instance!r} is already instantiated"
+            )
         self.instances[descriptor.instance] = descriptor
+        if scope_id is not None:
+            self.instance_scopes[descriptor.instance] = str(scope_id)
 
     def ensure_scope(
         self,
@@ -143,12 +150,44 @@ class FakeRegistry:
         return None
 
 
+class FakeConfigs:
+    """Minimal Configs service stub; missing default raises like the real one."""
+
+    def __init__(self, default: dict[str, Any] | None = None) -> None:
+        self._default = default
+
+    def get(self, section: str, key: str, fallback: str | None = None) -> str | None:
+        return fallback
+
+    def get_section(self, section: str) -> dict[str, Any]:
+        return {}
+
+    def get_provider(self, name: str) -> dict[str, Any]:
+        return {}
+
+    def list_providers(self) -> list[str]:
+        return []
+
+    def get_default_provider(self) -> dict[str, Any]:
+        if self._default is None:
+            raise ValueError(
+                "No default model is configured: add a "
+                "[providers.default] section to langharmess.toml"
+            )
+        return dict(self._default)
+
+
 def make_directory(
-    agents: list[dict[str, Any]] | None = None, scope: FakeScope | None = None
+    agents: list[dict[str, Any]] | None = None,
+    scope: FakeScope | None = None,
+    configs: FakeConfigs | None = None,
 ) -> AgentDirectoryPlugin:
     plugin = AgentDirectoryPlugin()
     plugin._registry = FakeRegistry(agents)
     plugin._scope = scope if scope is not None else FakeScope()
+    if configs is not None:
+        plugin._configs_service = configs
+        plugin._on_configs_service_bind("_configs_service", configs, None)
     plugin._validate(cast(Any, None))
     return plugin
 
@@ -483,3 +522,77 @@ def test_reload_of_unknown_agent_is_a_noop() -> None:
         "name@simple_agent",
         "agent-loop@simple_agent",
     }
+
+
+def test_materialize_creates_agent_scope_default_llm_from_providers_default() -> None:
+    plugin = make_directory(
+        configs=FakeConfigs(
+            {
+                "model": "default-model",
+                "api_key": "default-key",
+                "base_url": "https://default.example/v1",
+                "protocol": "responses",
+            }
+        )
+    )
+
+    default = plugin._scope.instances["llm@default"]
+    assert default.module == "langharmess_core.plugins.llm.llm"
+    assert default.specification == SPEC_LLM
+    assert default.properties == {
+        "plugin.model.name": "default-model",
+        "plugin.model.api_key": "default-key",
+        "plugin.model.base_url": "https://default.example/v1",
+        "plugin.model.protocol": "responses",
+    }
+    assert "plugin.agent_id" not in default.properties
+    assert plugin._scope.instance_scopes["llm@default"] == str(AGENT_SCOPE_ID)
+
+
+def test_default_llm_skipped_without_configs_service() -> None:
+    plugin = make_directory()
+    assert "llm@default" not in plugin._scope.instances
+
+
+def test_default_llm_skipped_when_providers_default_missing(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        plugin = make_directory(configs=FakeConfigs(None))
+
+    assert "llm@default" not in plugin._scope.instances
+    assert "Default model unavailable" in caplog.text
+
+
+def test_default_llm_created_once_across_repeated_materialization() -> None:
+    plugin = make_directory(configs=FakeConfigs({"model": "default-model"}))
+
+    plugin._materialize_all()
+    plugin._materialize_all()
+
+    assert list(plugin._scope.instances).count("llm@default") == 1
+
+
+def test_late_configs_bind_creates_default_llm() -> None:
+    plugin = make_directory()
+    assert "llm@default" not in plugin._scope.instances
+
+    late_configs = FakeConfigs({"model": "late-model"})
+    plugin._configs_service = late_configs
+    plugin._on_configs_service_bind("_configs_service", late_configs, None)
+
+    default = plugin._scope.instances["llm@default"]
+    assert default.properties["plugin.model.name"] == "late-model"
+
+
+def test_agent_specific_llm_coexists_with_agent_scope_default() -> None:
+    plugin = make_directory(configs=FakeConfigs({"model": "default-model"}))
+
+    plugin.ensure_plugin_instance(
+        "simple_agent", "llm", {"plugin.model.name": "agent-model"}
+    )
+
+    own = plugin._scope.instances["llm@simple_agent"]
+    assert own.properties["plugin.agent_id"] == "simple_agent"
+    assert own.properties["plugin.model.name"] == "agent-model"
+    assert "llm@default" in plugin._scope.instances
