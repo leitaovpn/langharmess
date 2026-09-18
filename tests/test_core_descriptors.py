@@ -35,6 +35,8 @@ EXPECTED_DYNAMIC_CONTRIBUTIONS = frozenset(
         "debug-plugin-template",
         "interrupt-after-plugin-template",
         "interrupt-before-plugin-template",
+        "management-tools-plugin-instance",
+        "management-tools-plugin-template",
         "middleware-plugin-template",
         "response-format-plugin-template",
         "state-schema-plugin-template",
@@ -147,8 +149,12 @@ def test_dynamic_package_covers_plugins_absent_from_builtin() -> None:
 def test_dynamic_templates_install_without_instantiating() -> None:
     for contribution in dynamic_package().contributions:
         descriptor = contribution.descriptor
-        assert contribution.target == "agent"
-        assert descriptor.name.endswith("-template")
+        if contribution.id == "management-tools-plugin-instance":
+            assert contribution.target == "agent_instance"
+            assert descriptor.name == "management-tools-plugin-agent"
+        else:
+            assert contribution.target == "agent"
+            assert descriptor.name.endswith("-template")
         assert descriptor.enabled is False
         assert descriptor.instance == descriptor.name
         assert descriptor.scope == "agent"
