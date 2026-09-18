@@ -35,6 +35,7 @@ EXPECTED_DYNAMIC_CONTRIBUTIONS = frozenset(
         "debug-plugin-template",
         "interrupt-after-plugin-template",
         "interrupt-before-plugin-template",
+        "human-approval-plugin-template",
         "management-tools-plugin-instance",
         "management-tools-plugin-template",
         "middleware-plugin-template",

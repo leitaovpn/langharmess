@@ -10,6 +10,7 @@ from langchain_core.tools import StructuredTool
 import langharmess_core.plugins.llm.llm as llm_module
 from langharmess_core.plugins.llm.llm import LLMPlugin
 from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop
+from langharmess_core.plugins.middleware.human_approval import HumanApprovalPlugin
 from langharmess_core.plugins.middleware.template_middleware import (
     TemplateMiddlewarePlugin,
 )
@@ -194,8 +195,20 @@ def test_middleware_plugin_returns_unique_named_middleware() -> None:
     middlewares = plugin.get_middlewares()
     assert len(middlewares) == 1
     assert middlewares[0].name == "test-middleware"
+    assert plugin.get_plugin_info() == {"name": "test-middleware", "version": "1.0.0"}
+
+
+def test_human_approval_plugin_only_interrupts_configured_tools() -> None:
+    plugin = HumanApprovalPlugin()
+    assert plugin.get_middlewares() == []
+    plugin._dangerous_tools = ["bash", "write_file"]
+    middleware = plugin.get_middlewares()[0]
+    assert middleware.interrupt_on == {
+        "bash": {"allowed_decisions": ["approve", "edit", "reject", "respond"]},
+        "write_file": {"allowed_decisions": ["approve", "edit", "reject", "respond"]},
+    }
     assert plugin.get_plugin_info() == {
-        "name": "test-middleware",
+        "name": "human-approval-plugin",
         "version": "1.0.0",
     }
 

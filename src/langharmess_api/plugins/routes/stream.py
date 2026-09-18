@@ -44,7 +44,8 @@ def _encode(event: dict[str, Any]) -> str:
 
 
 class StreamRequest(BaseModel):
-    input: str
+    input: str = ""
+    decision: str | dict[str, Any] | None = None
     model: str | None = None
     api_key: str = ""
     base_url: str = ""
@@ -147,6 +148,7 @@ class StreamRoutePlugin:
                     async for event in loop.astream(
                         payload.input,
                         thread_id=thread_key(user_id, session_id, agent_id),
+                        resume=payload.decision,
                     ):
                         yield _encode(event)
                 except Exception as exc:

@@ -9,6 +9,7 @@ from typing import Any
 
 from langchain.agents import create_agent
 from langchain_core.messages import ToolMessage
+from langgraph.types import Command
 from pelix.ipopo.decorators import (
     BindField,
     ComponentFactory,
@@ -583,15 +584,18 @@ class PluginAgentLoop:
         )
 
     async def astream(
-        self, message: str, *, thread_id: str | None = None
+        self, message: str, *, thread_id: str | None = None, resume: Any = None
     ) -> AsyncIterator[dict[str, Any]]:
         if self._graph is None:
             raise RuntimeError("Agent graph is not built; no LLM plugin is available")
         config = {"configurable": {"thread_id": thread_id}} if thread_id else None
         previous_content: dict[str, str] = {}
         usage_totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        input_value: Any = Command(resume=resume) if resume is not None else {
+            "messages": [{"role": "user", "content": message}]
+        }
         async for stream_type, chunk in self._graph.astream(
-            {"messages": [{"role": "user", "content": message}]},
+            input_value,
             config=config,
             stream_mode=["messages", "updates"],
         ):
@@ -625,6 +629,11 @@ class PluginAgentLoop:
             for update in chunk.values():
                 if update is None:
                     continue
+                interrupts = update.get("__interrupt__") if isinstance(update, dict) else None
+                if interrupts:
+                    for interrupt in interrupts:
+                        value = getattr(interrupt, "value", interrupt)
+                        yield {"type": "approval_required", "request": value}
                 for updated_message in update.get("messages", []):
                     _strip_orphan_tool_use(updated_message)
                     if isinstance(updated_message, ToolMessage):

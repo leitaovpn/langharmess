@@ -96,6 +96,11 @@ DYNAMIC_PLUGIN_CATALOG: dict[str, tuple[str, str, str]] = {
         "middleware-plugin-factory",
         SPEC_MIDDLEWARE,
     ),
+    "human-approval-plugin": (
+        "langharmess_core.plugins.middleware.human_approval",
+        "human-approval-plugin-factory",
+        SPEC_MIDDLEWARE,
+    ),
     "response-format-plugin": (
         "langharmess_core.plugins.response_format.template_response_format",
         "response-format-plugin-factory",
