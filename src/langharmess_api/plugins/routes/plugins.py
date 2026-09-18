@@ -24,12 +24,10 @@ from langharmess_plugin.config_store import (
     scope_path,
 )
 from langharmess_plugin.contracts import DynamicPluginManager, ScopedPluginRegistrar
-from langharmess_plugin.validation import ContractGuard
+from langharmess_plugin.validation import ContractGuard, is_runtime_scope
 from langharmess_scope import ScopeId
 
 KNOWN_SCOPES = ("api", "cli")
-
-KNOWN_RUNTIME_SCOPES = ("root", "server", "ui", "agent")
 
 
 class PluginsRequest(BaseModel):
@@ -340,7 +338,14 @@ class PluginsRoutePlugin:
         self._validate_known_scope(scope, KNOWN_SCOPES, "scope")
 
     def _validate_runtime_scope(self, scope: str) -> None:
-        self._validate_known_scope(scope, KNOWN_RUNTIME_SCOPES, "runtime scope")
+        if is_runtime_scope(scope):
+            return
+        raise http_error(
+            400,
+            f"Unknown runtime scope: {scope}",
+            code="VALIDATION_ERROR",
+            error_type="ValidationError",
+        )
 
     def _validate_known_scope(
         self, scope: str, known: tuple[str, ...], label: str

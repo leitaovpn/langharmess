@@ -670,3 +670,19 @@ def test_guard_quarantine_ignores_unrelated_list_entries() -> None:
     owner._tools.extend([twin, service])
     assert guard.admit(service) is False
     assert owner._tools == [twin]
+
+
+@pytest.mark.parametrize(
+    "scope", ["root", "server", "ui", "agent", "agent:a", "agent:web-1"]
+)
+def test_is_runtime_scope_accepts_vocabulary(scope: str) -> None:
+    from langharmess_plugin.validation import is_runtime_scope
+
+    assert is_runtime_scope(scope) is True
+
+
+@pytest.mark.parametrize("scope", ["", "agent:", "api", "cli", "Agent"])
+def test_is_runtime_scope_rejects_other_values(scope: str) -> None:
+    from langharmess_plugin.validation import is_runtime_scope
+
+    assert is_runtime_scope(scope) is False

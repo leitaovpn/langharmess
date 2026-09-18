@@ -18,6 +18,7 @@ from langharmess_cli.contracts import (
     InteractiveCommandContext,
     InteractiveCommandSpec,
 )
+from langharmess_plugin.validation import is_runtime_scope as _is_runtime_scope
 
 
 def _coerce(value: str) -> Any:
@@ -29,17 +30,10 @@ def _coerce(value: str) -> Any:
 
 
 CONFIG_SCOPES = ("api", "cli")
-RUNTIME_SCOPES = ("root", "server", "ui", "agent")
 
 
 def _is_config_scope(value: str) -> bool:
     return value in CONFIG_SCOPES or (
-        value.startswith("agent:") and len(value) > len("agent:")
-    )
-
-
-def _is_runtime_scope(value: str) -> bool:
-    return value in RUNTIME_SCOPES or (
         value.startswith("agent:") and len(value) > len("agent:")
     )
 
