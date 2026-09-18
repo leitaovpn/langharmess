@@ -247,9 +247,9 @@ class PluginCommandPlugin:
         )
         plugins = payload.get("plugins") or []
         if not plugins:
-            print(f"runtime scope {scope or 'all'}: no registered plugins")
+            print(f"runtime scope {scope or 'all scopes'}: no registered plugins")
             return
-        self._runtime_table(scope or "all", plugins)
+        self._runtime_table(scope, plugins)
 
     def _config(self, context: InteractiveCommandContext, arguments: list[str]) -> None:
         """Render persisted configuration overrides, distinct from runtime state."""
@@ -453,25 +453,40 @@ class PluginCommandPlugin:
     ) -> None:
         table = Table(title=title, header_style="bold cyan")
         for column in columns:
-            table.add_column(column, overflow="fold")
+            # Keep headers whole in narrow consoles, so the column reads as its label
+            # instead of folding it (and short values with it) across two lines.
+            table.add_column(column, overflow="fold", min_width=len(column))
         for row in rows:
             table.add_row(*(str(value) for value in row))
         Console().print(table)
 
-    def _runtime_table(self, scope: str, plugins: list[dict[str, Any]]) -> None:
+    def _runtime_table(
+        self, scope: str | None, plugins: list[dict[str, Any]]
+    ) -> None:
+        def row(entry: dict[str, Any]) -> tuple[str, ...]:
+            base = (
+                entry.get("name", "-"),
+                "enabled" if entry.get("enabled", True) else "disabled",
+                entry.get("status", "-"),
+                f"{entry.get('package_id', '-')}/{entry.get('contribution_id', '-')}",
+                entry.get("specification", "-"),
+            )
+            if scope is None:
+                return (str(entry.get("scope_id", "-")), *base)
+            return base
+
         self._table(
-            f"Runtime plugins · scope {scope}",
-            ("Name", "State", "Status", "Package / contribution", "Specification"),
+            f"Runtime plugins · {'all scopes' if scope is None else f'scope {scope}'}",
             (
-                (
-                    entry.get("name", "-"),
-                    "enabled" if entry.get("enabled", True) else "disabled",
-                    entry.get("status", "-"),
-                    f"{entry.get('package_id', '-')}/{entry.get('contribution_id', '-')}",
-                    entry.get("specification", "-"),
-                )
-                for entry in sorted(plugins, key=lambda item: str(item.get("name", "")))
+                "Scope", "Name", "State", "Status",
+                "Package / contribution", "Specification",
+            )
+            if scope is None
+            else (
+                "Name", "State", "Status",
+                "Package / contribution", "Specification",
             ),
+            (row(entry) for entry in sorted(plugins, key=lambda item: str(item.get("name", "")))),
         )
 
     def _config_table(self, scope: str, payload: dict[str, Any]) -> None:
@@ -542,9 +557,9 @@ class PluginCommandPlugin:
         if action == "list":
             plugins = payload.get("plugins") or []
             if plugins:
-                self._runtime_table(scope or "all", plugins)
+                self._runtime_table(scope, plugins)
             else:
-                print(f"runtime scope {scope or 'all'}: no registered plugins")
+                print(f"runtime scope {scope or 'all scopes'}: no registered plugins")
         elif action == "config":
             if scope is None:
                 self._config_all_table(payload.get("scopes") or [])

@@ -263,7 +263,7 @@ def test_noninteractive_mutation_reports_http_failures(
     assert "boom" in output
 
 
-def test_plugins_lists_runtime_plugins_for_default_scope(
+def test_plugins_lists_runtime_plugins_across_all_scopes(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     captured: dict[str, Any] = {}
@@ -279,11 +279,21 @@ def test_plugins_lists_runtime_plugins_for_default_scope(
                         "package_id": "builtin.api",
                         "contribution_id": "server",
                         "version": "1.0.0",
-                        "scope_id": "server",
+                        "scope_id": "agent:a",
                         "enabled": True,
                         "status": "installed",
                         "specification": "api.server",
-                    }
+                    },
+                    {
+                        "name": "api-web",
+                        "package_id": "builtin.api",
+                        "contribution_id": "ui",
+                        "version": "1.0.0",
+                        "scope_id": "ui",
+                        "enabled": True,
+                        "status": "installed",
+                        "specification": "api.server",
+                    },
                 ]
             }
         )
@@ -292,9 +302,11 @@ def test_plugins_lists_runtime_plugins_for_default_scope(
     assert handler_for("plugins")(Context(), "list") is False
 
     output = capsys.readouterr().out
-    assert "scope all" in output
+    assert "Runtime plugins · all scopes" in output
+    assert "Scope" in output
     assert "api-server" in output
-    assert "enabled" in output
+    assert "agent:a" in output
+    assert "api-web" in output
     assert "builtin.api/server" in output
     assert captured["url"].endswith("/plugins/runtime")
     assert captured["params"] is None
@@ -779,3 +791,61 @@ def test_plugins_runtime_operations_require_valid_scope(
         assert put_calls == []
         assert delete_calls == []
         assert "Scope is required" in capsys.readouterr().out
+
+
+def test_plugins_lists_runtime_plugins_for_a_scope_without_scope_column(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fake_get(url: str, **kwargs: Any) -> Response:
+        return Response(
+            {
+                "plugins": [
+                    {
+                        "name": "api-server",
+                        "package_id": "builtin.api",
+                        "contribution_id": "server",
+                        "version": "1.0.0",
+                        "scope_id": "server",
+                        "enabled": True,
+                        "status": "installed",
+                        "specification": "api.server",
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    assert handler_for("plugins")(Context(), "list server") is False
+
+    output = capsys.readouterr().out
+    assert "Runtime plugins · scope server" in output
+    assert "Scope" not in output
+
+
+def test_noninteractive_list_without_scope_renders_scope_column(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, calls = run_command(
+        monkeypatch,
+        ["list"],
+        methods={
+            "get": {
+                "plugins": [
+                    {
+                        "name": "api-server",
+                        "package_id": "builtin.api",
+                        "contribution_id": "server",
+                        "version": "1.0.0",
+                        "scope_id": "agent:a",
+                        "enabled": True,
+                        "status": "installed",
+                        "specification": "api.server",
+                    }
+                ]
+            }
+        },
+    )
+    assert code == 0
+    output = capsys.readouterr().out
+    assert "Runtime plugins · all scopes" in output
+    assert "agent:a" in output
