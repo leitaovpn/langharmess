@@ -88,7 +88,7 @@ optional=True)`，工具函数直接调用 coordinator 方法；`BindField` 回�
   loop 可见。
 - `management-tools-plugin-instance`（target `agent_instance`）：install 时
   scope 必须 `agent:<id>`，注册名按协调器惯例后缀为
-  `management-tools-plugin-template@agent-<id>`，仅该 agent 的 loop 可见。
+  `management-tools-plugin-agent@agent-<id>`，仅该 agent 的 loop 可见。
 
 **同 module 防呆**：两个贡献共用同一 module。第三方包在多个作用域安装同一 module
 是既有受支持流程（Pelix 对同 module 的 `install_bundle` 去重返回同一 bundle），
@@ -163,7 +163,7 @@ optional=True)`，工具函数直接调用 coordinator 方法；`BindField` 回�
 ```
 
 - 单 agent：install `management-tools-plugin-instance --scope agent:<id>`，
-  enable 时用后缀名 `management-tools-plugin-template@agent-<id>`
+  enable 时用后缀名 `management-tools-plugin-agent@agent-<id>`
   （`list_runtime_plugins` 可见）。
 - LLM 可以自己 disable 自己的管理工具（需 confirm）；重新开启由 CLI/API
   兜底。

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -82,6 +83,11 @@ DYNAMIC_PLUGIN_CATALOG: dict[str, tuple[str, str, str]] = {
         "langharmess_core.plugins.interrupt_before.template_interrupt_before",
         "interrupt-before-plugin-factory",
         SPEC_INTERRUPT_BEFORE,
+    ),
+    "management-tools-plugin": (
+        "langharmess_core.plugins.tools.management",
+        "management-tools-plugin-factory",
+        SPEC_TOOL,
     ),
     "middleware-plugin": (
         "langharmess_core.plugins.middleware.template_middleware",
@@ -385,13 +391,25 @@ def dynamic_template_descriptor(plugin: str) -> PluginDescriptor:
 
 def dynamic_package() -> PluginPackage:
     """Describe the core plugins installable at runtime, beyond the built-in set."""
+    contributions = [
+        PluginContribution(
+            f"{plugin}-template", "agent", dynamic_template_descriptor(plugin)
+        )
+        for plugin in DYNAMIC_PLUGIN_CATALOG
+    ]
+    contributions.append(
+        PluginContribution(
+            "management-tools-plugin-instance",
+            "agent_instance",
+            replace(
+                dynamic_template_descriptor("management-tools-plugin"),
+                name="management-tools-plugin-agent",
+                instance="management-tools-plugin-agent",
+            ),
+        )
+    )
     return PluginPackage(
         id="dynamic.core",
         version="1.0.0",
-        contributions=tuple(
-            PluginContribution(
-                f"{plugin}-template", "agent", dynamic_template_descriptor(plugin)
-            )
-            for plugin in DYNAMIC_PLUGIN_CATALOG
-        ),
+        contributions=tuple(contributions),
     )

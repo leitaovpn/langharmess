@@ -1194,7 +1194,7 @@ git commit -m "feat: expose runtime plugin mutations as management tools"
 
 **Interfaces:**
 - Consumes: Task 5 的组件 module/factory 名(字符串引用,不 import)。
-- Produces:`DYNAMIC_PLUGIN_CATALOG["management-tools-plugin"] = ("langharmess_core.plugins.tools.management", "management-tools-plugin-factory", SPEC_TOOL)`;`dynamic.core` 贡献 id:`management-tools-plugin-template`(target `agent`,注册名同名)与 `management-tools-plugin-instance`(target `agent_instance`,注册名 `management-tools-plugin-template@agent-<id>`)。
+- Produces:`DYNAMIC_PLUGIN_CATALOG["management-tools-plugin"] = ("langharmess_core.plugins.tools.management", "management-tools-plugin-factory", SPEC_TOOL)`;`dynamic.core` 贡献 id:`management-tools-plugin-template`(target `agent`,注册名同名)与 `management-tools-plugin-instance`(target `agent_instance`,注册名 `management-tools-plugin-agent@agent-<id>`)。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -1494,7 +1494,7 @@ def test_management_tools_agent_instance_and_module_guard() -> None:
             scope_id=ScopeId("agent:a"),
         )
         assert registration.descriptor.name == (
-            "management-tools-plugin-template@agent-a"
+            "management-tools-plugin-agent@agent-a"
         )
         assert registration.scope_id == ScopeId("agent:a")
 
@@ -1506,7 +1506,7 @@ def test_management_tools_agent_instance_and_module_guard() -> None:
             )
 
         enabled = coordinator.set_enabled(
-            "management-tools-plugin-template@agent-a",
+            "management-tools-plugin-agent@agent-a",
             True,
             scope_id=ScopeId("agent:a"),
         )
