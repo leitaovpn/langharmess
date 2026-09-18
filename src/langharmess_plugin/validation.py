@@ -511,3 +511,17 @@ class ContractGuard:
     def release(self, service: Any) -> None:
         """Forget quarantine bookkeeping for an unbound service."""
         self._rejected.pop(id(service), None)
+
+
+RUNTIME_SCOPES = ("root", "server", "ui", "agent")
+
+
+def is_runtime_scope(value: str) -> bool:
+    """True for the runtime scope vocabulary: root|server|ui|agent|agent:<id>.
+
+    The bare prefix ``agent:`` is rejected: every mutation must name an
+    explicit scope, and ``agent:`` with an empty id is a typo.
+    """
+    return value in RUNTIME_SCOPES or (
+        value.startswith("agent:") and len(value) > len("agent:")
+    )
