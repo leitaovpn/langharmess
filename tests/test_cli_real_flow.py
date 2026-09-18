@@ -270,13 +270,9 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
             ["plugins", "discover", "--server-port", str(port), "--token", "secret"],
         )
         assert discover.returncode == 0, discover.stderr
-        packages = json.loads(discover.stdout).get("packages") or []
-        real = next(item for item in packages if item.get("id") == "real.echo")
-        assert real["source"] == "external"
-        assert any(
-            contribution.get("name") == "real-echo"
-            for contribution in real.get("contributions") or []
-        )
+        # Non-interactive discover renders a rich table, not JSON.
+        assert "Discovered plugins" in discover.stdout
+        assert "real.echo" in discover.stdout
 
         install = run_cli(
             tmp_path,
@@ -286,6 +282,8 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
                 "install",
                 "real.echo",
                 "echo",
+                "--scope",
+                "server",
                 "--server-port",
                 str(port),
                 "--token",
@@ -293,7 +291,9 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
             ],
         )
         assert install.returncode == 0, install.stderr
-        assert json.loads(install.stdout).get("status") == "installed"
+        assert "Plugin result" in install.stdout
+        assert "real-echo" in install.stdout
+        assert "server" in install.stdout
         assert any(item.get("name") == "real-echo" for item in runtime_plugins(base_url))
 
         disable = run_cli(
@@ -303,6 +303,8 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
                 "plugins",
                 "disable",
                 "real-echo",
+                "--scope",
+                "server",
                 "--server-port",
                 str(port),
                 "--token",
@@ -310,7 +312,7 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
             ],
         )
         assert disable.returncode == 0, disable.stderr
-        assert json.loads(disable.stdout).get("status") == "disabled"
+        assert "disabled" in disable.stdout
         disabled = next(item for item in runtime_plugins(base_url) if item.get("name") == "real-echo")
         assert disabled.get("enabled") is False
 
@@ -321,6 +323,8 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
                 "plugins",
                 "enable",
                 "real-echo",
+                "--scope",
+                "server",
                 "--server-port",
                 str(port),
                 "--token",
@@ -328,7 +332,7 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
             ],
         )
         assert enable.returncode == 0, enable.stderr
-        assert json.loads(enable.stdout).get("status") == "installed"
+        assert "enabled" in enable.stdout
         enabled = next(item for item in runtime_plugins(base_url) if item.get("name") == "real-echo")
         assert enabled.get("enabled") is True
 
@@ -339,6 +343,8 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
                 "plugins",
                 "uninstall",
                 "real-echo",
+                "--scope",
+                "server",
                 "--server-port",
                 str(port),
                 "--token",
@@ -346,7 +352,7 @@ def test_real_cli_dynamic_discover_install_enable_disable_uninstall(
             ],
         )
         assert uninstall.returncode == 0, uninstall.stderr
-        assert json.loads(uninstall.stdout).get("removed") is True
+        assert "Plugin result" in uninstall.stdout
         assert all(item.get("name") != "real-echo" for item in runtime_plugins(base_url))
 
 
