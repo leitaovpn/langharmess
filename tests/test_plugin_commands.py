@@ -709,3 +709,15 @@ def test_noninteractive_mutations_reject_invalid_scope(
         code, _ = run_command(monkeypatch, args, methods={})
         assert code == 1
         assert message in capsys.readouterr().out
+
+
+def test_noninteractive_rejects_bare_agent_scope(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for args, message in [
+        (["enable", "api-rate-limit", "--scope", "agent:"], "enable requires"),
+        (["config", "--scope", "agent:"], "config --scope must be"),
+    ]:
+        code, _ = run_command(monkeypatch, args, methods={})
+        assert code == 1
+        assert message in capsys.readouterr().out

@@ -36,11 +36,15 @@ RUNTIME_SCOPES = ("root", "server", "ui", "agent")
 
 
 def _is_config_scope(value: str) -> bool:
-    return value in CONFIG_SCOPES or value.startswith("agent:")
+    return value in CONFIG_SCOPES or (
+        value.startswith("agent:") and len(value) > len("agent:")
+    )
 
 
 def _is_runtime_scope(value: str) -> bool:
-    return value in RUNTIME_SCOPES or value.startswith("agent:")
+    return value in RUNTIME_SCOPES or (
+        value.startswith("agent:") and len(value) > len("agent:")
+    )
 
 
 @ComponentFactory("cli-plugins-command-factory")
