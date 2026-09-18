@@ -84,6 +84,9 @@ def api_stream_descriptor() -> PluginDescriptor:
         scope_parent="root",
     )
 
+def api_resume_descriptor() -> PluginDescriptor:
+    return PluginDescriptor(name="api-resume", version="1.0.0", module="langharmess_api.plugins.routes.resume", factory="api-resume-route-factory", instance="api-resume", specification=SPEC_ROUTE, scope="server", scope_parent="root")
+
 
 def api_plugins_descriptor(directory: str) -> PluginDescriptor:
     return PluginDescriptor(
@@ -197,6 +200,7 @@ def builtin_package() -> PluginPackage:
             PluginContribution("db", "root", api_db_descriptor()),
             PluginContribution("health", "server", api_health_descriptor()),
             PluginContribution("stream", "server", api_stream_descriptor()),
+            PluginContribution("resume", "server", api_resume_descriptor()),
             PluginContribution(
                 "plugins", "server", api_plugins_descriptor(directory)
             ),

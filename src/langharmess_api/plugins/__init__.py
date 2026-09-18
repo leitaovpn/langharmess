@@ -6,6 +6,7 @@ from langharmess_api.plugins.rate_limit.rate_limit import RateLimitPlugin
 from langharmess_api.plugins.routes.echo import EchoRoutePlugin
 from langharmess_api.plugins.routes.health import HealthRoutePlugin
 from langharmess_api.plugins.routes.stream import StreamRoutePlugin
+from langharmess_api.plugins.routes.resume import ResumeRoutePlugin
 from langharmess_api.plugins.server.app import APIServerService
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "HealthRoutePlugin",
     "RateLimitPlugin",
     "StreamRoutePlugin",
+    "ResumeRoutePlugin",
 ]

@@ -168,7 +168,7 @@ class InteractiveCLIRunner:
                    "user_id": self.user_id, "agent_id": self.agent_id,
                    "model": self.model, "protocol": self.model_protocol,
                    "api_key": self.api_key, "base_url": self.model_base_url}
-        with httpx.stream("POST", f"{self.base_url}/stream", json=payload,
+        with httpx.stream("POST", f"{self.base_url}/resume", json=payload,
                           headers={"Authorization": f"Bearer {self.token}"}, timeout=None) as response:
             response.raise_for_status()
             for line_text in response.iter_lines():
