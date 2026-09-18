@@ -29,6 +29,8 @@ from langharmess_core.contracts import (
     SPEC_TOOL,
     SPEC_TRANSFORMERS,
 )
+from langharmess_core.plugins.agents.export import AGENT_TOOL_EXPORTS
+from langharmess_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
 from langharmess_plugin.package import PluginContribution, PluginPackage
 from langharmess_plugin.registry import PluginDescriptor
 from langharmess_plugin.scope_const import agent_instance_scope_id
@@ -412,4 +414,30 @@ def dynamic_package() -> PluginPackage:
         id="dynamic.core",
         version="1.0.0",
         contributions=tuple(contributions),
+    )
+
+
+def agent_tools_package() -> PluginPackage:
+    """Describe the agent management tools installed via dynamic discovery."""
+    return PluginPackage(
+        id="agent.tools",
+        version="1.0.0",
+        contributions=(
+            PluginContribution(
+                "agent-operations",
+                "agent",
+                PluginDescriptor(
+                    name="agent-operations-export",
+                    version="1.0.0",
+                    module="langharmess_core.plugins.agents.export",
+                    factory="agent-operations-export-factory",
+                    instance="agent-operations-export",
+                    specification=SPEC_TOOL_EXPORT_TARGET,
+                    scope="agent",
+                    scope_parent="root",
+                    enabled=True,
+                ),
+                tool_exports=AGENT_TOOL_EXPORTS,
+            ),
+        ),
     )

@@ -158,3 +158,25 @@ def test_schemas_reject_invalid_agent_ids() -> None:
     with pytest.raises(ValidationError):
         CreateAgentArgs(agent_id="x" * 65)
     assert GetAgentArgs(agent_id="web-1.billing").agent_id == "web-1.billing"
+
+
+def test_agent_tools_package_declares_discoverable_contribution() -> None:
+    from langharmess_core.plugin import agent_tools_package
+    from langharmess_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
+
+    package = agent_tools_package()
+    assert package.id == "agent.tools"
+    assert package.version == "1.0.0"
+    assert [item.id for item in package.contributions] == ["agent-operations"]
+    contribution = package.contributions[0]
+    assert contribution.target == "agent"
+    assert contribution.tool_exports == AGENT_TOOL_EXPORTS
+    descriptor = contribution.descriptor
+    assert descriptor.name == "agent-operations-export"
+    assert descriptor.instance == "agent-operations-export"
+    assert descriptor.module == "langharmess_core.plugins.agents.export"
+    assert descriptor.factory == "agent-operations-export-factory"
+    assert descriptor.specification == SPEC_TOOL_EXPORT_TARGET
+    assert descriptor.enabled is True
+    assert descriptor.scope == "agent"
+    assert descriptor.scope_parent == "root"
