@@ -33,6 +33,7 @@ langharmess = "langharmess.__main__:main"
 config = "langharmess_config.plugin:builtin_package"
 
 [project.entry-points."langharmess.plugins"]
+agent-tools = "langharmess_core.plugin:agent_tools_package"
 builtin-api = "langharmess_api.plugin:builtin_package"
 builtin-cli = "langharmess_cli.plugin:builtin_package"
 builtin-config = "langharmess_config.plugin:builtin_package"
