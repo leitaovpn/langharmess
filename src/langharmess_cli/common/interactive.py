@@ -148,6 +148,25 @@ class InteractiveCLIRunner:
                     event = json.loads(line_text)
                     if self._apply_session_event(event):
                         continue
+                    if event.get("type") == "approval_required":
+                        request = event.get("request") or {}
+                        action_requests = (
+                            request.get("action_requests") or []
+                            if isinstance(request, dict)
+                            else []
+                        )
+                        tools = [
+                            str(action.get("name", "tool"))
+                            for action in action_requests
+                            if isinstance(action, dict)
+                        ]
+                        choice = input(
+                            f"Approve {', '.join(tools) or 'tool'}? [y]es/[n]o/[e]dit: "
+                        ).strip().lower()
+                        self._resume_approval(
+                            self._build_approval_decisions(action_requests, choice)
+                        )
+                        continue
                     self.renderer.render_event(event)
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
             self.renderer.show_error(str(exc))
@@ -155,6 +174,48 @@ class InteractiveCLIRunner:
             self.renderer.show_error(tr(self.locale, "cancelled"))
         finally:
             self.renderer.finish_response()
+
+    @staticmethod
+    def _build_approval_decisions(
+        action_requests: list[dict[str, Any]], choice: str
+    ) -> dict[str, Any]:
+        """Translate the CLI answer into a LangChain HITLResponse payload.
+
+        The server-side middleware validates that one decision is sent per
+        interrupted tool call, in the same order as the action requests.
+        """
+        if choice in {"", "y", "yes"}:
+            return {"decisions": [{"type": "approve"} for _ in action_requests]}
+        if choice in {"e", "edit"}:
+            decisions: list[dict[str, Any]] = []
+            for action in action_requests:
+                name = str(action.get("name", "tool"))
+                edited = input(f"New args for {name} (JSON): ").strip()
+                try:
+                    args = json.loads(edited) if edited else action.get("args") or {}
+                except json.JSONDecodeError:
+                    decisions.append(
+                        {"type": "reject", "message": "Invalid edited args JSON"}
+                    )
+                    continue
+                decisions.append(
+                    {"type": "edit", "edited_action": {"name": name, "args": args}}
+                )
+            return {"decisions": decisions}
+        return {"decisions": [{"type": "reject"} for _ in action_requests]}
+
+    def _resume_approval(self, decision: dict[str, Any]) -> None:
+        payload = {"input": "", "decision": decision, "session_id": self.session_id,
+                   "user_id": self.user_id, "agent_id": self.agent_id,
+                   "model": self.model, "protocol": self.model_protocol,
+                   "api_key": self.api_key, "base_url": self.model_base_url}
+        with httpx.stream("POST", f"{self.base_url}/resume", json=payload,
+                          headers={"Authorization": f"Bearer {self.token}"}, timeout=None) as response:
+            response.raise_for_status()
+            for line_text in response.iter_lines():
+                event = json.loads(line_text)
+                if not self._apply_session_event(event):
+                    self.renderer.render_event(event)
 
     def _apply_session_event(self, event: Mapping[str, Any]) -> bool:
         if event.get("type") != "session":

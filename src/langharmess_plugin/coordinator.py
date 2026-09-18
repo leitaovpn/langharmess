@@ -314,6 +314,10 @@ class RuntimeMutationCoordinator:
             instance=f"{descriptor.instance}@{suffix}",
             scope=str(scope_id),
             scope_parent="agent",
+            properties={
+                **descriptor.properties,
+                "plugin.agent_id": str(scope_id).removeprefix("agent:"),
+            },
         )
 
     def _restore_scopes(self) -> None:

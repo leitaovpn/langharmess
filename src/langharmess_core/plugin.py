@@ -96,6 +96,11 @@ DYNAMIC_PLUGIN_CATALOG: dict[str, tuple[str, str, str]] = {
         "middleware-plugin-factory",
         SPEC_MIDDLEWARE,
     ),
+    "human-approval-plugin": (
+        "langharmess_core.plugins.middleware.human_approval",
+        "human-approval-plugin-factory",
+        SPEC_MIDDLEWARE,
+    ),
     "response-format-plugin": (
         "langharmess_core.plugins.response_format.template_response_format",
         "response-format-plugin-factory",
@@ -421,6 +426,18 @@ def dynamic_package() -> PluginPackage:
         )
         for plugin in DYNAMIC_PLUGIN_CATALOG
     ]
+    # Middleware that participates in an agent loop must be materialized as an
+    # agent instance so the loop's ``plugin.agent_id`` filter can see it.
+    human_index = next(
+        index
+        for index, contribution in enumerate(contributions)
+        if contribution.id == "human-approval-plugin-template"
+    )
+    contributions[human_index] = PluginContribution(
+        "human-approval-plugin-template",
+        "agent_instance",
+        contributions[human_index].descriptor,
+    )
     contributions.append(
         PluginContribution(
             "management-tools-plugin-instance",

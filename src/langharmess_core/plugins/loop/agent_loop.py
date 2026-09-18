@@ -10,6 +10,7 @@ from typing import Any
 
 from langchain.agents import create_agent
 from langchain_core.messages import ToolMessage
+from langgraph.types import Command
 from pelix.ipopo.decorators import (
     BindField,
     ComponentFactory,
@@ -101,6 +102,18 @@ def _strip_orphan_tool_use(message: Any) -> None:
             and block.get("id") not in completed_ids
         )
     ]
+
+
+def _iter_interrupts(container: Any) -> Iterator[Any]:
+    """Yield the value payload of every interrupt carried by a stream chunk.
+
+    The ``__interrupt__`` entry holds a tuple of ``Interrupt`` objects; its
+    value field carries the human-facing request payload.
+    """
+    if not isinstance(container, dict):
+        return
+    for interrupt in container.get("__interrupt__", ()):
+        yield getattr(interrupt, "value", interrupt)
 
 
 @ComponentFactory("agent-loop-factory")
@@ -596,7 +609,7 @@ class PluginAgentLoop:
         )
 
     async def astream(
-        self, message: str, *, thread_id: str | None = None
+        self, message: str, *, thread_id: str | None = None, resume: Any = None
     ) -> AsyncIterator[dict[str, Any]]:
         if self._graph is None:
             self._rebuild()
@@ -605,8 +618,11 @@ class PluginAgentLoop:
         config = {"configurable": {"thread_id": thread_id}} if thread_id else None
         previous_content: dict[str, str] = {}
         usage_totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        input_value: Any = Command(resume=resume) if resume is not None else {
+            "messages": [{"role": "user", "content": message}]
+        }
         async for stream_type, chunk in self._graph.astream(
-            {"messages": [{"role": "user", "content": message}]},
+            input_value,
             config=config,
             stream_mode=["messages", "updates"],
         ):
@@ -637,9 +653,17 @@ class PluginAgentLoop:
                     yield {"type": "assistant", "content": delta}
                 continue
 
+            # LangGraph emits interrupts either at the top level of the updates
+            # chunk ({"__interrupt__": (Interrupt(...),)}) or nested under the
+            # node name ({"tools": {"__interrupt__": (...), "messages": [...]}}).
+            # The interrupt container is a tuple, never a node-update dict.
+            for interrupt in _iter_interrupts(chunk):
+                yield {"type": "approval_required", "request": interrupt}
             for update in chunk.values():
-                if update is None:
+                if not isinstance(update, dict):
                     continue
+                for interrupt in _iter_interrupts(update):
+                    yield {"type": "approval_required", "request": interrupt}
                 for updated_message in update.get("messages", []):
                     _strip_orphan_tool_use(updated_message)
                     if isinstance(updated_message, ToolMessage):

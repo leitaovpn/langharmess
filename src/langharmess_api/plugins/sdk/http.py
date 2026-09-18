@@ -61,3 +61,11 @@ class HttpUISdk:
                 async for line in response.aiter_lines():
                     if line:
                         yield json.loads(line)
+
+    async def resume(self, payload: Mapping[str, Any]) -> AsyncIterator[Mapping[str, Any]]:
+        async with httpx.AsyncClient() as client:
+            async with client.stream("POST", f"{self._base_url}/resume", headers=self._headers(), json=dict(payload)) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if line:
+                        yield json.loads(line)

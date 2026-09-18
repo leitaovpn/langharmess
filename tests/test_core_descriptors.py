@@ -35,6 +35,7 @@ EXPECTED_DYNAMIC_CONTRIBUTIONS = frozenset(
         "debug-plugin-template",
         "interrupt-after-plugin-template",
         "interrupt-before-plugin-template",
+        "human-approval-plugin-template",
         "management-tools-plugin-instance",
         "management-tools-plugin-template",
         "middleware-plugin-template",
@@ -152,6 +153,9 @@ def test_dynamic_templates_install_without_instantiating() -> None:
         if contribution.id == "management-tools-plugin-instance":
             assert contribution.target == "agent_instance"
             assert descriptor.name == "management-tools-plugin-agent"
+        elif contribution.id == "human-approval-plugin-template":
+            assert contribution.target == "agent_instance"
+            assert descriptor.name.endswith("-template")
         else:
             assert contribution.target == "agent"
             assert descriptor.name.endswith("-template")

@@ -44,7 +44,8 @@ def _encode(event: dict[str, Any]) -> str:
 
 
 class StreamRequest(BaseModel):
-    input: str
+    input: str = ""
+    decision: str | dict[str, Any] | None = None
     model: str | None = None
     api_key: str = ""
     base_url: str = ""
@@ -144,10 +145,10 @@ class StreamRoutePlugin:
                             "user_id": user_id,
                         }
                     )
-                    async for event in loop.astream(
-                        payload.input,
-                        thread_id=thread_key(user_id, session_id, agent_id),
-                    ):
+                    kwargs: dict[str, Any] = {"thread_id": thread_key(user_id, session_id, agent_id)}
+                    if payload.decision is not None:
+                        kwargs["resume"] = payload.decision
+                    async for event in loop.astream(payload.input, **kwargs):
                         yield _encode(event)
                 except Exception as exc:
                     LOGGER.exception("Agent stream failed")
