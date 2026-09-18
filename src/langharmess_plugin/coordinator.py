@@ -20,6 +20,7 @@ TOOL_ADAPTER_MODULE = "langharmess_core.plugins.tools.export_adapter"
 TOOL_ADAPTER_FACTORY = "tool-export-adapter-factory"
 TOOL_SPECIFICATION = "agent.plugin.tools"
 BUILTIN_PACKAGE_PREFIX = "builtin."
+DYNAMIC_CORE_PACKAGE = "dynamic.core"
 
 
 class RuntimeMutationError(RuntimeError):
@@ -82,6 +83,17 @@ class RuntimeMutationCoordinator:
                 raise RuntimeMutationError(
                     f"Plugin is already installed: {descriptor.name}"
                 )
+            for item in self._registrations:
+                if (
+                    package_id == DYNAMIC_CORE_PACKAGE
+                    and item.descriptor.name != descriptor.name
+                    and item.descriptor.module == descriptor.module
+                ):
+                    raise RuntimeMutationError(
+                        f"Module {descriptor.module!r} is already installed by "
+                        f"{item.descriptor.name!r}; one plugin per module "
+                        f"within {DYNAMIC_CORE_PACKAGE}"
+                    )
             self.manager.install_plugin(descriptor)
             registration = PersistedPluginRegistration(
                 package.id,
