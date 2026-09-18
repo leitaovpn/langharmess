@@ -4,12 +4,29 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import BaseModel
 
-from langharmess_core.contracts import SPEC_TOOL
-from langharmess_core.plugin import tool_export_adapter_template_descriptor
-from langharmess_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
-from langharmess_plugin.coordinator import RuntimeMutationCoordinator
+from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_LLM, SPEC_TOOL
+from langharmess_core.plugin import (
+    agent_loop_descriptor,
+    agent_loop_template_descriptor,
+    dynamic_package,
+    tool_export_adapter_template_descriptor,
+)
+from langharmess_plugin.contracts import (
+    SPEC_TOOL_EXPORT_TARGET,
+    DynamicPluginManager,
+)
+from langharmess_plugin.coordinator import (
+    RuntimeMutationCoordinator,
+    RuntimeMutationError,
+)
 from langharmess_plugin.discovery import PluginDiscovery
 from langharmess_plugin.package import PluginContribution, PluginPackage, ToolExport
 from langharmess_plugin.plugin_manager import PluginManager
@@ -224,5 +241,217 @@ def test_dynamic_discovery_full_lifecycle() -> None:
         coordinator.uninstall("server-echo", scope_id=ScopeId("server"))
         assert coordinator.registrations() == ()
         assert "server_echo" not in tool_names(manager, "agent")
+    finally:
+        manager.stop()
+
+
+MANAGEMENT_TOOLS = {
+    "list_scope_tree",
+    "list_runtime_plugins",
+    "discover_plugins",
+    "install_plugin",
+    "enable_plugin",
+    "disable_plugin",
+    "upgrade_plugin",
+    "uninstall_plugin",
+    "update_plugin_properties",
+}
+
+
+class StaticModel(BaseChatModel):
+    response: str = "ok"
+
+    def _generate(
+        self,
+        messages: Any,
+        stop: Any = None,
+        run_manager: Any = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        return ChatResult(
+            generations=[ChatGeneration(message=AIMessage(content=self.response))]
+        )
+
+    @property
+    def _llm_type(self) -> str:
+        return "static-model"
+
+    def bind_tools(self, tools: Any, **kwargs: Any) -> StaticModel:
+        return self
+
+
+def make_loop_manager() -> PluginManager:
+    manager = PluginManager(
+        PluginRegistry(
+            [
+                PluginDescriptor(
+                    name="tools-template",
+                    version="1.0.0",
+                    module="langharmess_core.plugins.tools.tools",
+                    factory="tools-plugin-factory",
+                    instance="tools-template",
+                    specification=SPEC_TOOL,
+                    enabled=False,
+                ),
+                PluginDescriptor(
+                    name="llm-template",
+                    version="1.0.0",
+                    module="langharmess_core.plugins.llm.llm",
+                    factory="llm-plugin-factory",
+                    instance="llm-template",
+                    specification=SPEC_LLM,
+                    enabled=False,
+                ),
+                tool_export_adapter_template_descriptor(),
+                agent_loop_template_descriptor(),
+            ]
+        )
+    )
+    manager.start()
+    return manager
+
+
+def materialize_loop(manager: PluginManager) -> None:
+    scope = ScopeId("agent:a")
+    manager.instantiate_instance(
+        PluginDescriptor(
+            name="llm-a",
+            version="1.0.0",
+            module="langharmess_core.plugins.llm.llm",
+            factory="llm-plugin-factory",
+            instance="llm-a",
+            specification=SPEC_LLM,
+            properties={
+                "plugin.model.instance": StaticModel(),
+                "plugin.agent_id": "a",
+            },
+        ),
+        scope_id=scope,
+        plugin_key="llm",
+    )
+    manager.instantiate_instance(
+        agent_loop_descriptor(
+            "a",
+            [SPEC_LLM, SPEC_TOOL],
+            visibility_filter=manager.scope_filter(scope),
+        ),
+        scope_id=scope,
+        plugin_key="agent-loop",
+    )
+
+
+def loop_tool_names(manager: PluginManager) -> list[str]:
+    loops = manager.get_services(SPEC_AGENT_LOOP)
+    assert len(loops) == 1
+    return [str(tool) for tool in loops[0].describe()["tools"]]
+
+
+def management_discovery() -> PluginDiscovery:
+    return PluginDiscovery(lambda: [EntryPoint(dynamic_package(), "dynamic-core")])
+
+
+def test_management_tools_install_enable_disable_visibility() -> None:
+    manager = make_manager()
+    try:
+        install_templates(manager)
+        store = InMemoryRuntimeStateStore()
+        coordinator = RuntimeMutationCoordinator(
+            manager, store, management_discovery()
+        )
+        manager.register_runtime_service(DynamicPluginManager, coordinator)
+        coordinator.rescan()
+
+        registration = coordinator.install(
+            "dynamic.core",
+            "management-tools-plugin-template",
+            scope_id=ScopeId("agent"),
+        )
+        assert registration.descriptor.name == "management-tools-plugin-template"
+        assert MANAGEMENT_TOOLS.isdisjoint(tool_names(manager, "agent"))
+
+        enabled = coordinator.set_enabled(
+            "management-tools-plugin-template", True, scope_id=ScopeId("agent")
+        )
+        assert enabled.enabled is True
+        assert MANAGEMENT_TOOLS <= set(tool_names(manager, "agent"))
+        assert MANAGEMENT_TOOLS.isdisjoint(tool_names(manager, "ui"))
+
+        disabled = coordinator.set_enabled(
+            "management-tools-plugin-template", False, scope_id=ScopeId("agent")
+        )
+        assert disabled.enabled is False
+        assert MANAGEMENT_TOOLS.isdisjoint(tool_names(manager, "agent"))
+    finally:
+        manager.stop()
+
+
+def test_management_tools_agent_instance_and_module_guard() -> None:
+    manager = make_manager()
+    try:
+        install_templates(manager)
+        store = InMemoryRuntimeStateStore()
+        coordinator = RuntimeMutationCoordinator(
+            manager, store, management_discovery()
+        )
+        manager.register_runtime_service(DynamicPluginManager, coordinator)
+        coordinator.rescan()
+
+        registration = coordinator.install(
+            "dynamic.core",
+            "management-tools-plugin-instance",
+            scope_id=ScopeId("agent:a"),
+        )
+        assert registration.descriptor.name == (
+            "management-tools-plugin-agent@agent-a"
+        )
+        assert registration.scope_id == ScopeId("agent:a")
+
+        with pytest.raises(RuntimeMutationError, match="one plugin per module"):
+            coordinator.install(
+                "dynamic.core",
+                "management-tools-plugin-template",
+                scope_id=ScopeId("agent"),
+            )
+
+        enabled = coordinator.set_enabled(
+            "management-tools-plugin-agent@agent-a",
+            True,
+            scope_id=ScopeId("agent:a"),
+        )
+        assert enabled.enabled is True
+        assert MANAGEMENT_TOOLS <= set(tool_names(manager, "agent:a"))
+        assert MANAGEMENT_TOOLS.isdisjoint(tool_names(manager, "agent"))
+    finally:
+        manager.stop()
+
+
+def test_management_tools_reach_an_agent_loop_and_leave_on_disable() -> None:
+    manager = make_loop_manager()
+    try:
+        install_templates(manager)
+        materialize_loop(manager)
+        store = InMemoryRuntimeStateStore()
+        coordinator = RuntimeMutationCoordinator(
+            manager, store, management_discovery()
+        )
+        manager.register_runtime_service(DynamicPluginManager, coordinator)
+        coordinator.rescan()
+
+        assert MANAGEMENT_TOOLS.isdisjoint(loop_tool_names(manager))
+
+        coordinator.install(
+            "dynamic.core",
+            "management-tools-plugin-template",
+            scope_id=ScopeId("agent"),
+        )
+        coordinator.set_enabled(
+            "management-tools-plugin-template", True, scope_id=ScopeId("agent")
+        )
+        assert MANAGEMENT_TOOLS <= set(loop_tool_names(manager))
+
+        coordinator.set_enabled(
+            "management-tools-plugin-template", False, scope_id=ScopeId("agent")
+        )
+        assert MANAGEMENT_TOOLS.isdisjoint(loop_tool_names(manager))
     finally:
         manager.stop()
