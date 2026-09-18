@@ -31,7 +31,7 @@ class HumanApprovalPlugin:
         names = self._dangerous_tools or []
         if isinstance(names, str):
             names = [item.strip() for item in names.split(",") if item.strip()]
-        interrupt_on = {str(name): True for name in names}
+        interrupt_on: dict[str, Any] = {str(name): True for name in names}
         if not interrupt_on:
             return []
         return [HumanInTheLoopMiddleware(interrupt_on)]

@@ -583,7 +583,9 @@ APPROVAL_REQUEST = {
 }
 
 
-def approval_fake_stream(requests: list, request: dict, lines: list[dict] = None) -> object:
+def approval_fake_stream(
+    requests: list, request: dict, lines: list[dict] = None, resume_lines: list[dict] = None
+) -> object:
     """Serve the approval event on /stream and capture both HTTP calls."""
 
     def fake_stream(*args, **kwargs):
@@ -594,7 +596,7 @@ def approval_fake_stream(requests: list, request: dict, lines: list[dict] = None
                 if lines is None
                 else lines
             )
-        return stream_response([])
+        return stream_response([] if resume_lines is None else resume_lines)
 
     return fake_stream
 
@@ -675,3 +677,66 @@ def test_approval_decision_count_matches_action_requests(monkeypatch) -> None:
     assert requests[1]["kwargs"]["json"]["decision"] == {
         "decisions": [{"type": "approve"}, {"type": "approve"}]
     }
+
+
+def test_approval_edit_rejects_invalid_json(monkeypatch) -> None:
+    """Invalid edited args JSON degrades to a reject with a reason."""
+    _, requests, _ = approval_runner(
+        monkeypatch, ["e", "not-json"], APPROVAL_REQUEST
+    )
+
+    assert requests[1]["kwargs"]["json"]["decision"] == {
+        "decisions": [{"type": "reject", "message": "Invalid edited args JSON"}]
+    }
+
+
+def test_approval_edit_empty_input_keeps_original_args(monkeypatch) -> None:
+    _, requests, _ = approval_runner(monkeypatch, ["e", ""], APPROVAL_REQUEST)
+
+    assert requests[1]["kwargs"]["json"]["decision"] == {
+        "decisions": [
+            {
+                "type": "edit",
+                "edited_action": {
+                    "name": "write_file",
+                    "args": {"file_path": "/tmp/x.txt", "text": "hi"},
+                },
+            }
+        ]
+    }
+
+
+def test_approval_non_dict_request_falls_back_to_tool_label(monkeypatch) -> None:
+    """A malformed request payload still prompts with the generic label."""
+    _, requests, prompts = approval_runner(monkeypatch, ["y"], "not-a-dict")
+
+    assert "tool" in prompts[0]
+    assert requests[1]["kwargs"]["json"]["decision"] == {"decisions": []}
+
+
+def test_approval_resume_response_events_are_rendered(monkeypatch) -> None:
+    """Events streamed by the resume turn (e.g. tool output) reach the renderer."""
+    requests = []
+    monkeypatch.setattr(
+        "langharmess_cli.common.interactive.httpx.stream",
+        approval_fake_stream(
+            requests,
+            APPROVAL_REQUEST,
+            resume_lines=[{"type": "assistant", "content": "done"}],
+        ),
+    )
+    monkeypatch.setattr("builtins.input", lambda prompt: "y")
+    renderer = RecordingRenderer()
+    runner = InteractiveCLIRunner(
+        base_url="http://api",
+        token="secret",
+        commands=[],
+        session_id="s1",
+        renderer=renderer,
+    )
+    runner.do_stream("write a file")
+
+    assert requests[1]["kwargs"]["json"]["decision"] == {
+        "decisions": [{"type": "approve"}]
+    }
+    assert {"type": "assistant", "content": "done"} in renderer.events

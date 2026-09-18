@@ -7,13 +7,21 @@ from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import StreamingResponse
-from pelix.ipopo.decorators import BindField, ComponentFactory, Property, Provides, RequiresBest, UnbindField
+from pelix.ipopo.decorators import (
+    BindField,
+    ComponentFactory,
+    Property,
+    Provides,
+    RequiresBest,
+    UnbindField,
+)
 from pydantic import BaseModel
 
 from langharmess_api.contracts import RouteProvider
 from langharmess_core.common.ids import thread_key, validate_id
 from langharmess_core.contracts import AgentDirectoryProvider, SessionIndexProvider
 from langharmess_plugin.validation import ContractGuard
+
 
 class ResumeRequest(BaseModel):
     decision: str | dict[str, Any]
@@ -50,10 +58,14 @@ class ResumeRoutePlugin:
             if self._agent_directory is None or self._session_index is None:
                 raise HTTPException(503, "Agent services unavailable")
             try:
-                user = validate_id(payload.user_id, field="user_id"); agent = validate_id(payload.agent_id, field="agent_id"); session = validate_id(payload.session_id, field="session_id")
-            except ValueError as exc: raise HTTPException(400, str(exc)) from exc
+                user = validate_id(payload.user_id, field="user_id")
+                agent = validate_id(payload.agent_id, field="agent_id")
+                session = validate_id(payload.session_id, field="session_id")
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
             loop = self._agent_directory.get_loop(agent)
-            if loop is None: raise HTTPException(503, "Agent loop unavailable")
+            if loop is None:
+                raise HTTPException(503, "Agent loop unavailable")
             await self._session_index.touch(user, session, agent)
             async def generate() -> AsyncIterator[str]:
                 yield json.dumps({"type": "session", "session_id": session, "agent_id": agent, "user_id": user}) + "\n"

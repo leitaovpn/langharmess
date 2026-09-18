@@ -67,4 +67,5 @@ class HttpUISdk:
             async with client.stream("POST", f"{self._base_url}/resume", headers=self._headers(), json=dict(payload)) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
-                    if line: yield json.loads(line)
+                    if line:
+                        yield json.loads(line)

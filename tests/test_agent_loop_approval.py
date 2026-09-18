@@ -20,7 +20,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 
-from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop
+from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop, _iter_interrupts
 
 APPROVAL_VALUE = {
     "action_requests": [
@@ -97,6 +97,11 @@ def test_astream_forwards_interrupt_nested_under_node_name() -> None:
     events = _collect(loop)
 
     assert events == [{"type": "approval_required", "request": APPROVAL_VALUE}]
+
+
+def test_iter_interrupts_skips_non_dict_containers() -> None:
+    assert list(_iter_interrupts(None)) == []
+    assert list(_iter_interrupts((1, 2))) == []
 
 
 class ToolCallModel(BaseChatModel):
