@@ -297,6 +297,7 @@ def test_agent_instance_contribution_suffixes_descriptor() -> None:
     assert registration.descriptor.name == "instance@agent-a"
     assert registration.descriptor.instance == "instance@agent-a"
     assert registration.scope_id == ScopeId("agent:a")
+    assert registration.descriptor.properties["plugin.agent_id"] == "a"
 
 
 def test_agent_instance_contribution_requires_agent_scope() -> None:

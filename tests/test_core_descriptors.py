@@ -153,6 +153,9 @@ def test_dynamic_templates_install_without_instantiating() -> None:
         if contribution.id == "management-tools-plugin-instance":
             assert contribution.target == "agent_instance"
             assert descriptor.name == "management-tools-plugin-agent"
+        elif contribution.id == "human-approval-plugin-template":
+            assert contribution.target == "agent_instance"
+            assert descriptor.name.endswith("-template")
         else:
             assert contribution.target == "agent"
             assert descriptor.name.endswith("-template")
