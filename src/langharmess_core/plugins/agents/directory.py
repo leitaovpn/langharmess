@@ -15,6 +15,7 @@ from pelix.ipopo.decorators import (
     Validate,
 )
 
+from langharmess_config.contracts import Configs
 from langharmess_core.common.ids import validate_id
 from langharmess_core.contracts import (
     SPEC_AGENT_LOOP,
@@ -29,6 +30,7 @@ from langharmess_core.plugin import (
     agent_plugin_descriptor,
     agent_required_modules,
     agent_scoped_specifications,
+    default_llm_descriptor,
 )
 from langharmess_plugin.contracts import ScopedPluginRegistrar
 from langharmess_plugin.registry import PluginDescriptor
@@ -44,6 +46,7 @@ LOGGER = logging.getLogger("langharmess.agent")
 @Property("_plugin_version", "plugin.version", "1.0.0")
 @RequiresBest("_registry", AgentRegistryProvider, optional=True, immediate_rebind=True)
 @RequiresBest("_scope", ScopedPluginRegistrar, optional=True, immediate_rebind=True)
+@RequiresBest("_configs_service", Configs, optional=True, immediate_rebind=True)
 class AgentDirectoryPlugin:
     """Materializes and resolves the plugin instances of every agent."""
 
@@ -52,14 +55,18 @@ class AgentDirectoryPlugin:
         self._plugin_version = "1.0.0"
         self._registry: Any = None
         self._scope: Any = None
+        self._configs_service: Any = None
         self._guards: dict[str, ContractGuard] = {
             "_registry": ContractGuard(self, "_registry", AgentRegistryProvider),
             "_scope": ContractGuard(self, "_scope", ScopedPluginRegistrar),
+            "_configs_service": ContractGuard(self, "_configs_service", Configs),
         }
         self._instances: dict[str, dict[str, PluginDescriptor]] = {}
         self._loops: dict[str, PluginDescriptor] = {}
         self._failed: set[str] = set()
         self._configs: dict[str, dict[str, Any]] = {}
+        self._default_llm: PluginDescriptor | None = None
+        self._llm_default_properties: dict[str, Any] | None = None
 
     @Validate
     def _validate(self, bundle_context: Any) -> None:
@@ -86,6 +93,21 @@ class AgentDirectoryPlugin:
         self._guards[field].release(service)
         self._instances.clear()
         self._loops.clear()
+        self._default_llm = None
+
+    @BindField("_configs_service", if_valid=True)
+    def _on_configs_service_bind(
+        self, field: str, service: Any, reference: Any
+    ) -> None:
+        if not self._guards[field].admit(service):
+            return
+        self._materialize_all()
+
+    @UnbindField("_configs_service")
+    def _on_configs_service_unbind(
+        self, field: str, service: Any, reference: Any
+    ) -> None:
+        self._guards[field].release(service)
 
     def list_agents(self) -> list[dict[str, Any]]:
         if self._registry is None:
@@ -147,7 +169,20 @@ class AgentDirectoryPlugin:
         self._materialize_all()
         if plugin not in AGENT_PLUGIN_CATALOG:
             raise ValueError(f"Unknown agent plugin: {plugin}")
-        merged = {**self.binding_properties(agent["id"], plugin), **properties}
+        merged = dict(self.binding_properties(agent["id"], plugin))
+        if plugin == "llm":
+            merged = {**self._llm_defaults(), **merged, **properties}
+            if not merged.get("plugin.model.name") and not merged.get(
+                "plugin.model.instance"
+            ):
+                LOGGER.debug(
+                    "Agent %s has no usable llm configuration; "
+                    "it inherits the scope default",
+                    agent["id"],
+                )
+                return
+        else:
+            merged.update(properties)
         descriptor = agent_plugin_descriptor(agent["id"], plugin, merged)
         current = self._instances.get(agent["id"], {}).get(plugin)
         if current == descriptor:
@@ -178,6 +213,7 @@ class AgentDirectoryPlugin:
     def _materialize_all(self) -> None:
         if self._registry is None or self._scope is None:
             return
+        self._ensure_default_llm()
         for agent in self._registry.list_agents():
             agent_id = agent["id"]
             if not agent.get("enabled", False):
@@ -185,6 +221,47 @@ class AgentDirectoryPlugin:
             if agent_id in self._instances or agent_id in self._failed:
                 continue
             self._materialize(agent)
+
+    def _llm_defaults(self) -> dict[str, Any]:
+        """providers.default mapped to llm plugin properties, cached."""
+        if self._configs_service is None:
+            return {}
+        if self._llm_default_properties is None:
+            self._llm_default_properties = self._read_llm_defaults()
+        return dict(self._llm_default_properties)
+
+    def _read_llm_defaults(self) -> dict[str, Any]:
+        try:
+            provider = self._configs_service.get_default_provider()
+        except ValueError as exc:
+            LOGGER.warning("Default model unavailable: %s", exc)
+            return {}
+        return {
+            "plugin.model.name": provider.get("model", ""),
+            "plugin.model.api_key": provider.get("api_key", ""),
+            "plugin.model.base_url": provider.get("base_url", ""),
+            "plugin.model.protocol": provider.get("protocol", "chat"),
+        }
+
+    def _ensure_default_llm(self) -> None:
+        """Instantiate the agent-scope fallback LLM from providers.default."""
+        if self._scope is None or self._default_llm is not None:
+            return
+        if AGENT_PLUGIN_CATALOG["llm"][0] not in self._scope.installed_modules():
+            LOGGER.debug("Default LLM waits for the llm bundle")
+            return
+        properties = self._llm_defaults()
+        if not properties:
+            return
+        descriptor = default_llm_descriptor(properties)
+        try:
+            self._scope.instantiate_instance(
+                descriptor, scope_id=AGENT_SCOPE_ID, plugin_key="llm"
+            )
+        except Exception as exc:
+            LOGGER.warning("Could not create the default LLM: %s", exc)
+            return
+        self._default_llm = descriptor
 
     def _bindings(self, agent_id: str) -> dict[str, dict[str, Any]]:
         stored = self._configs.get(agent_id)
@@ -200,9 +277,14 @@ class AgentDirectoryPlugin:
         agent_id = agent["id"]
         if self._scope is None:
             return
+        self._ensure_default_llm()
+        bindings = self._bindings(agent_id)
+        required = list(agent_required_modules())
+        if "llm" in bindings:
+            required.append(AGENT_PLUGIN_CATALOG["llm"][0])
         missing = [
             module
-            for module in agent_required_modules()
+            for module in required
             if module not in self._scope.installed_modules()
         ]
         if missing:
@@ -216,13 +298,15 @@ class AgentDirectoryPlugin:
                 name=agent.get("name") or agent_id,
                 parent_id=AGENT_SCOPE_ID,
             )
-            for plugin in self._bindings(agent_id):
+            for plugin in bindings:
                 if plugin not in AGENT_PLUGIN_CATALOG:
                     LOGGER.warning(
                         "Ignoring unknown agent plugin %s for %s", plugin, agent_id
                     )
                     continue
                 descriptor = self._binding_descriptor(agent, plugin)
+                if descriptor is None:
+                    continue
                 self._scope.instantiate_instance(
                     descriptor, scope_id=scope_id, plugin_key=plugin
                 )
@@ -251,8 +335,19 @@ class AgentDirectoryPlugin:
 
     def _binding_descriptor(
         self, agent: dict[str, Any], plugin: str
-    ) -> PluginDescriptor:
+    ) -> PluginDescriptor | None:
         properties = dict(self.binding_properties(agent["id"], plugin))
+        if plugin == "llm":
+            properties = {**self._llm_defaults(), **properties}
+            if not properties.get("plugin.model.name") and not properties.get(
+                "plugin.model.instance"
+            ):
+                LOGGER.debug(
+                    "Agent %s has an unconfigured llm binding; "
+                    "it inherits the scope default",
+                    agent["id"],
+                )
+                return None
         if plugin == "name":
             properties.setdefault("plugin.agent_name", agent.get("name") or agent["id"])
         return agent_plugin_descriptor(agent["id"], plugin, properties)

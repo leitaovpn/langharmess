@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -37,6 +38,10 @@ from langharmess_core.plugins.store.template_store import TemplateStorePlugin
 from langharmess_core.plugins.transformers.template_transformers import (
     TemplateTransformersPlugin,
 )
+
+
+async def _rebuild_on_loop(loop: Any) -> None:
+    loop._rebuild()
 
 
 def test_agent_parameter_plugins_expose_values() -> None:
@@ -179,7 +184,8 @@ def test_rebuild_passes_all_parameters_to_create_agent(
         SimpleNamespace(get_transformers=lambda: ["t1"]),
     ]
 
-    loop._rebuild()
+    # With a checkpointer the graph builds on the API event loop.
+    asyncio.run(_rebuild_on_loop(loop))
 
     assert captured["response_format"] is response_format
     assert captured["state_schema"] is state_schema
