@@ -166,7 +166,7 @@ class PluginDiscovery:
     @staticmethod
     def _validate_catalog(packages: list[PluginPackage]) -> None:
         package_ids: set[str] = set()
-        descriptor_keys: set[tuple[str, str]] = set()
+        descriptor_keys: dict[tuple[str, str], str] = {}
         for package in packages:
             if package.id in package_ids:
                 raise PluginDiscoveryError(f"Duplicate plugin package: {package.id!r}")
@@ -174,8 +174,10 @@ class PluginDiscovery:
             for contribution in package.contributions:
                 descriptor = contribution.descriptor
                 key = (descriptor.module, descriptor.factory)
-                if key in descriptor_keys:
+                previous = descriptor_keys.get(key)
+                if previous is not None and previous != package.id:
                     raise PluginDiscoveryError(
-                        f"Duplicate plugin descriptor: {key!r}"
+                        f"Duplicate plugin descriptor {key!r} in "
+                        f"{package.id!r} and {previous!r}"
                     )
-                descriptor_keys.add(key)
+                descriptor_keys[key] = package.id

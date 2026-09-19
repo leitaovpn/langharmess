@@ -166,17 +166,36 @@ def test_package_catalog_allows_duplicate_names_different_factories() -> None:
     assert len(result.packages[0].contributions) == 2
 
 
-def test_package_catalog_rejects_duplicate_module_factory() -> None:
+def test_package_catalog_allows_same_factory_within_package() -> None:
+    # One package may contribute two install requests over the same
+    # definition: a template install plus an agent-instance request.
     first = static_descriptor(name="a", module="m", factory="f")
     second = static_descriptor(name="b", module="m", factory="f")
     package = PluginPackage(
         "p",
         "1.0.0",
         (
-            PluginContribution("a", "server", first),
-            PluginContribution("b", "server", second),
+            PluginContribution("a", "agent", first),
+            PluginContribution("b", "agent_instance", second),
         ),
     )
     discovery = PluginDiscovery(lambda: entries(lambda: package))
+    result = discovery.scan()
+    assert len(result.packages) == 1
+    assert len(result.packages[0].contributions) == 2
+
+
+def test_package_catalog_rejects_duplicate_module_factory_across_packages() -> None:
+    first = static_descriptor(name="a", module="m", factory="f")
+    second = static_descriptor(name="b", module="m", factory="f")
+    package_a = PluginPackage(
+        "p.a", "1.0.0", (PluginContribution("a", "server", first),)
+    )
+    package_b = PluginPackage(
+        "p.b", "1.0.0", (PluginContribution("b", "server", second),)
+    )
+    discovery = PluginDiscovery(
+        lambda: entries(lambda: package_a, lambda: package_b)
+    )
     with pytest.raises(Exception, match="[Dd]uplicate"):
         discovery.scan()
