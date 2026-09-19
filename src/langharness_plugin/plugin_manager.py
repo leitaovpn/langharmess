@@ -417,6 +417,292 @@ class PluginManager:
             raise PluginNotFoundError(f"Plugin factory {factory!r} is not installed")
         return snapshot
 
+    # -------------------------------------------------------------- instances
+
+    def create_instance(
+        self,
+        factory: str,
+        module: str,
+        scope_id: ScopeId | None = None,
+        *,
+        properties: Mapping[str, Any] | None = None,
+        enabled: bool = True,
+        ranking: int = 0,
+    ) -> PluginInstanceSnapshot:
+        with self._lock:
+            self._require_started()
+            scope_id = scope_id if scope_id is not None else ROOT_SCOPE_ID
+            self.scope_tree.require(scope_id)
+            key = (module, factory)
+            definition = self._plugins.get(key)
+            if definition is None:
+                raise PluginNotFoundError(
+                    f"Plugin definition {factory!r} from {module!r} is not installed"
+                )
+            user = dict(properties or {})
+            instance_uuid = uuid.uuid4().hex
+            effective = self._effective_properties(
+                definition.descriptor, scope_id, user,
+                ranking=ranking, instance_uuid=instance_uuid,
+            )
+            if enabled:
+                self._instantiate_uuid(definition.descriptor, instance_uuid, effective)
+                status: InstanceStatus = "active"
+            else:
+                status = "disabled"
+            snapshot = PluginInstanceSnapshot(
+                instance_uuid, factory, module, scope_id, effective,
+                enabled, ranking, status,
+            )
+            self._instances[instance_uuid] = snapshot
+            self._user_properties[instance_uuid] = user
+            registration_key = (module, factory, scope_id)
+            self._registration_instances.setdefault(
+                registration_key, set()
+            ).add(instance_uuid)
+            try:
+                self._persist_state()
+            except Exception:
+                if enabled:
+                    self._ipopo.kill(instance_uuid)
+                self._instances.pop(instance_uuid, None)
+                self._user_properties.pop(instance_uuid, None)
+                self._registration_instances.get(
+                    registration_key, set()
+                ).discard(instance_uuid)
+                raise
+            self._record_history(
+                "create_instance", factory=factory, module=module,
+                scope_id=str(scope_id), instance=instance_uuid,
+            )
+            return snapshot
+
+    def ensure_instance(
+        self,
+        factory: str,
+        module: str,
+        scope_id: ScopeId | None,
+        *,
+        properties: Mapping[str, Any] | None,
+        enabled: bool,
+    ) -> PluginInstanceSnapshot:
+        """Idempotent assembly helper: reconcile-or-create one instance."""
+        scope_id = scope_id if scope_id is not None else ROOT_SCOPE_ID
+        for snapshot in self._instances.values():
+            if (
+                snapshot.factory == factory
+                and snapshot.module == module
+                and snapshot.scope_id == scope_id
+            ):
+                user = self._user_properties.get(snapshot.instance, {})
+                if snapshot.enabled != enabled or user != dict(properties or {}):
+                    return self.update_instance(
+                        snapshot.instance,
+                        properties=dict(properties or {}) or None,
+                        enabled=enabled,
+                    )
+                return snapshot
+        return self.create_instance(
+            factory, module, scope_id, properties=properties, enabled=enabled
+        )
+
+    def get_instance(self, instance: str) -> PluginInstanceSnapshot:
+        snapshot = self._instances.get(instance)
+        if snapshot is None:
+            raise InstanceNotFoundError(instance)
+        return snapshot
+
+    def delete_instance(self, instance: str) -> None:
+        with self._lock:
+            self._require_started()
+            snapshot = self._instances.get(instance)
+            if snapshot is None:
+                raise InstanceNotFoundError(instance)
+            self._remove_instance_record(instance)
+            try:
+                self._persist_state()
+            except Exception:
+                if snapshot.status == "active":
+                    self._instantiate_uuid(
+                        self._plugins[(snapshot.module, snapshot.factory)].descriptor,
+                        instance,
+                        dict(snapshot.properties),
+                    )
+                self._instances[instance] = snapshot
+                self._user_properties[instance] = dict(snapshot.properties)
+                self._registration_instances.setdefault(
+                    (snapshot.module, snapshot.factory, snapshot.scope_id), set()
+                ).add(instance)
+                raise
+            self._record_history(
+                "delete_instance", factory=snapshot.factory,
+                module=snapshot.module, scope_id=str(snapshot.scope_id),
+                instance=instance,
+            )
+
+    def update_instance(
+        self,
+        instance: str,
+        *,
+        properties: Mapping[str, Any] | None = None,
+        enabled: bool | None = None,
+        ranking: int | None = None,
+    ) -> PluginInstanceSnapshot:
+        with self._lock:
+            self._require_started()
+            current = self._instances.get(instance)
+            if current is None:
+                raise InstanceNotFoundError(instance)
+            definition = self._plugins.get((current.module, current.factory))
+            if definition is None:
+                raise InstanceStateError(
+                    f"Definition for instance {instance!r} is not installed"
+                )
+            descriptor = definition.descriptor
+            user = dict(self._user_properties.get(instance, {}))
+            if properties is not None:
+                user.update(properties)
+            new_enabled = current.enabled if enabled is None else enabled
+            new_ranking = current.ranking if ranking is None else ranking
+            effective = self._effective_properties(
+                descriptor, current.scope_id, user, ranking=new_ranking
+            )
+            new_snapshot = PluginInstanceSnapshot(
+                instance, current.factory, current.module, current.scope_id,
+                effective, new_enabled, new_ranking,
+                "active" if new_enabled else "disabled",
+            )
+            needs_rebind = (
+                new_enabled != current.enabled
+                or new_ranking != current.ranking
+                or descriptor.swap_policy != "hot"
+            )
+            try:
+                if not new_enabled:
+                    if current.status == "active":
+                        self._ipopo.kill(instance)
+                elif current.status == "disabled":
+                    self._instantiate_uuid(descriptor, instance, effective)
+                elif needs_rebind:
+                    self._ipopo.kill(instance)
+                    self._instantiate_uuid(descriptor, instance, effective)
+                else:
+                    self._ipopo.reconfigure(instance, effective or None)
+            except Exception:
+                if current.status == "active" and new_enabled:
+                    self._ipopo.kill(instance)
+                    self._instantiate_uuid(
+                        descriptor, instance, dict(current.properties)
+                    )
+                raise
+            self._instances[instance] = new_snapshot
+            self._user_properties[instance] = user
+            try:
+                self._persist_state()
+            except Exception:
+                self._instances[instance] = current
+                self._user_properties[instance] = dict(current.properties)
+                raise
+            self._record_history(
+                "update_instance", factory=current.factory,
+                module=current.module, scope_id=str(current.scope_id),
+                instance=instance,
+            )
+            return new_snapshot
+
+    def list_instance(
+        self,
+        *,
+        factory: str | None = None,
+        module: str | None = None,
+        scope_id: ScopeId | None = None,
+        enabled: bool | None = None,
+    ) -> tuple[PluginInstanceSnapshot, ...]:
+        result = [
+            snapshot
+            for snapshot in self._instances.values()
+            if (factory is None or snapshot.factory == factory)
+            and (module is None or snapshot.module == module)
+            and (scope_id is None or snapshot.scope_id == scope_id)
+            and (enabled is None or snapshot.enabled == enabled)
+        ]
+        return tuple(
+            sorted(
+                result,
+                key=lambda item: (item.factory, str(item.scope_id), item.instance),
+            )
+        )
+
+    def _effective_properties(
+        self,
+        descriptor: PluginDescriptor,
+        scope_id: ScopeId,
+        user: dict[str, Any],
+        *,
+        ranking: int,
+        instance_uuid: str | None = None,
+    ) -> dict[str, Any]:
+        effective = dict(user)
+        effective[PLUGIN_SCOPE_ID] = str(scope_id)
+        effective[PLUGIN_SCOPE_CHAIN] = [
+            str(item) for item in self._scope_policy.visible_scopes(scope_id)
+        ]
+        effective[PLUGIN_KEY] = descriptor.factory
+        if instance_uuid is not None:
+            effective[PLUGIN_INSTANCE_ID] = instance_uuid
+        effective[PLUGIN_RANKING] = ranking
+        effective[SERVICE_RANKING] = (
+            self.scope_tree.depth(scope_id) * SCOPE_RANKING_STRIDE + ranking
+        )
+        self._apply_scoped_filters(effective, descriptor, scope_id)
+        _validate_filters(effective)
+        return effective
+
+    def _apply_scoped_filters(
+        self,
+        properties: dict[str, Any],
+        descriptor: PluginDescriptor,
+        scope_id: ScopeId,
+    ) -> None:
+        fields = scoped_fields_from_module(descriptor.module)
+        if not fields:
+            return
+        filters = dict(properties.get(FILTERS_PROPERTY, {}))
+        scope_filter = self._scope_policy.visibility_filter(scope_id)
+        for field in fields:
+            user = filters.get(field)
+            if user and user.startswith(scope_filter):
+                continue  # already in canonical form (scope filter first)
+            filters[field] = (
+                scope_filter if not user else f"(&{scope_filter}{user})"
+            )
+        properties[FILTERS_PROPERTY] = filters
+
+    def _instantiate_uuid(
+        self,
+        descriptor: PluginDescriptor,
+        instance_uuid: str,
+        properties: dict[str, Any],
+    ) -> Any:
+        instance = self._ipopo.instantiate(
+            descriptor.factory, instance_uuid, properties or None
+        )
+        protocol = contract_for(descriptor.specification)
+        if protocol is not None:
+            violations = validate(instance, protocol)
+            if violations:
+                self._ipopo.kill(instance_uuid)
+                raise ContractViolationError(
+                    plugin=descriptor.name,
+                    specification=descriptor.specification,
+                    protocol=protocol.__name__,
+                    violations=violations,
+                )
+        setattr(instance, "_plugin_scope_id", properties.get(PLUGIN_SCOPE_ID, ""))
+        setattr(instance, "_plugin_key", properties.get(PLUGIN_KEY, ""))
+        setattr(instance, "_plugin_ranking", int(properties.get(PLUGIN_RANKING, 0)))
+        return instance
+
     # ------------------------------------------------------------ service helpers
 
     def scope_filter(self, scope_id: ScopeId) -> str:
