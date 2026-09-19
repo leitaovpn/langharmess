@@ -142,16 +142,21 @@ class TestCreateInstance:
 
 
 class TestUpdateInstance:
-    def test_update_properties_hot_reconfigures_in_place(self) -> None:
+    def test_update_properties_hot_rebuilds_in_place_uuid(self) -> None:
+        # Pelix has no in-place reconfigure, so both swap policies rebuild
+        # the component under the same UUID.
         manager = installed_manager()
         snapshot = manager.create_instance(
             "test-factory", "langharness_core.test_module", ScopeId("server"),
             properties={"plugin.mode": "fast"},
         )
+        manager._ipopo.instantiate.reset_mock()
+        manager._ipopo.instantiate.return_value = Mock()
         updated = manager.update_instance(
             snapshot.instance, properties={"plugin.mode": "slow"}
         )
-        manager._ipopo.reconfigure.assert_called_once()
+        manager._ipopo.kill.assert_called_once_with(snapshot.instance)
+        manager._ipopo.instantiate.assert_called_once()
         assert updated.instance == snapshot.instance  # UUID preserved
         assert updated.properties["plugin.mode"] == "slow"
 
@@ -187,14 +192,16 @@ class TestUpdateInstance:
             "test-factory", "langharness_core.test_module", ScopeId("server"),
             properties={"plugin.mode": "fast"},
         )
-        manager._ipopo.reconfigure.side_effect = RuntimeError("boom")
+        # The rebuild fails; the old component must be restored.
         manager._ipopo.instantiate.return_value = Mock()
+        manager._ipopo.instantiate.side_effect = [RuntimeError("boom"), Mock()]
         with pytest.raises(RuntimeError, match="boom"):
             manager.update_instance(
                 snapshot.instance, properties={"plugin.mode": "slow"}
             )
         restored = manager.get_instance(snapshot.instance)
         assert restored.properties["plugin.mode"] == "fast"
+        assert restored.instance == snapshot.instance
 
     def test_disable_then_enable_reuses_uuid(self) -> None:
         manager = installed_manager()

@@ -49,7 +49,7 @@ def builtin_package() -> PluginPackage:
         id="builtin.config",
         version="1.0.0",
         contributions=(
-            PluginContribution("toml", "root", config_toml),
+            PluginContribution("config-toml", "root", config_toml),
             PluginContribution("configs", "root", configs),
         ),
     )

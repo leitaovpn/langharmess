@@ -75,6 +75,22 @@ _RUNTIME_KEYS = (
 )
 
 
+def _json_safe(value: Any) -> Any:
+    """Reduce a property value to something the snapshot JSON can encode.
+
+    Runtime-only values such as injected service objects become their repr;
+    derived agent-scoped instances are dropped on restore, so the lossy
+    conversion never affects restored state.
+    """
+    if isinstance(value, Mapping):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return repr(value)
+
+
 def _validate_filters(properties: dict[str, Any]) -> None:
     """Reject malformed requires.filters: iPOPO silently ignores them."""
     filters = properties.get(FILTERS_PROPERTY)
@@ -271,6 +287,11 @@ class PluginManager:
         validate_descriptor(descriptor)
         key = (descriptor.module, descriptor.factory)
         if key in self._plugins:
+            installed_snapshot = self._plugins[key]
+            if installed_snapshot.descriptor == descriptor:
+                # Idempotent re-install of the same definition (assembly
+                # paths run after restore).
+                return installed_snapshot
             raise PluginAlreadyInstalledError(
                 f"Plugin definition {descriptor.factory!r} from "
                 f"{descriptor.module!r} is already installed"
@@ -565,7 +586,8 @@ class PluginManager:
             new_enabled = current.enabled if enabled is None else enabled
             new_ranking = current.ranking if ranking is None else ranking
             effective = self._effective_properties(
-                descriptor, current.scope_id, user, ranking=new_ranking
+                descriptor, current.scope_id, user,
+                ranking=new_ranking, instance_uuid=instance,
             )
             new_snapshot = PluginInstanceSnapshot(
                 instance, current.factory, current.module, current.scope_id,
@@ -575,7 +597,7 @@ class PluginManager:
             needs_rebind = (
                 new_enabled != current.enabled
                 or new_ranking != current.ranking
-                or descriptor.swap_policy != "hot"
+                or user != self._user_properties.get(instance)
             )
             try:
                 if not new_enabled:
@@ -584,10 +606,14 @@ class PluginManager:
                 elif current.status == "disabled":
                     self._instantiate_uuid(descriptor, instance, effective)
                 elif needs_rebind:
+                    # Pelix's iPOPO service has no in-place reconfigure, so
+                    # both swap policies rebuild the component under the same
+                    # UUID; the swap_policy branch is reserved for a future
+                    # iPOPO upgrade.
                     self._ipopo.kill(instance)
                     self._instantiate_uuid(descriptor, instance, effective)
                 else:
-                    self._ipopo.reconfigure(instance, effective or None)
+                    pass  # nothing changed
             except Exception:
                 if current.status == "active" and new_enabled:
                     self._ipopo.kill(instance)
@@ -654,6 +680,9 @@ class PluginManager:
         effective[SERVICE_RANKING] = (
             self.scope_tree.depth(scope_id) * SCOPE_RANKING_STRIDE + ranking
         )
+        # User filters must be valid LDAP before any merge: Pelix's parser is
+        # lenient enough to accept broken merged strings.
+        _validate_filters(effective)
         self._apply_scoped_filters(effective, descriptor, scope_id)
         _validate_filters(effective)
         return effective
@@ -779,17 +808,21 @@ class PluginManager:
                 descriptor = self.registry.get_by_name(name)
             except KeyError as exc:
                 raise ValueError(f"Unknown plugin: {name}") from exc
-            for snapshot in self._instances.values():
+            changed = False
+            for snapshot in tuple(self._instances.values()):
                 if snapshot.factory != descriptor.factory:
                     continue
-                enabled = bool(override.get("enabled", True))
+                before = self._instances[snapshot.instance]
                 self._user_properties[snapshot.instance] = {}
-                self.update_instance(
+                updated = self.update_instance(
                     snapshot.instance,
                     properties=dict(override.get("properties") or {}),
-                    enabled=enabled,
+                    enabled=bool(override.get("enabled", True)),
                 )
-            applied.append(name)
+                if updated != before:
+                    changed = True
+            if changed:
+                applied.append(name)
         return {"applied": applied, "restart_required": []}
 
     # ------------------------------------------------------------ persistence
@@ -799,6 +832,11 @@ class PluginManager:
     ) -> None:
         self._state_store = store
         self._history = history
+        # Sync the CAS counter with the persisted store so mutations made
+        # before restore() do not conflict with existing state. Old schema
+        # files raise RuntimeStateSchemaError here at boot.
+        loaded = store.load()
+        self._state_version = loaded.version if loaded is not None else 0
 
     def registrations(self) -> tuple[PersistedPluginRegistration, ...]:
         return tuple(self._provenance.values())
@@ -828,7 +866,7 @@ class PluginManager:
                 snapshot.factory,
                 snapshot.module,
                 snapshot.scope_id,
-                dict(snapshot.properties),
+                _json_safe(snapshot.properties),
                 snapshot.enabled,
                 snapshot.ranking,
                 snapshot.status,
@@ -908,7 +946,13 @@ class PluginManager:
             self._install_definition(descriptor, source="discovered", persist=False)
             self._plugins[key] = replace(self._plugins[key], status=status)
         restored: list[PluginInstanceSnapshot] = []
+        dropped = False
         for instance_record in loaded.instances:
+            if str(instance_record.scope_id).startswith("agent:"):
+                # Agent-scoped instances are derived state: the agent
+                # directory re-materializes them from stored agent configs.
+                dropped = True
+                continue
             key = (instance_record.module, instance_record.factory)
             definition = self._plugins.get(key)
             if definition is None:
@@ -961,10 +1005,15 @@ class PluginManager:
                  instance_record.scope_id), set()
             ).add(instance_record.instance)
             restored.append(snapshot)
+        # Provenance is durable registration state: agent-scoped instances are
+        # derived and dropped above, but the coordinator rebuilds them from
+        # these records.
         self._provenance = {
             registration.instance: registration
             for registration in loaded.registrations
         }
+        if dropped:
+            self._persist_state()
         return tuple(restored)
 
     def _restore_scopes(self, scopes: tuple[dict[str, str | None], ...]) -> None:

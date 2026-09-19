@@ -177,13 +177,22 @@ class TestDefinitions:
         with pytest.raises(PluginIdentityConflictError):
             manager.install_descriptor(other)
 
-    def test_double_install_raises(self) -> None:
+    def test_double_install_is_idempotent_for_identical_definitions(self) -> None:
+        from dataclasses import replace
+
         from langharness_plugin.errors import PluginAlreadyInstalledError
 
         manager, _ = self.make_definition_manager()
-        manager.install_plugin("echo-factory")
+        first = manager.install_plugin("echo-factory")
+        second = manager.install_plugin("echo-factory")
+        assert first is second
+
+        # A different descriptor for the same (module, factory) is rejected.
+        changed = replace(
+            manager.registry.get("echo-factory"), version="2.0.0"
+        )
         with pytest.raises(PluginAlreadyInstalledError):
-            manager.install_plugin("echo-factory")
+            manager.install_descriptor(changed)
 
     def test_bundle_shared_by_two_definitions_in_one_module(self) -> None:
         from dataclasses import replace

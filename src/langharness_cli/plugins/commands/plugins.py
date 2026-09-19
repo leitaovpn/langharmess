@@ -536,13 +536,13 @@ class PluginCommandPlugin:
     def _registration_table(self, title: str, payload: dict[str, Any]) -> None:
         self._table(
             title,
-            ("Name", "Scope", "State", "Status", "Specification"),
+            ("Factory", "Scope", "State", "Status", "Instance"),
             ((
-                payload.get("name", "-"),
+                payload.get("factory", "-"),
                 payload.get("scope_id", "-"),
                 "enabled" if payload.get("enabled", True) else "disabled",
                 payload.get("status", "-"),
-                payload.get("specification", "-"),
+                payload.get("instance", "-"),
             ),),
         )
 

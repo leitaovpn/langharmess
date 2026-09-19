@@ -187,18 +187,20 @@ class AgentDirectoryPlugin:
             merged.update(properties)
         descriptor = agent_plugin_descriptor(plugin)
         scope_id = agent_instance_scope_id(agent["id"])
+        wanted = agent_binding_properties(agent["id"], plugin, merged)
         current = self._instances.get(agent["id"], {}).get(plugin)
         if current is not None:
-            self._scope.update_instance(
-                current.instance,
-                properties=agent_binding_properties(agent["id"], plugin, merged),
+            unchanged = current.scope_id == scope_id and all(
+                dict(current.properties).get(key) == value
+                for key, value in wanted.items()
             )
-            return
+            if unchanged:
+                return
+            # Replace semantics: agent instances are derived state, so the
+            # old component is torn down and a fresh UUID is created.
+            self._scope.delete_instance(current.instance)
         snapshot = self._scope.create_instance(
-            descriptor.factory,
-            descriptor.module,
-            scope_id,
-            properties=agent_binding_properties(agent["id"], plugin, merged),
+            descriptor.factory, descriptor.module, scope_id, properties=wanted
         )
         self._instances.setdefault(agent["id"], {})[plugin] = snapshot
 

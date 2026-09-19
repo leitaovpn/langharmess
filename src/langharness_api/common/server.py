@@ -75,16 +75,16 @@ def create_app() -> FastAPI:
         )
         coordinator = RuntimeMutationCoordinator(manager, discovery=PluginDiscovery())
         manager.register_runtime_service(DynamicPluginManager, coordinator)
+        manager.discover()
+        coordinator.rescan()
+        coordinator.restore()
+        _apply_agent_configs(manager, directory)
         installed: set[tuple[str, str]] = set()
         for request in requests:
             key = (request.descriptor.module, request.descriptor.factory)
             if key not in installed:
                 manager.install_descriptor(request.descriptor, source="assembly")
                 installed.add(key)
-        manager.discover()
-        coordinator.rescan()
-        coordinator.restore()
-        _apply_agent_configs(manager, directory)
         for request in requests:
             manager.ensure_instance(
                 request.descriptor.factory,

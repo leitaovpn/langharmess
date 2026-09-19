@@ -87,10 +87,10 @@ def test_install_creates_instance_and_persists_provenance() -> None:
     assert manager._state_store.load().registrations == (registration,)
 
 
-def test_install_defaults_to_root_scope() -> None:
+def test_install_defaults_to_contribution_target_scope() -> None:
     mutations, manager = coordinator()
     registration = mutations.install("dynamic.package", "dynamic")
-    assert registration.scope_id == ROOT_SCOPE_ID
+    assert registration.scope_id == ScopeId("server")
 
 
 def test_reinstall_creates_second_instance() -> None:

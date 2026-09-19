@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from threading import RLock
 from typing import Any
 
@@ -10,7 +11,15 @@ from langharness_plugin.package import PluginContribution, PluginPackage
 from langharness_plugin.plugin_manager import PluginManager
 from langharness_plugin.registry import PluginDescriptor
 from langharness_plugin.state_store import PersistedPluginRegistration
+from langharness_plugin.scope_const import AGENT_SCOPE_ID, SERVER_SCOPE_ID, UI_SCOPE_ID
 from langharness_scope import ROOT_SCOPE_ID, Scope, ScopeId
+
+TARGET_SCOPES = {
+    "root": ROOT_SCOPE_ID,
+    "ui": UI_SCOPE_ID,
+    "server": SERVER_SCOPE_ID,
+    "agent": AGENT_SCOPE_ID,
+}
 
 TOOL_ADAPTER_MODULE = "langharness_core.plugins.tools.export_adapter"
 TOOL_ADAPTER_FACTORY = "tool-export-adapter-factory"
@@ -74,7 +83,9 @@ class RuntimeMutationCoordinator:
                     "and cannot be installed dynamically"
                 )
             package, contribution = self._find(package_id, contribution_id)
-            scope_id = scope_id if scope_id is not None else ROOT_SCOPE_ID
+            scope_id = scope_id if scope_id is not None else self._target_scope(
+                contribution
+            )
             properties = self._contribution_properties(contribution, scope_id)
             if registration_key is not None:
                 existing = next(
@@ -186,6 +197,7 @@ class RuntimeMutationCoordinator:
             )
             self._kill_adapters(registration)
             self.manager.delete_instance(registration.instance)
+            self.manager.detach_provenance(registration.instance)
             self.manager.attach_provenance(updated)
             self.manager._persist_state()
             self.manager._record_history(
@@ -209,6 +221,36 @@ class RuntimeMutationCoordinator:
             if not self._catalog:
                 self.rescan()
             self.manager.restore()
+            # Agent-scoped instances are derived state and are dropped from
+            # persistence; dynamic registrations in those scopes are rebuilt
+            # from their contribution so their provenance stays valid.
+            for registration in tuple(self.manager.registrations()):
+                if not str(registration.scope_id).startswith("agent:"):
+                    continue
+                package = self._catalog.get(registration.package_id)
+                if package is None:
+                    continue
+                contribution = next(
+                    (
+                        item for item in package.contributions
+                        if item.id == registration.contribution_id
+                    ),
+                    None,
+                )
+                if contribution is None:
+                    continue
+                snapshot = self.manager.create_instance(
+                    contribution.descriptor.factory,
+                    contribution.descriptor.module,
+                    registration.scope_id,
+                    properties=self._contribution_properties(
+                        contribution, registration.scope_id
+                    ),
+                    enabled=registration.enabled,
+                )
+                self.manager.attach_provenance(
+                    replace(registration, instance=snapshot.instance)
+                )
             for registration in tuple(self.manager.registrations()):
                 package = self._catalog.get(registration.package_id)
                 if package is None or not registration.enabled:
@@ -226,6 +268,7 @@ class RuntimeMutationCoordinator:
                     self._install_adapters(registration, contribution)
                 except Exception:
                     continue
+            self.manager._persist_state()
             return tuple(self.manager.registrations())
 
     def _find(
@@ -238,6 +281,15 @@ class RuntimeMutationCoordinator:
             if contribution.id == contribution_id:
                 return package, contribution
         raise KeyError(contribution_id)
+
+    @staticmethod
+    def _target_scope(contribution: PluginContribution) -> ScopeId:
+        """The contribution's declared scope, used when none is passed."""
+        if contribution.target == "agent_instance":
+            raise RuntimeMutationError(
+                "agent_instance contribution requires agent:<id> scope"
+            )
+        return TARGET_SCOPES.get(contribution.target, ROOT_SCOPE_ID)
 
     @staticmethod
     def _contribution_properties(
@@ -285,7 +337,7 @@ class RuntimeMutationCoordinator:
     ) -> None:
         if not contribution.tool_exports:
             return
-        if not self._adapter_definition_installed:
+        if self.manager.registry.get(TOOL_ADAPTER_FACTORY) is None:
             self.manager.install_descriptor(
                 PluginDescriptor(
                     name="tool-export-adapter",
@@ -297,7 +349,7 @@ class RuntimeMutationCoordinator:
                 ),
                 source="assembly",
             )
-            self._adapter_definition_installed = True
+        self._adapter_definition_installed = True
         target = self.manager.find_service(
             contribution.descriptor.specification,
             f"(plugin.scope_id={registration.scope_id})",

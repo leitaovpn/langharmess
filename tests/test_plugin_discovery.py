@@ -185,17 +185,21 @@ def test_package_catalog_allows_same_factory_within_package() -> None:
     assert len(result.packages[0].contributions) == 2
 
 
-def test_package_catalog_rejects_duplicate_module_factory_across_packages() -> None:
+def test_package_catalog_allows_same_factory_across_packages() -> None:
+    # Two packages may contribute install requests over the same definition
+    # (e.g. a server install plus an agent-instance request); the registry
+    # rejects real identity conflicts at install time.
     first = static_descriptor(name="a", module="m", factory="f")
     second = static_descriptor(name="b", module="m", factory="f")
     package_a = PluginPackage(
         "p.a", "1.0.0", (PluginContribution("a", "server", first),)
     )
     package_b = PluginPackage(
-        "p.b", "1.0.0", (PluginContribution("b", "server", second),)
+        "p.b", "1.0.0", (PluginContribution("b", "agent_instance", second),)
     )
     discovery = PluginDiscovery(
         lambda: entries(lambda: package_a, lambda: package_b)
     )
-    with pytest.raises(Exception, match="[Dd]uplicate"):
-        discovery.scan()
+    result = discovery.scan()
+    assert len(result.packages) == 2
+    assert result.failures == ()

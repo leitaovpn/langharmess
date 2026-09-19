@@ -90,6 +90,7 @@ class BootstrapError(RuntimeError):
 class AssemblyRequest:
     """One builtin definition to install plus one instance to reconcile."""
 
+    name: str  # contribution id: stable identity for config keys
     descriptor: PluginDescriptor
     scope_id: ScopeId
     properties: dict[str, Any]
@@ -258,7 +259,9 @@ def _assembly_requests(
                 # overrides so --server-ip/--server-port always win.
                 properties["plugin.base_url"] = base_url
             scope_id = TARGET_SCOPES.get(contribution.target, ROOT_SCOPE_ID)
-            requests.append(AssemblyRequest(descriptor, scope_id, properties, enabled))
+            requests.append(
+                AssemblyRequest(name, descriptor, scope_id, properties, enabled)
+            )
     return requests
 
 
@@ -326,11 +329,6 @@ def _run(options: Namespace, remainder: list[str]) -> int:
             )
             manager.register_runtime_service(DynamicPluginManager, coordinator)
         installed: set[tuple[str, str]] = set()
-        for request in requests:
-            key = (request.descriptor.module, request.descriptor.factory)
-            if key not in installed:
-                manager.install_descriptor(request.descriptor, source="assembly")
-                installed.add(key)
         if coordinator is not None:
             manager.discover()
             coordinator.rescan()
@@ -338,6 +336,11 @@ def _run(options: Namespace, remainder: list[str]) -> int:
             from langharness_api.common.server import _apply_agent_configs
 
             _apply_agent_configs(manager, options.config_dir)
+        for request in requests:
+            key = (request.descriptor.module, request.descriptor.factory)
+            if key not in installed:
+                manager.install_descriptor(request.descriptor, source="assembly")
+                installed.add(key)
         for request in requests:
             manager.ensure_instance(
                 request.descriptor.factory,
