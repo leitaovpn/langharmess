@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any, cast
 
 from langharness.api_guard import APIGuard
-from langharness_api.common.server import _apply_agent_configs
 from langharness_api.contracts import SPEC_SERVER_SERVER, ServerServerProvider
 from langharness_cli.contracts import SPEC_UI_SERVER, UIServerProvider
 from langharness_config.contracts import SPEC_CONFIGS, Configs
@@ -75,6 +74,11 @@ PATH_PROPERTIES = {
     ),
     "session-index": ("plugin.sessions.path", "sessions.sqlite3"),
     "agent-registry": ("plugin.agents.path", "agents.json"),
+}
+
+API_DEFAULTS: dict[str, dict[str, str]] = {
+    "api-auth": {"plugin.token": "secret"},
+    "api-rate-limit": {"plugin.limit": 100},
 }
 
 
@@ -180,22 +184,27 @@ def _discover_config_package(config_dir: str) -> PluginPackage:
 def _default_properties(
     descriptor: PluginDescriptor,
     *,
+    name: str,
     config_dir: str,
     locale: str,
 ) -> dict[str, Any]:
-    """Code-built default properties for one builtin plugin."""
+    """Code-built default properties for one builtin assembly request."""
     properties: dict[str, Any] = {}
-    if descriptor.name == "config-toml":
+    if name == "config-toml":
         properties["plugin.config.path"] = str(Path(config_dir) / "langharness.toml")
-    if descriptor.name == "api-plugins":
+    if name == "api-plugins":
         properties["plugin.config_dir"] = config_dir
-    if descriptor.name in LOG_NAMES:
-        properties["plugin.log.directory"] = config_dir
-    if descriptor.name in UI_LOCALE_NAMES:
+    if name in LOG_NAMES:
+        from langharness_logging.plugin import log_properties
+
+        properties.update(log_properties(name.split("-", 1)[0], config_dir))
+    if name in UI_LOCALE_NAMES:
         properties["plugin.ui.locale"] = locale
-    if descriptor.name in PATH_PROPERTIES:
-        key, filename = PATH_PROPERTIES[descriptor.name]
+    if name in PATH_PROPERTIES:
+        key, filename = PATH_PROPERTIES[name]
         properties[key] = str(Path(config_dir) / filename)
+    if name in API_DEFAULTS:
+        properties.update(API_DEFAULTS[name])
     return properties
 
 
@@ -227,25 +236,24 @@ def _assembly_requests(
     for package in packages:
         for contribution in package.contributions:
             descriptor = contribution.descriptor
+            name = contribution.id  # stable identity of the assembly request
             properties = _default_properties(
-                descriptor, config_dir=config_dir, locale=locale
+                descriptor, name=name, config_dir=config_dir, locale=locale
             )
             enabled = True
-            if descriptor.name in overrides:
-                enabled, properties = merge_overrides(
-                    properties, overrides[descriptor.name]
-                )
+            if name in overrides:
+                enabled, properties = merge_overrides(properties, overrides[name])
             if (
                 override_scope == "cli"
-                and descriptor.name == "server-log"
+                and name == "server-log"
                 or override_scope == "api"
-                and descriptor.name == "cli-log"
+                and name == "cli-log"
             ):
                 continue
-            if descriptor.name in seen:
+            if name in seen:
                 continue
-            seen.add(descriptor.name)
-            if descriptor.name in {"cli-health", "cli-plugins"}:
+            seen.add(name)
+            if name in {"cli-health", "cli-plugins"}:
                 # The launcher owns the connect address; rewrite after stored
                 # overrides so --server-ip/--server-port always win.
                 properties["plugin.base_url"] = base_url
@@ -265,8 +273,12 @@ def _select_packages(config_package: PluginPackage, options: Namespace) -> list[
     manager = PluginManager(PluginRegistry())
     manager.start()
     try:
+        installed: set[tuple[str, str]] = set()
         for request in requests:
-            manager.install_descriptor(request.descriptor)
+            key = (request.descriptor.module, request.descriptor.factory)
+            if key not in installed:
+                manager.install_descriptor(request.descriptor)
+                installed.add(key)
         for request in requests:
             manager.create_instance(
                 request.descriptor.factory,
@@ -313,12 +325,18 @@ def _run(options: Namespace, remainder: list[str]) -> int:
                 manager, discovery=PluginDiscovery()
             )
             manager.register_runtime_service(DynamicPluginManager, coordinator)
+        installed: set[tuple[str, str]] = set()
         for request in requests:
-            manager.install_descriptor(request.descriptor, source="assembly")
+            key = (request.descriptor.module, request.descriptor.factory)
+            if key not in installed:
+                manager.install_descriptor(request.descriptor, source="assembly")
+                installed.add(key)
         if coordinator is not None:
             manager.discover()
             coordinator.rescan()
             coordinator.restore()
+            from langharness_api.common.server import _apply_agent_configs
+
             _apply_agent_configs(manager, options.config_dir)
         for request in requests:
             manager.ensure_instance(
