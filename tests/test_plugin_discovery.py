@@ -8,20 +8,20 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from langharmess_api.plugin import builtin_package as api_builtin_package
-from langharmess_cli.plugin import builtin_package as cli_builtin_package
-from langharmess_config.plugin import builtin_package as config_builtin_package
-from langharmess_core.plugin import (
+from langharness_api.plugin import builtin_package as api_builtin_package
+from langharness_cli.plugin import builtin_package as cli_builtin_package
+from langharness_config.plugin import builtin_package as config_builtin_package
+from langharness_core.plugin import (
     builtin_package as core_builtin_package,
 )
-from langharmess_core.plugin import (
+from langharness_core.plugin import (
     dynamic_package as core_dynamic_package,
 )
-from langharmess_logging.plugin import builtin_package as logging_builtin_package
-from langharmess_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
-from langharmess_plugin.discovery import PluginDiscovery, PluginDiscoveryError
-from langharmess_plugin.package import PluginContribution, PluginPackage, ToolExport
-from langharmess_plugin.registry import PluginDescriptor
+from langharness_logging.plugin import builtin_package as logging_builtin_package
+from langharness_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
+from langharness_plugin.discovery import PluginDiscovery, PluginDiscoveryError
+from langharness_plugin.package import PluginContribution, PluginPackage, ToolExport
+from langharness_plugin.registry import PluginDescriptor
 
 
 class EchoArgs(BaseModel):
@@ -258,11 +258,11 @@ def test_discovers_builtin_packages_from_runtime_plugin_directories() -> None:
         for package in result.packages
         for contribution in package.contributions
     }
-    assert any(module.startswith("langharmess_api.plugins.") for module in modules)
-    assert any(module.startswith("langharmess_cli.plugins.") for module in modules)
-    assert any(module.startswith("langharmess_config.plugins.") for module in modules)
-    assert any(module.startswith("langharmess_core.plugins.") for module in modules)
-    assert any(module.startswith("langharmess_logging.plugins.") for module in modules)
+    assert any(module.startswith("langharness_api.plugins.") for module in modules)
+    assert any(module.startswith("langharness_cli.plugins.") for module in modules)
+    assert any(module.startswith("langharness_config.plugins.") for module in modules)
+    assert any(module.startswith("langharness_core.plugins.") for module in modules)
+    assert any(module.startswith("langharness_logging.plugins.") for module in modules)
 
 
 def test_builtin_packages_are_declarative_and_do_not_share_names() -> None:

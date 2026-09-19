@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from langharmess_core.contracts import (
+from langharness_core.contracts import (
     SPEC_CHECKPOINTER,
     SPEC_LLM,
     SPEC_MIDDLEWARE,
     SPEC_TOOL,
 )
-from langharmess_core.plugin import (
+from langharness_core.plugin import (
     agent_directory_descriptor,
     agent_filter,
     agent_loop_descriptor,
@@ -56,7 +56,7 @@ def test_state_descriptors_store_files_under_directory(tmp_path: Path) -> None:
     registry = agent_registry_descriptor(directory)
 
     assert checkpointer.properties["plugin.checkpoint.path"] == str(
-        tmp_path / "langharmess_checkpoints.sqlite3"
+        tmp_path / "langharness_checkpoints.sqlite3"
     )
     assert sessions.properties["plugin.sessions.path"] == str(
         tmp_path / "sessions.sqlite3"
@@ -76,7 +76,7 @@ def test_state_descriptors_declare_their_specifications(tmp_path: Path) -> None:
 def test_agent_plugin_descriptor_is_scoped_to_the_agent() -> None:
     descriptor = agent_plugin_descriptor("a1", "tools")
     assert descriptor.instance == "tools@a1"
-    assert descriptor.module == "langharmess_core.plugins.tools.workspace"
+    assert descriptor.module == "langharness_core.plugins.tools.workspace"
     assert descriptor.specification == SPEC_TOOL
     assert descriptor.properties == {
         "plugin.tools.root_dir": ".",
@@ -112,9 +112,9 @@ def test_agent_scoped_specifications_cover_the_catalog() -> None:
 
 def test_agent_required_modules_lists_expected_bundles() -> None:
     assert agent_required_modules() == [
-        "langharmess_core.plugins.tools.workspace",
-        "langharmess_core.plugins.name.template_name",
-        "langharmess_core.plugins.loop.agent_loop",
+        "langharness_core.plugins.tools.workspace",
+        "langharness_core.plugins.name.template_name",
+        "langharness_core.plugins.loop.agent_loop",
     ]
 
 
@@ -125,7 +125,7 @@ def test_agent_filter_builds_an_ldap_filter() -> None:
 def test_agent_directory_descriptor_declares_its_specification() -> None:
     descriptor = agent_directory_descriptor()
     assert descriptor.specification == "agent.directory"
-    assert descriptor.module == "langharmess_core.plugins.agents.directory"
+    assert descriptor.module == "langharness_core.plugins.agents.directory"
 
 
 def test_dynamic_package_covers_plugins_absent_from_builtin() -> None:
@@ -163,13 +163,13 @@ def test_dynamic_templates_install_without_instantiating() -> None:
         assert descriptor.instance == descriptor.name
         assert descriptor.scope == "agent"
         assert descriptor.scope_parent == "root"
-        assert descriptor.module.startswith("langharmess_core.plugins.")
+        assert descriptor.module.startswith("langharness_core.plugins.")
         assert descriptor.factory.endswith("-factory")
         assert descriptor.specification.startswith("agent.plugin.")
 
 
 def test_dynamic_template_descriptor_matches_catalog_entry() -> None:
     descriptor = dynamic_template_descriptor("middleware-plugin")
-    assert descriptor.module == "langharmess_core.plugins.middleware.template_middleware"
+    assert descriptor.module == "langharness_core.plugins.middleware.template_middleware"
     assert descriptor.factory == "middleware-plugin-factory"
     assert descriptor.specification == SPEC_MIDDLEWARE

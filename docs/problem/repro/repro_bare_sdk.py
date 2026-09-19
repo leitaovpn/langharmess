@@ -7,7 +7,7 @@ from pathlib import Path
 
 from openai import AsyncOpenAI
 
-config = tomllib.loads(Path("langharmess.toml").read_text())
+config = tomllib.loads(Path("langharness.toml").read_text())
 provider = config["providers"]["chatgpt-5"]
 
 client = AsyncOpenAI(

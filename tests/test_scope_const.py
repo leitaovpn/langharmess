@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from langharmess_plugin.scope_const import (
+from langharness_plugin.scope_const import (
     AGENT_SCOPE_ID,
     BUILTIN_SCOPES,
     PLUGIN_KEY,
@@ -13,7 +13,7 @@ from langharmess_plugin.scope_const import (
     UI_SCOPE_ID,
     agent_instance_scope_id,
 )
-from langharmess_scope import ScopeId
+from langharness_scope import ScopeId
 
 
 def test_builtin_scope_ids_are_canonical() -> None:

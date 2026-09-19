@@ -2,8 +2,8 @@
 
 from pydantic import BaseModel
 
-from langharmess_core.plugins.tools.export_adapter import ToolExportAdapter
-from langharmess_plugin.package import ToolExport
+from langharness_core.plugins.tools.export_adapter import ToolExportAdapter
+from langharness_plugin.package import ToolExport
 
 
 class AddArgs(BaseModel):

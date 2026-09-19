@@ -7,9 +7,9 @@ from typing import Any
 
 import pytest
 
-from langharmess_core.plugins.tools.management import ManagementToolsPlugin
-from langharmess_plugin.coordinator import RuntimeMutationError
-from langharmess_scope import Scope, ScopeId
+from langharness_core.plugins.tools.management import ManagementToolsPlugin
+from langharness_plugin.coordinator import RuntimeMutationError
+from langharness_scope import Scope, ScopeId
 
 READ_TOOLS = {"list_scope_tree", "list_runtime_plugins", "discover_plugins"}
 
@@ -24,7 +24,7 @@ def _registration(name: str = "demo-plugin", scope_id: str = "agent") -> Any:
         status="installed",
         descriptor=SimpleNamespace(
             name=name,
-            module="langharmess_core.plugins.tools.demo",
+            module="langharness_core.plugins.tools.demo",
             specification="agent.plugin.tools",
         ),
     )
@@ -51,7 +51,7 @@ class FakeManager:
                         id="demo-template",
                         descriptor=SimpleNamespace(
                             name="demo-template",
-                            module="langharmess_core.plugins.tools.demo",
+                            module="langharness_core.plugins.tools.demo",
                             specification="agent.plugin.tools",
                         ),
                         target="agent",

@@ -29,15 +29,15 @@ Current milestone:
 
 - Plugins communicate through Pelix service specifications, not by importing
   each other's concrete classes.
-- Public agent contracts live in `src/langharmess_core/contracts.py`.
-- Plugin lifecycle and registration live in `src/langharmess_plugin/`.
+- Public agent contracts live in `src/langharness_core/contracts.py`.
+- Plugin lifecycle and registration live in `src/langharness_plugin/`.
 - The agent loop is an iPOPO component that rebuilds a LangChain
   `create_agent` graph when injected services change.
 - Keep runtime plugin registration deterministic: production plugins must not
   use `@Instantiate`; the `PluginManager` controls instantiation and teardown.
 - Every agent has its own plugin set: the agent directory materializes one
   instance per agent from the installed template bundles (catalog in
-  `langharmess_core/plugin.py`), tagging instances with `plugin.agent_id` and
+  `langharness_core/plugin.py`), tagging instances with `plugin.agent_id` and
   scoping the agent loop through iPOPO `requires.filters`. Never install the
   same module twice; instantiate extra instances through
   `PluginManager.instantiate_instance`.
@@ -56,8 +56,8 @@ Current milestone:
 
 ### Module file layout
 
-Every runtime module (`langharmess_core`, `langharmess_api`,
-`langharmess_cli`, `langharmess_config`, `langharmess_logging`) follows one
+Every runtime module (`langharness_core`, `langharness_api`,
+`langharness_cli`, `langharness_config`, `langharness_logging`) follows one
 layout:
 
 ```text
@@ -79,25 +79,25 @@ Rules:
   `PluginDescriptor(...)` literals.
 - `plugins/<topic>/` owns the component implementation. One-topic modules may
   use `plugins/<name>.py` directly (e.g.
-  `langharmess_logging/plugins/log.py`, `langharmess_cli/plugins/rich_renderer.py`).
+  `langharness_logging/plugins/log.py`, `langharness_cli/plugins/rich_renderer.py`).
 - `common/` holds assembly helpers: CLI and server entry logic, API guards,
   the interactive runner, i18n, and shared FastAPI dependency sentinels.
 - Descriptor `module=` strings and factory names must match the moved paths;
   prefer naming a factory `<name>-plugin-factory` so it tracks its file.
-- The agent loop component is `langharmess_core/plugins/loop/agent_loop.py`;
-  the FastAPI component is `langharmess_api/plugins/server/app.py` with the
-  server factory in `langharmess_api/common/server.py`.
+- The agent loop component is `langharness_core/plugins/loop/agent_loop.py`;
+  the FastAPI component is `langharness_api/plugins/server/app.py` with the
+  server factory in `langharness_api/common/server.py`.
 - Tests import public paths; keep `tests/test_imports.py` `PUBLIC_MODULES`
   in sync when modules move.
-- `langharmess_plugin/` is the framework layer and keeps its flat layout
+- `langharness_plugin/` is the framework layer and keeps its flat layout
   (`contracts.py`, `registry.py`, `plugin_manager.py`).
 
 ## Packages
 
-- `langharmess_core`: agent loop and agent plugin contracts/implementations.
-- `langharmess_plugin`: plugin manager and registry.
-- `langharmess_api`: plugin-driven FastAPI server.
-- `langharmess_cli`: plugin-driven CLI (the UI module).
+- `langharness_core`: agent loop and agent plugin contracts/implementations.
+- `langharness_plugin`: plugin manager and registry.
+- `langharness_api`: plugin-driven FastAPI server.
+- `langharness_cli`: plugin-driven CLI (the UI module).
 
 ## Quality gates
 
@@ -121,32 +121,32 @@ The same gate is enforced locally by `.githooks/pre-commit` and in CI by
 
 - Python 3.13.
 - Use `.venv/bin/python`.
-- Source packages are `langharmess_core`, `langharmess_plugin`,
-  `langharmess_api`, and `langharmess_cli`.
+- Source packages are `langharness_core`, `langharness_plugin`,
+  `langharness_api`, and `langharness_cli`.
 - Install hooks with `make install-hooks`.
 
 ### Debugging
 
-- Entry points: `.venv/bin/python -m langharmess_cli` (CLI) and
-  `.venv/bin/python -m langharmess_api` (API server). The package is
+- Entry points: `.venv/bin/python -m langharness_cli` (CLI) and
+  `.venv/bin/python -m langharness_api` (API server). The package is
   installed editable into `.venv`, so no `PYTHONPATH` setup is needed.
   Ready-made configurations live in `.vscode/launch.json`.
 - Verify that editable install before trusting a manual run:
-  `.venv/bin/python -c "import langharmess_api; print(langharmess_api.__file__)"`
+  `.venv/bin/python -c "import langharness_api; print(langharness_api.__file__)"`
   must point inside `src/`. A copy under `site-packages` means a plain
   `pip install .` replaced the editable links — repair with
-  `.venv/bin/python -m pip install -e .`, otherwise `python -m langharmess_api`
+  `.venv/bin/python -m pip install -e .`, otherwise `python -m langharness_api`
   (including the server `--mode all` auto-starts) silently runs old code.
 - Interactive mode uses prompt_toolkit and needs a real TTY: debug it with
   `"console": "integratedTerminal"`.
-- `langharmess --mode all` auto-starts the API server as a subprocess
-  (`langharmess.api_guard.APIGuard`, owned by the bootstrap); a debugger
+- `langharness --mode all` auto-starts the API server as a subprocess
+  (`langharness.api_guard.APIGuard`, owned by the bootstrap); a debugger
   attached to the UI process does not follow into it. To debug the server,
   launch the "API server" configuration separately or use the "full stack"
   compound — the guard reuses an already-running server. `--mode ui` starts
   no server, so it needs one already listening.
 - Interactive mode requires a default model: `[providers.default]` in
-  `~/.langharmess/langharmess.toml`, or an explicit `--provider <name>`;
+  `~/.langharness/langharness.toml`, or an explicit `--provider <name>`;
   without either it exits with code 2. `default` is a reserved provider name
   (hidden from `/model`, rejected by `--provider`).
 
@@ -159,7 +159,7 @@ the real path (real provider, real agent loop, real tools) use this workflow:
    the server cwd, so one run cannot poison the next:
    ```bash
    cd /tmp/rag-ws/chat                       # workspace with the input files
-   .venv/bin/python -m langharmess_api --host 127.0.0.1 --port 8100 &
+   .venv/bin/python -m langharness_api --host 127.0.0.1 --port 8100 &
    .venv/bin/python driver.py chat           # POST /stream, collect NDJSON
    ```
 2. Call `POST /stream` with `{input, model, api_key, base_url, session_id,
@@ -169,8 +169,8 @@ the real path (real provider, real agent loop, real tools) use this workflow:
    announce it in a leading `{"type": "session", ...}` event. Authenticate
    with `Authorization: Bearer <plugin.token>` (default `secret`). The server
    binds the workspace tools to its cwd, so start it in the workspace that
-   holds the test data; conversation checkpoints live in `LANG_HARMESS_DIR`
-   (`~/.langharmess/langharmess_checkpoints.sqlite3` by default).
+   holds the test data; conversation checkpoints live in `LANG_HARNESS_DIR`
+   (`~/.langharness/langharness_checkpoints.sqlite3` by default).
 3. Read the raw NDJSON events: `assistant` (text deltas), `tool_call`,
    `tool_output`, `usage`, and `error`. Runtime failures arrive as an
    `error` event inside an HTTP 200 stream — always scan for it instead of
@@ -257,7 +257,7 @@ Once indexed, prefer the MCP tools over grep/read for structural questions:
 
 ## Lessons learned
 
-- The CLI renderer (`langharmess_cli.plugins.rich_renderer`) draws the
+- The CLI renderer (`langharness_cli.plugins.rich_renderer`) draws the
   streamed answer in a `rich.live.Live` region. Keep the live frame shorter
   than the terminal: with `vertical_overflow="visible"`, once the frame
   outgrows the terminal, cursor-up control codes clamp at the top row and

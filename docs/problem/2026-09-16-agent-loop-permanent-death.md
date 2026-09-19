@@ -24,16 +24,16 @@ S3: POST /stream {model, api_key, base_url, protocol: chat}  → 仍 503（不�
 
 in-process 插桩拿到完整 traceback，链路如下：
 
-1. `src/langharmess_api/plugins/routes/stream.py:130-148`
+1. `src/langharness_api/plugins/routes/stream.py:130-148`
    `_apply_agent_configuration` 只把非空的 `api_key`/`base_url` 写进
    properties → 合并后的 llm 描述符缺这两个属性。
-2. `src/langharmess_core/plugins/agents/directory.py:143-161`
+2. `src/langharness_core/plugins/agents/directory.py:143-161`
    `ensure_plugin_instance` 发现描述符变化 → `_safe_kill` 杀掉**正在工作的**
    scoped llm 实例，重建一个配置残缺的新实例。
 3. agent loop 的 `_llm_provider` 是 `@RequiresBest(..., optional=False)`
    必需依赖 → 重绑后 iPOPO 重新校验 → `@Validate` → `_rebuild()` →
    调 `llm.get_model()`。
-4. `src/langharmess_core/plugins/llm/llm.py:54-62`：model 有名字但
+4. `src/langharness_core/plugins/llm/llm.py:54-62`：model 有名字但
    key/url 为空 → 走 `init_chat_model(self._model_name)` 兜底 → 对非标准
    模型名抛 `ValueError: Unable to infer model provider`。
 5. 异常穿透 `@Validate` 回调 → iPOPO 把实例置为 **ERRONEOUS

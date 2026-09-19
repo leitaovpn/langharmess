@@ -6,18 +6,18 @@ from typing import Any
 
 import pytest
 
-from langharmess_core import contracts
-from langharmess_core.plugins.agents.registry import AgentRegistryPlugin
-from langharmess_core.plugins.llm.llm import LLMPlugin
-from langharmess_core.plugins.middleware.template_middleware import (
+from langharness_core import contracts
+from langharness_core.plugins.agents.registry import AgentRegistryPlugin
+from langharness_core.plugins.llm.llm import LLMPlugin
+from langharness_core.plugins.middleware.template_middleware import (
     TemplateMiddlewarePlugin,
 )
-from langharmess_core.plugins.sessions.sqlite import SQLiteSessionIndexPlugin
-from langharmess_core.plugins.system_prompt.template_system_prompt import (
+from langharness_core.plugins.sessions.sqlite import SQLiteSessionIndexPlugin
+from langharness_core.plugins.system_prompt.template_system_prompt import (
     TemplateSystemPromptPlugin,
 )
-from langharmess_core.plugins.tools.tools import ToolPlugin
-from langharmess_plugin.validation import contract_for, validate
+from langharness_core.plugins.tools.tools import ToolPlugin
+from langharness_plugin.validation import contract_for, validate
 
 PROTOCOLS = (
     (contracts.SPEC_LLM, contracts.LLMProvider, LLMPlugin),
@@ -69,7 +69,7 @@ def test_pin_does_not_pollute_protocol_members() -> None:
 
 
 def test_agent_loop_contract_is_pinned() -> None:
-    from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop
+    from langharness_core.plugins.loop.agent_loop import PluginAgentLoop
 
     assert contract_for(contracts.SPEC_AGENT_LOOP) is contracts.AgentLoopProvider
     assert validate(PluginAgentLoop(), contracts.AgentLoopProvider) == ()

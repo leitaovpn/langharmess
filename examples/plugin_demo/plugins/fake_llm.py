@@ -11,7 +11,7 @@ from pelix.ipopo.decorators import (
     Provides,
 )
 
-from langharmess_core.contracts import ModelProtocol
+from langharness_core.contracts import ModelProtocol
 from plugin_demo.contracts import LLMProvider
 from plugin_demo.models import ScriptedToolCallModel
 

@@ -1,6 +1,6 @@
 """Every built-in plugin belongs to the canonical runtime scope tree."""
 
-from langharmess_api.plugin import (
+from langharness_api.plugin import (
     api_agents_descriptor,
     api_auth_descriptor,
     api_db_descriptor,
@@ -12,9 +12,9 @@ from langharmess_api.plugin import (
     api_sessions_descriptor,
     api_stream_descriptor,
 )
-from langharmess_cli.plugin import cli_descriptors
-from langharmess_config.plugin import config_descriptors
-from langharmess_core.plugin import (
+from langharness_cli.plugin import cli_descriptors
+from langharness_config.plugin import config_descriptors
+from langharness_core.plugin import (
     agent_directory_descriptor,
     agent_loop_descriptor,
     agent_loop_template_descriptor,
@@ -25,7 +25,7 @@ from langharmess_core.plugin import (
     sqlite_checkpointer_descriptor,
     tool_export_adapter_template_descriptor,
 )
-from langharmess_logging.plugin import log_descriptor
+from langharness_logging.plugin import log_descriptor
 
 
 def test_common_plugins_are_in_root_scope() -> None:

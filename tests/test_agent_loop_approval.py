@@ -20,7 +20,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 
-from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop, _iter_interrupts
+from langharness_core.plugins.loop.agent_loop import PluginAgentLoop, _iter_interrupts
 
 APPROVAL_VALUE = {
     "action_requests": [

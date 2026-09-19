@@ -10,11 +10,11 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_LLM, SPEC_TOOL
-from langharmess_core.plugin import agent_loop_descriptor
-from langharmess_plugin.plugin_manager import PluginManager
-from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
-from langharmess_scope import InMemoryScopeStore, ScopeId, ScopeTree
+from langharness_core.contracts import SPEC_AGENT_LOOP, SPEC_LLM, SPEC_TOOL
+from langharness_core.plugin import agent_loop_descriptor
+from langharness_plugin.plugin_manager import PluginManager
+from langharness_plugin.registry import PluginDescriptor, PluginRegistry
+from langharness_scope import InMemoryScopeStore, ScopeId, ScopeTree
 
 
 class ScopeModel(BaseChatModel):
@@ -119,19 +119,19 @@ def test_scope_and_plugin_full_lifecycle_with_best_and_aggregate_shadowing() -> 
         [
             template(
                 "llm-template",
-                "langharmess_core.plugins.llm.llm",
+                "langharness_core.plugins.llm.llm",
                 "llm-plugin-factory",
                 SPEC_LLM,
             ),
             template(
                 "tools-template",
-                "langharmess_core.plugins.tools.tools",
+                "langharness_core.plugins.tools.tools",
                 "tools-plugin-factory",
                 SPEC_TOOL,
             ),
             template(
                 "loop-template",
-                "langharmess_core.plugins.loop.agent_loop",
+                "langharness_core.plugins.loop.agent_loop",
                 "agent-loop-factory",
                 SPEC_AGENT_LOOP,
             ),
@@ -155,7 +155,7 @@ def test_scope_and_plugin_full_lifecycle_with_best_and_aggregate_shadowing() -> 
         manager.instantiate_instance(
             instance(
                 "llm@root",
-                "langharmess_core.plugins.llm.llm",
+                "langharness_core.plugins.llm.llm",
                 "llm-plugin-factory",
                 SPEC_LLM,
                 ranking=999,
@@ -168,7 +168,7 @@ def test_scope_and_plugin_full_lifecycle_with_best_and_aggregate_shadowing() -> 
         manager.instantiate_instance(
             instance(
                 "llm@agent",
-                "langharmess_core.plugins.llm.llm",
+                "langharness_core.plugins.llm.llm",
                 "llm-plugin-factory",
                 SPEC_LLM,
                 ranking=1,
@@ -185,7 +185,7 @@ def test_scope_and_plugin_full_lifecycle_with_best_and_aggregate_shadowing() -> 
             manager.instantiate_instance(
                 instance(
                     name,
-                    "langharmess_core.plugins.tools.tools",
+                    "langharness_core.plugins.tools.tools",
                     "tools-plugin-factory",
                     SPEC_TOOL,
                     properties={"plugin.tools.functions": [function]},
@@ -250,7 +250,7 @@ def test_scope_and_plugin_full_lifecycle_with_best_and_aggregate_shadowing() -> 
 def test_runtime_scope_visibility_matrix_with_real_service_registry() -> None:
     tools_template = template(
         "visibility-tools-template",
-        "langharmess_core.plugins.tools.tools",
+        "langharness_core.plugins.tools.tools",
         "tools-plugin-factory",
         SPEC_TOOL,
     )
@@ -276,7 +276,7 @@ def test_runtime_scope_visibility_matrix_with_real_service_registry() -> None:
             manager.instantiate_instance(
                 instance(
                     f"visibility@{scope}",
-                    "langharmess_core.plugins.tools.tools",
+                    "langharness_core.plugins.tools.tools",
                     "tools-plugin-factory",
                     SPEC_TOOL,
                     properties={"plugin.tools.functions": [function]},

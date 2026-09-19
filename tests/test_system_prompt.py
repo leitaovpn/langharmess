@@ -7,9 +7,9 @@ from types import SimpleNamespace
 
 import pytest
 
-import langharmess_core.plugins.loop.agent_loop as agent_loop_module
-from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop
-from langharmess_core.plugins.system_prompt.template_system_prompt import (
+import langharness_core.plugins.loop.agent_loop as agent_loop_module
+from langharness_core.plugins.loop.agent_loop import PluginAgentLoop
+from langharness_core.plugins.system_prompt.template_system_prompt import (
     TemplateSystemPromptPlugin,
 )
 

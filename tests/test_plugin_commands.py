@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 import pytest
 
-from langharmess_cli.plugins.commands.plugins import PluginCommandPlugin
+from langharness_cli.plugins.commands.plugins import PluginCommandPlugin
 
 SCOPE_CONFIG = {
     "scope": "api",
@@ -373,7 +373,7 @@ def test_plugins_discover_rescans_and_prints_catalog(
                                 "id": "auth",
                                 "name": "api-auth",
                                 "specification": "api.plugin.auth",
-                                "module": "langharmess_api.plugins.auth.auth",
+                                "module": "langharness_api.plugins.auth.auth",
                             }
                         ],
                     }

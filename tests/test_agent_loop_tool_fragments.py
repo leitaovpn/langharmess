@@ -7,7 +7,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk
 
-from langharmess_core.plugins.loop.agent_loop import PluginAgentLoop
+from langharness_core.plugins.loop.agent_loop import PluginAgentLoop
 
 
 class FakeGraph:

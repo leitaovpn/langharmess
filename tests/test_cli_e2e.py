@@ -39,7 +39,7 @@ def test_cli_auto_starts_api_server() -> None:
         [
             sys.executable,
             "-m",
-            "langharmess_cli",
+            "langharness_cli",
             "--server-port",
             str(port),
             "health",
@@ -62,7 +62,7 @@ def test_cli_reuses_running_api_server() -> None:
             sys.executable,
             "-m",
             "uvicorn",
-            "langharmess_api.common.server:create_app",
+            "langharness_api.common.server:create_app",
             "--factory",
             "--host",
             "127.0.0.1",
@@ -79,7 +79,7 @@ def test_cli_reuses_running_api_server() -> None:
             [
                 sys.executable,
                 "-m",
-                "langharmess_cli",
+                "langharness_cli",
                 "--server-port",
                 str(port),
                 "health",
@@ -99,7 +99,7 @@ def test_cli_reuses_running_api_server() -> None:
 
 def test_cli_interactive_mode(tmp_path: Path) -> None:
     port = free_port()
-    (tmp_path / "langharmess.toml").write_text(
+    (tmp_path / "langharness.toml").write_text(
         '[providers.default]\nprotocol = "chat"\n'
         'base_url = "https://example.test/v1"\n'
         'model = "demo"\napi_key = "key"\n',
@@ -109,7 +109,7 @@ def test_cli_interactive_mode(tmp_path: Path) -> None:
         [
             sys.executable,
             "-m",
-            "langharmess_cli",
+            "langharness_cli",
             "interactive",
             "--dir",
             str(tmp_path),
@@ -127,9 +127,9 @@ def test_cli_interactive_mode(tmp_path: Path) -> None:
     assert "{'status': 'ok', 'db': True}" in result.stdout
     assert "Started server process" not in result.stdout
     assert "Started server process" not in result.stderr
-    assert (tmp_path / "langharmess.toml").is_file()
-    assert "CLI started" in (tmp_path / "langharmess_cli.log").read_text()
-    server_log = (tmp_path / "langharmess_server.log").read_text()
+    assert (tmp_path / "langharness.toml").is_file()
+    assert "CLI started" in (tmp_path / "langharness_cli.log").read_text()
+    server_log = (tmp_path / "langharness_server.log").read_text()
     assert "API server app built" in server_log
     assert "Started server process" in server_log
     assert "GET /health" in server_log
@@ -143,7 +143,7 @@ def test_cli_interactive_mode_errors_without_default_provider(
         [
             sys.executable,
             "-m",
-            "langharmess_cli",
+            "langharness_cli",
             "interactive",
             "--dir",
             str(tmp_path),
@@ -159,4 +159,4 @@ def test_cli_interactive_mode_errors_without_default_provider(
     )
     assert result.returncode == 2
     assert "No default model is configured" in result.stderr
-    assert (tmp_path / "langharmess.toml").is_file()
+    assert (tmp_path / "langharness.toml").is_file()

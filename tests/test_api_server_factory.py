@@ -8,14 +8,14 @@ from types import SimpleNamespace
 
 import pytest
 
-import langharmess_api.common.server as server_module
+import langharness_api.common.server as server_module
 
 
 def test_create_app_uses_plugin_manager_once(
     monkeypatch: pytest.MonkeyPatch, tmp_path,
 ) -> None:
     monkeypatch.setattr(server_module, "_MANAGER", None)
-    monkeypatch.setenv("LANG_HARMESS_DIR", str(tmp_path))
+    monkeypatch.setenv("LANG_HARNESS_DIR", str(tmp_path))
 
     configs = SimpleNamespace(get=lambda section, key: None)
     api_server = SimpleNamespace(build_app=lambda: SimpleNamespace(title="ok"))
@@ -50,7 +50,7 @@ def test_apply_agent_configs_without_files_is_a_noop(tmp_path) -> None:
 
 
 def test_apply_agent_configs_forwards_stored_scopes(tmp_path) -> None:
-    from langharmess_plugin.config_store import PluginConfigStore, scope_path
+    from langharness_plugin.config_store import PluginConfigStore, scope_path
 
     store = PluginConfigStore.load(scope_path(str(tmp_path), "agent:alpha"), "agent:alpha")
     store.update({"tools": {"enabled": False}}, actor="cli")
@@ -66,7 +66,7 @@ def test_apply_agent_configs_forwards_stored_scopes(tmp_path) -> None:
 
 
 def test_apply_agent_configs_without_directory_is_a_noop(tmp_path) -> None:
-    from langharmess_plugin.config_store import PluginConfigStore, scope_path
+    from langharness_plugin.config_store import PluginConfigStore, scope_path
 
     store = PluginConfigStore.load(scope_path(str(tmp_path), "agent:alpha"), "agent:alpha")
     store.update({"tools": {"enabled": False}}, actor="cli")

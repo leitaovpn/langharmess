@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from langharmess_core.plugins.agents.export import (
+from langharness_core.plugins.agents.export import (
     AGENT_TOOL_EXPORTS,
     AgentOperationsExport,
     CreateAgentArgs,
@@ -161,8 +161,8 @@ def test_schemas_reject_invalid_agent_ids() -> None:
 
 
 def test_agent_tools_package_declares_discoverable_contribution() -> None:
-    from langharmess_core.plugin import agent_tools_package
-    from langharmess_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
+    from langharness_core.plugin import agent_tools_package
+    from langharness_plugin.contracts import SPEC_TOOL_EXPORT_TARGET
 
     package = agent_tools_package()
     assert package.id == "agent.tools"
@@ -174,7 +174,7 @@ def test_agent_tools_package_declares_discoverable_contribution() -> None:
     descriptor = contribution.descriptor
     assert descriptor.name == "agent-operations-export"
     assert descriptor.instance == "agent-operations-export"
-    assert descriptor.module == "langharmess_core.plugins.agents.export"
+    assert descriptor.module == "langharness_core.plugins.agents.export"
     assert descriptor.factory == "agent-operations-export-factory"
     assert descriptor.specification == SPEC_TOOL_EXPORT_TARGET
     assert descriptor.enabled is True

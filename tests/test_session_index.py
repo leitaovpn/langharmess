@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import pytest
 
-from langharmess_core.plugins.sessions.sqlite import SQLiteSessionIndexPlugin
+from langharness_core.plugins.sessions.sqlite import SQLiteSessionIndexPlugin
 
 
 def make_plugin(tmp_path: Path) -> SQLiteSessionIndexPlugin:

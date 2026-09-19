@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 import pytest
 
-from langharmess_cli.common.session import resolve_identity
+from langharness_cli.common.session import resolve_identity
 
 
 class Response:

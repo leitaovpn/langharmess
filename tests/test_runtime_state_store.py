@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from langharmess_plugin.registry import PluginDescriptor
-from langharmess_plugin.state_store import (
+from langharness_plugin.registry import PluginDescriptor
+from langharness_plugin.state_store import (
     InMemoryRuntimeStateStore,
     PersistedPluginRegistration,
     PluginStateConflictError,
@@ -14,8 +14,8 @@ from langharmess_plugin.state_store import (
     SqlitePluginStateStore,
     SqliteRuntimeStateStore,
 )
-from langharmess_scope import Scope, ScopeConflictError, ScopeId, ScopeSnapshot
-from langharmess_scope.sqlite import SqliteScopeStore
+from langharness_scope import Scope, ScopeConflictError, ScopeId, ScopeSnapshot
+from langharness_scope.sqlite import SqliteScopeStore
 
 
 def plugin_snapshot(version: int = 0) -> PluginStateSnapshot:

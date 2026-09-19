@@ -5,12 +5,12 @@
 
 ## 背景
 
-当前的 langharmess 只有"一个随机 session_id"这一层身份：
+当前的 langharness 只有"一个随机 session_id"这一层身份：
 
-- CLI 每次启动生成 `uuid4().hex`（`langharmess_cli/common/interactive.py:60`），换模型强制轮换（`:213`），退出即丢失，无法续接历史会话；
-- 请求体中没有 user_id / agent_id，服务端只有一个硬编码的 agent loop 实例（`langharmess_core/plugin.py:16`）；
+- CLI 每次启动生成 `uuid4().hex`（`langharness_cli/common/interactive.py:60`），换模型强制轮换（`:213`），退出即丢失，无法续接历史会话；
+- 请求体中没有 user_id / agent_id，服务端只有一个硬编码的 agent loop 实例（`langharness_core/plugin.py:16`）；
 - 插件配置每次启动现算（硬编码 + env + CLI 参数），既不落盘，也没有历史与回滚；`PluginRegistry.save/load` 存在但生产从未调用；
-- checkpointer 用相对路径 `langharmess_checkpoints.sqlite3`，落在 server 进程 CWD 而不是 `--dir`。
+- checkpointer 用相对路径 `langharness_checkpoints.sqlite3`，落在 server 进程 CWD 而不是 `--dir`。
 
 本设计引入：agent 身份与独立插件集、user/agent/session 三层身份模型、服务端会话索引、插件配置的持久化与版本回滚。
 
@@ -20,7 +20,7 @@
 |------|------|----------|
 | 1. agent 需要身份 id 和描述 | 采纳，并扩展为**每 agent 独立插件集** | agent 注册表（`agents.json`）+ 每 agent 一套插件实例 |
 | 2. 请求带 user_id/agent_id/会话 id；会话间记忆隔离；user↔agent 多对多、user↔会话一对多 | 采纳 | 记忆键 `thread_id = f"{user_id}::{session_id}"`；会话属于 user 且**可跨 agent 共享**；多对多仅记录使用关系 |
-| 3. CLI 未指定 user_id 默认 `local_user` | 采纳 | `--user-id` > `LANG_HARMESS_USER_ID` > `local_user` |
+| 3. CLI 未指定 user_id 默认 `local_user` | 采纳 | `--user-id` > `LANG_HARNESS_USER_ID` > `local_user` |
 | 4. CLI 可查看 agent、指定 agent_id | 采纳，默认值调整为**该用户最近一次使用的 agent** | `GET /agents` + `/agents`、`/agent <id>`；回退 `simple_agent` |
 | 5. CLI 可查看历史会话 id，默认最近一次 | 采纳，索引放**服务端** | `GET /sessions` + `sessions.sqlite3`；`/sessions`、`/new` |
 | 6. cli、api、agent 三层插件配置持久化 + 历史回滚 | 采纳，成功效改为**运行时热应用** | 版本流快照 + append-only 回滚；`swap_policy` 决定热应用或 `restart_required` |
@@ -42,14 +42,14 @@ session_id : uuid4 hex，属于 user（1:N），可跨 agent 使用
 thread_id  : f"{user_id}::{session_id}"      # LangGraph 记忆隔离键
 ```
 
-### 存储布局（统一在 `<dir>`，默认 `~/.langharmess`）
+### 存储布局（统一在 `<dir>`，默认 `~/.langharness`）
 
 ```
 <dir>/
-  langharmess.toml                  # 已有：provider 配置
+  langharness.toml                  # 已有：provider 配置
   agents.json                       # agent 注册表，种子 simple_agent
   sessions.sqlite3                  # 会话索引
-  langharmess_checkpoints.sqlite3   # 从 CWD 迁移到 <dir>
+  langharness_checkpoints.sqlite3   # 从 CWD 迁移到 <dir>
   plugin_config/                    # P3
     cli.json  api.json              # 全局 scope
     agents/<agent_id>.json          # 每 agent 插件绑定 + 覆盖

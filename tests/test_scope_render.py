@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from langharmess_scope.render import render_scope_tree
+from langharness_scope.render import render_scope_tree
 
 
 def test_render_scope_tree_orders_roots_and_children() -> None:

@@ -8,16 +8,16 @@ from types import SimpleNamespace
 
 import pytest
 
-import langharmess.bootstrap as bootstrap_module
-from langharmess.bootstrap import (
+import langharness.bootstrap as bootstrap_module
+from langharness.bootstrap import (
     DEFAULT_PACKAGE_PATHS,
     BootstrapError,
     load_package,
     parse_options,
     selected_package_paths,
 )
-from langharmess_config.plugin import builtin_package as config_package
-from langharmess_plugin.package import PluginPackage
+from langharness_config.plugin import builtin_package as config_package
+from langharness_plugin.package import PluginPackage
 
 
 def test_base_url_for_maps_wildcard_bind_to_loopback() -> None:
@@ -38,7 +38,7 @@ def test_parse_options_uses_documented_defaults(tmp_path) -> None:
     assert options.mode == "all"
     assert options.server_ip == "127.0.0.1"
     assert options.server_port == 11534
-    assert options.config_dir.endswith(".langharmess")
+    assert options.config_dir.endswith(".langharness")
     assert remainder == []
 
 
@@ -54,7 +54,7 @@ def test_parse_options_accepts_config_dir_alias_and_ui_arguments(tmp_path) -> No
 
 def test_load_package_validates_import_path_and_result() -> None:
     package = load_package(
-        "langharmess_config.plugin:builtin_package",
+        "langharness_config.plugin:builtin_package",
         config_dir="/tmp/config",
         section="plugins.config",
     )
@@ -64,7 +64,7 @@ def test_load_package_validates_import_path_and_result() -> None:
         load_package("missing", config_dir="/tmp/config", section="plugins.ui")
     with pytest.raises(BootstrapError, match="not callable"):
         load_package(
-            "langharmess_config.contracts:SPEC_CONFIGS",
+            "langharness_config.contracts:SPEC_CONFIGS",
             config_dir="/tmp/config",
             section="plugins.ui",
         )
@@ -133,10 +133,10 @@ def test_config_entry_point_discovery_success_and_failures(
 def test_descriptors_retarget_persistent_paths_and_locale(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    from langharmess_api.plugin import builtin_package as api_package
-    from langharmess_cli.plugin import builtin_package as ui_package
-    from langharmess_core.plugin import builtin_package as agent_package
-    from langharmess_logging.plugin import builtin_package as log_package
+    from langharness_api.plugin import builtin_package as api_package
+    from langharness_cli.plugin import builtin_package as ui_package
+    from langharness_core.plugin import builtin_package as agent_package
+    from langharness_logging.plugin import builtin_package as log_package
 
     descriptors = bootstrap_module._descriptors(
         [config_package(), ui_package(), api_package(), agent_package(), log_package()],
@@ -148,11 +148,11 @@ def test_descriptors_retarget_persistent_paths_and_locale(
     by_name = {descriptor.name: descriptor for descriptor in descriptors}
 
     assert by_name["config-toml"].properties["plugin.config.path"] == str(
-        tmp_path / "langharmess.toml"
+        tmp_path / "langharness.toml"
     )
     assert by_name["api-plugins"].properties["plugin.config_dir"] == str(tmp_path)
     assert by_name["sqlite-checkpointer"].properties["plugin.checkpoint.path"] == str(
-        tmp_path / "langharmess_checkpoints.sqlite3"
+        tmp_path / "langharness_checkpoints.sqlite3"
     )
     assert by_name["session-index"].properties["plugin.sessions.path"] == str(
         tmp_path / "sessions.sqlite3"
@@ -188,7 +188,7 @@ def test_descriptors_retarget_persistent_paths_and_locale(
 def test_descriptors_launcher_base_url_beats_stored_overrides(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    from langharmess_cli.plugin import builtin_package as ui_package
+    from langharness_cli.plugin import builtin_package as ui_package
 
     monkeypatch.setattr(
         bootstrap_module,
@@ -252,8 +252,8 @@ def test_select_packages_requires_configs_service(
 def test_run_assembles_real_ui_and_server_managers(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    from langharmess_api.plugins.server.runtime import ServerServerService
-    from langharmess_cli.plugins.server import UIServerService
+    from langharness_api.plugins.server.runtime import ServerServerService
+    from langharness_cli.plugins.server import UIServerService
 
     calls = []
 
@@ -289,7 +289,7 @@ def _guard_spy(
     Each mode gets its own `_run` call: a second call re-executes the plugin
     module for a new framework, which would discard the patched `run`.
     """
-    from langharmess_cli.plugins.server import UIServerService
+    from langharness_cli.plugins.server import UIServerService
 
     guards: list[tuple[str, dict]] = []
 
@@ -329,16 +329,16 @@ def test_run_guards_api_server_in_all_mode(
 def test_main_restores_environment_and_reports_bootstrap_errors(
     monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
 ) -> None:
-    monkeypatch.setenv("LANG_HARMESS_DIR", "before")
+    monkeypatch.setenv("LANG_HARNESS_DIR", "before")
     monkeypatch.setattr(bootstrap_module, "_run", lambda options, remainder: 6)
     assert bootstrap_module.main(["--config-dir", str(tmp_path)]) == 6
-    assert bootstrap_module.os.environ["LANG_HARMESS_DIR"] == "before"
+    assert bootstrap_module.os.environ["LANG_HARNESS_DIR"] == "before"
 
     def fail(options, remainder):
         raise BootstrapError("bad bootstrap")
 
-    monkeypatch.delenv("LANG_HARMESS_DIR")
+    monkeypatch.delenv("LANG_HARNESS_DIR")
     monkeypatch.setattr(bootstrap_module, "_run", fail)
     assert bootstrap_module.main(["--config-dir", str(tmp_path)]) == 2
     assert "bad bootstrap" in capsys.readouterr().err
-    assert "LANG_HARMESS_DIR" not in bootstrap_module.os.environ
+    assert "LANG_HARNESS_DIR" not in bootstrap_module.os.environ

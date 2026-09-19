@@ -4,7 +4,7 @@
 
 **Goal:** 把 `/plugins`(运行时面)与 `/scope` 操作包装成 9 个 LangChain 工具,作为可动态安装/启停的 ToolProvider 插件按作用域进入 agent loop,带完整入参约束与提示词。
 
-**Architecture:** 新组件 `ManagementToolsPlugin`(`langharmess_core/plugins/tools/management.py`)经 `@RequiresBest(DynamicPluginManager)` 进程内绑定协调器,9 个 `StructuredTool`(pydantic v2 schema + 五要素 description)直接调用 `RuntimeMutationCoordinator`;插件注册进 `dynamic.core` 目录(agent 目标=全部 loop,agent_instance 目标=单 agent),enable/disable 复用现有协调器并触发 loop 重建。配套两处共享 helper 收敛(scope 词汇、scope 树渲染)与协调器同 module 防呆守卫。
+**Architecture:** 新组件 `ManagementToolsPlugin`(`langharness_core/plugins/tools/management.py`)经 `@RequiresBest(DynamicPluginManager)` 进程内绑定协调器,9 个 `StructuredTool`(pydantic v2 schema + 五要素 description)直接调用 `RuntimeMutationCoordinator`;插件注册进 `dynamic.core` 目录(agent 目标=全部 loop,agent_instance 目标=单 agent),enable/disable 复用现有协调器并触发 loop 重建。配套两处共享 helper 收敛(scope 词汇、scope 树渲染)与协调器同 module 防呆守卫。
 
 **Tech Stack:** Python 3.13、Pelix/iPOPO、LangChain(langchain-core ≥1.6.2,`StructuredTool.from_function`)、pydantic ≥2.13.5、pytest。
 
@@ -13,8 +13,8 @@
 - 质量门槛(AGENTS.md):每个 commit 必须过 `make check`(Ruff → mypy → Pyright → clean-process import 检查 → pytest),单元覆盖率 ≥95%(pytest-cov 强制)。
 - TDD:先写失败测试,再写最小实现;每个任务独立 commit。
 - 生产代码 mypy strict、Pyright standard 不允许全局放宽;e2e 测试文件头已有 `# mypy: ignore-errors` 属既有豁免,不新增豁免。
-- 插件间通信只走 Pelix service spec(Protocol),不 import 他方具体类;`langharmess_plugin`/`langharmess_scope` 是框架层,可被 core 依赖。
-- 描述符只在 `langharmess_core/plugin.py` 构建;组件实现在 `plugins/<topic>/<name>.py`。
+- 插件间通信只走 Pelix service spec(Protocol),不 import 他方具体类;`langharness_plugin`/`langharness_scope` 是框架层,可被 core 依赖。
+- 描述符只在 `langharness_core/plugin.py` 构建;组件实现在 `plugins/<topic>/<name>.py`。
 - 文档(docs/、README)用中文,代码/命令用英文;commit message 风格 `feat:` / `refactor:` / `test:` / `docs:`。
 - 设计文档:`docs/designs/2026-09-18-management-tools-design.md`(已提交 d1b00ae)。
 
@@ -23,14 +23,14 @@
 ### Task 1: 共享 runtime scope 词汇校验 helper
 
 **Files:**
-- Modify: `src/langharmess_plugin/validation.py`(追加 helper)
-- Modify: `src/langharmess_cli/plugins/commands/plugins.py:31-44`(改用共享 helper)
-- Modify: `src/langharmess_api/plugins/routes/plugins.py:32,342-343`(改用共享 helper)
+- Modify: `src/langharness_plugin/validation.py`(追加 helper)
+- Modify: `src/langharness_cli/plugins/commands/plugins.py:31-44`(改用共享 helper)
+- Modify: `src/langharness_api/plugins/routes/plugins.py:32,342-343`(改用共享 helper)
 - Test: `tests/test_validation.py`(追加用例)
 
 **Interfaces:**
 - Consumes: 无(第一个任务)。
-- Produces: `langharmess_plugin.validation.RUNTIME_SCOPES = ("root", "server", "ui", "agent")`;`is_runtime_scope(value: str) -> bool`——`value in RUNTIME_SCOPES` 或 `value.startswith("agent:") and len(value) > len("agent:")`,拒绝裸 `agent:`。后续 Task 4 的工具 schema、CLI、API 共用。
+- Produces: `langharness_plugin.validation.RUNTIME_SCOPES = ("root", "server", "ui", "agent")`;`is_runtime_scope(value: str) -> bool`——`value in RUNTIME_SCOPES` 或 `value.startswith("agent:") and len(value) > len("agent:")`,拒绝裸 `agent:`。后续 Task 4 的工具 schema、CLI、API 共用。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -41,14 +41,14 @@
     "scope", ["root", "server", "ui", "agent", "agent:a", "agent:web-1"]
 )
 def test_is_runtime_scope_accepts_vocabulary(scope: str) -> None:
-    from langharmess_plugin.validation import is_runtime_scope
+    from langharness_plugin.validation import is_runtime_scope
 
     assert is_runtime_scope(scope) is True
 
 
 @pytest.mark.parametrize("scope", ["", "agent:", "api", "cli", "Agent"])
 def test_is_runtime_scope_rejects_other_values(scope: str) -> None:
-    from langharmess_plugin.validation import is_runtime_scope
+    from langharness_plugin.validation import is_runtime_scope
 
     assert is_runtime_scope(scope) is False
 ```
@@ -60,7 +60,7 @@ Expected: FAIL with `ImportError: cannot import name 'is_runtime_scope'`
 
 - [ ] **Step 3: 最小实现**
 
-`src/langharmess_plugin/validation.py` 末尾追加:
+`src/langharness_plugin/validation.py` 末尾追加:
 
 ```python
 RUNTIME_SCOPES = ("root", "server", "ui", "agent")
@@ -84,24 +84,24 @@ Expected: PASS
 
 - [ ] **Step 5: CLI 改用共享 helper**
 
-`src/langharmess_cli/plugins/commands/plugins.py`:
+`src/langharness_cli/plugins/commands/plugins.py`:
 
-删除常量与函数(第 31-44 行的 `RUNTIME_SCOPES` 与 `_is_runtime_scope`,`CONFIG_SCOPES` 与 `_is_config_scope` 保留不动),在 `langharmess_cli.contracts` 导入块之后加一行别名导入:
+删除常量与函数(第 31-44 行的 `RUNTIME_SCOPES` 与 `_is_runtime_scope`,`CONFIG_SCOPES` 与 `_is_config_scope` 保留不动),在 `langharness_cli.contracts` 导入块之后加一行别名导入:
 
 ```python
-from langharmess_plugin.validation import is_runtime_scope as _is_runtime_scope
+from langharness_plugin.validation import is_runtime_scope as _is_runtime_scope
 ```
 
 文件中其余 8 处 `_is_runtime_scope(` 调用点不变。
 
 - [ ] **Step 6: API 改用共享 helper**
 
-`src/langharmess_api/plugins/routes/plugins.py`:
+`src/langharness_api/plugins/routes/plugins.py`:
 
 1. 第 28 行导入改为:
 
 ```python
-from langharmess_plugin.validation import ContractGuard, is_runtime_scope
+from langharness_plugin.validation import ContractGuard, is_runtime_scope
 ```
 
 2. 删除第 32 行 `KNOWN_RUNTIME_SCOPES = ("root", "server", "ui", "agent")`。
@@ -130,22 +130,22 @@ Expected: 全绿(CLI/API 既有测试覆盖词汇行为,行为不变)。
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/langharmess_plugin/validation.py src/langharmess_cli/plugins/commands/plugins.py src/langharmess_api/plugins/routes/plugins.py tests/test_validation.py
+git add src/langharness_plugin/validation.py src/langharness_cli/plugins/commands/plugins.py src/langharness_api/plugins/routes/plugins.py tests/test_validation.py
 git commit -m "refactor: share runtime scope vocabulary validation between CLI and API"
 ```
 
 ---
 
-### Task 2: scope 树渲染下沉到 langharmess_scope
+### Task 2: scope 树渲染下沉到 langharness_scope
 
 **Files:**
-- Create: `src/langharmess_scope/render.py`
-- Modify: `src/langharmess_cli/plugins/commands/scope.py:10-13,77,91-112`(改用共享渲染器)
+- Create: `src/langharness_scope/render.py`
+- Modify: `src/langharness_cli/plugins/commands/scope.py:10-13,77,91-112`(改用共享渲染器)
 - Test: `tests/test_scope_render.py`(新建)
 
 **Interfaces:**
 - Consumes: 无。
-- Produces: `langharmess_scope.render.render_scope_tree(scopes: list[dict[str, Any]]) -> str`——与 CLI 现 `_render_tree` 逐字等价;Task 4 的 `list_scope_tree` 工具复用。
+- Produces: `langharness_scope.render.render_scope_tree(scopes: list[dict[str, Any]]) -> str`——与 CLI 现 `_render_tree` 逐字等价;Task 4 的 `list_scope_tree` 工具复用。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -154,7 +154,7 @@ git commit -m "refactor: share runtime scope vocabulary validation between CLI a
 ```python
 """Scope tree text rendering tests."""
 
-from langharmess_scope.render import render_scope_tree
+from langharness_scope.render import render_scope_tree
 
 
 def test_render_scope_tree_orders_roots_and_children() -> None:
@@ -185,11 +185,11 @@ def test_render_scope_tree_sorts_siblings_by_id() -> None:
 - [ ] **Step 2: 运行测试确认失败**
 
 Run: `pytest tests/test_scope_render.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'langharmess_scope.render'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'langharness_scope.render'`
 
 - [ ] **Step 3: 最小实现**
 
-新建 `src/langharmess_scope/render.py`(从 CLI `_render_tree` 原样迁入):
+新建 `src/langharness_scope/render.py`(从 CLI `_render_tree` 原样迁入):
 
 ```python
 """Text rendering for scope trees."""
@@ -230,12 +230,12 @@ Expected: PASS
 
 - [ ] **Step 5: CLI 接入共享渲染器**
 
-`src/langharmess_cli/plugins/commands/scope.py`:
+`src/langharness_cli/plugins/commands/scope.py`:
 
-1. 在 `langharmess_cli.contracts` 导入块之后加:
+1. 在 `langharness_cli.contracts` 导入块之后加:
 
 ```python
-from langharmess_scope.render import render_scope_tree
+from langharness_scope.render import render_scope_tree
 ```
 
 2. 第 77 行调用改:
@@ -254,8 +254,8 @@ Expected: 全绿(`tests/test_scope_command.py` 输出行为不变)。
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/langharmess_scope/render.py src/langharmess_cli/plugins/commands/scope.py tests/test_scope_render.py
-git commit -m "refactor: move scope tree rendering into langharmess_scope"
+git add src/langharness_scope/render.py src/langharness_cli/plugins/commands/scope.py tests/test_scope_render.py
+git commit -m "refactor: move scope tree rendering into langharness_scope"
 ```
 
 ---
@@ -263,7 +263,7 @@ git commit -m "refactor: move scope tree rendering into langharmess_scope"
 ### Task 3: coordinator 同 module 安装守卫
 
 **Files:**
-- Modify: `src/langharmess_plugin/coordinator.py:80-84`(`install` 内插入守卫)
+- Modify: `src/langharness_plugin/coordinator.py:80-84`(`install` 内插入守卫)
 - Test: `tests/test_runtime_mutation_coordinator.py`(追加用例)
 
 **Interfaces:**
@@ -274,10 +274,10 @@ git commit -m "refactor: move scope tree rendering into langharmess_scope"
 
 `tests/test_runtime_mutation_coordinator.py`:
 
-1. 导入行 `from langharmess_plugin.coordinator import RuntimeMutationCoordinator` 改为:
+1. 导入行 `from langharness_plugin.coordinator import RuntimeMutationCoordinator` 改为:
 
 ```python
-from langharmess_plugin.coordinator import (
+from langharness_plugin.coordinator import (
     RuntimeMutationCoordinator,
     RuntimeMutationError,
 )
@@ -329,7 +329,7 @@ Expected: FAIL——`same.module` 的 `two` 被正常安装,`pytest.raises` 不�
 
 - [ ] **Step 3: 最小实现**
 
-`src/langharmess_plugin/coordinator.py` 的 `install` 方法,在「同名已装」检查之后追加:
+`src/langharness_plugin/coordinator.py` 的 `install` 方法,在「同名已装」检查之后追加:
 
 ```python
             for item in self._registrations:
@@ -356,7 +356,7 @@ Expected: 全绿。
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/langharmess_plugin/coordinator.py tests/test_runtime_mutation_coordinator.py
+git add src/langharness_plugin/coordinator.py tests/test_runtime_mutation_coordinator.py
 git commit -m "feat: reject installing a second plugin from an already-installed module"
 ```
 
@@ -365,7 +365,7 @@ git commit -m "feat: reject installing a second plugin from an already-installed
 ### Task 4: management 组件 + 3 个只读工具
 
 **Files:**
-- Create: `src/langharmess_core/plugins/tools/management.py`(组件骨架 + schemas + 只读工具)
+- Create: `src/langharness_core/plugins/tools/management.py`(组件骨架 + schemas + 只读工具)
 - Test: `tests/test_management_tools.py`(新建)
 
 **Interfaces:**
@@ -389,8 +389,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from langharmess_core.plugins.tools.management import ManagementToolsPlugin
-from langharmess_scope import Scope, ScopeId
+from langharness_core.plugins.tools.management import ManagementToolsPlugin
+from langharness_scope import Scope, ScopeId
 
 READ_TOOLS = {"list_scope_tree", "list_runtime_plugins", "discover_plugins"}
 
@@ -405,7 +405,7 @@ def _registration(name: str = "demo-plugin", scope_id: str = "agent") -> Any:
         status="installed",
         descriptor=SimpleNamespace(
             name=name,
-            module="langharmess_core.plugins.tools.demo",
+            module="langharness_core.plugins.tools.demo",
             specification="agent.plugin.tools",
         ),
     )
@@ -432,7 +432,7 @@ class FakeManager:
                         id="demo-template",
                         descriptor=SimpleNamespace(
                             name="demo-template",
-                            module="langharmess_core.plugins.tools.demo",
+                            module="langharness_core.plugins.tools.demo",
                             specification="agent.plugin.tools",
                         ),
                         target="agent",
@@ -518,11 +518,11 @@ def test_discover_plugins_rescans_and_lists() -> None:
 - [ ] **Step 2: 运行测试确认失败**
 
 Run: `pytest tests/test_management_tools.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'langharmess_core.plugins.tools.management'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'langharness_core.plugins.tools.management'`
 
 - [ ] **Step 3: 最小实现**
 
-新建 `src/langharmess_core/plugins/tools/management.py`:
+新建 `src/langharness_core/plugins/tools/management.py`:
 
 ```python
 """LangChain tools wrapping the runtime plugin-management coordinator."""
@@ -543,11 +543,11 @@ from pelix.ipopo.decorators import (
 )
 from pydantic import BaseModel, Field, field_validator
 
-from langharmess_core.contracts import ToolProvider
-from langharmess_plugin.contracts import DynamicPluginManager
-from langharmess_plugin.validation import ContractGuard, is_runtime_scope
-from langharmess_scope import ScopeId
-from langharmess_scope.render import render_scope_tree
+from langharness_core.contracts import ToolProvider
+from langharness_plugin.contracts import DynamicPluginManager
+from langharness_plugin.validation import ContractGuard, is_runtime_scope
+from langharness_scope import ScopeId
+from langharness_scope.render import render_scope_tree
 
 SCOPE_HELP = (
     "Explicit runtime scope: root, server, ui, agent, or agent:<id>. "
@@ -760,7 +760,7 @@ Expected: 全绿。
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/langharmess_core/plugins/tools/management.py tests/test_management_tools.py
+git add src/langharness_core/plugins/tools/management.py tests/test_management_tools.py
 git commit -m "feat: add management tools plugin with scope/plugin read tools"
 ```
 
@@ -769,7 +769,7 @@ git commit -m "feat: add management tools plugin with scope/plugin read tools"
 ### Task 5: 6 个运行时变更工具 + confirm 约束
 
 **Files:**
-- Modify: `src/langharmess_core/plugins/tools/management.py`(追加 schemas 与 6 个工具,`get_tools` 扩到 9 个)
+- Modify: `src/langharness_core/plugins/tools/management.py`(追加 schemas 与 6 个工具,`get_tools` 扩到 9 个)
 - Test: `tests/test_management_tools.py`(追加用例,并更新 Task 4 的 3 工具断言)
 
 **Interfaces:**
@@ -780,7 +780,7 @@ git commit -m "feat: add management tools plugin with scope/plugin read tools"
 
 - [ ] **Step 1: 写失败测试**
 
-`tests/test_management_tools.py` 追加(文件头补 `from langharmess_plugin.coordinator import RuntimeMutationError`):
+`tests/test_management_tools.py` 追加(文件头补 `from langharness_plugin.coordinator import RuntimeMutationError`):
 
 ```python
 ALL_TOOLS = READ_TOOLS | {
@@ -1180,7 +1180,7 @@ Expected: 全绿。
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/langharmess_core/plugins/tools/management.py tests/test_management_tools.py
+git add src/langharness_core/plugins/tools/management.py tests/test_management_tools.py
 git commit -m "feat: expose runtime plugin mutations as management tools"
 ```
 
@@ -1189,12 +1189,12 @@ git commit -m "feat: expose runtime plugin mutations as management tools"
 ### Task 6: dynamic.core 目录注册(agent + agent_instance 两贡献)
 
 **Files:**
-- Modify: `src/langharmess_core/plugin.py:55-121,386-397`(目录条目 + `dynamic_package` 额外贡献)
+- Modify: `src/langharness_core/plugin.py:55-121,386-397`(目录条目 + `dynamic_package` 额外贡献)
 - Test: `tests/test_core_descriptors.py:30-46,147-160`(更新期望集合与 target 断言)
 
 **Interfaces:**
 - Consumes: Task 5 的组件 module/factory 名(字符串引用,不 import)。
-- Produces:`DYNAMIC_PLUGIN_CATALOG["management-tools-plugin"] = ("langharmess_core.plugins.tools.management", "management-tools-plugin-factory", SPEC_TOOL)`;`dynamic.core` 贡献 id:`management-tools-plugin-template`(target `agent`,注册名同名)与 `management-tools-plugin-instance`(target `agent_instance`,注册名 `management-tools-plugin-agent@agent-<id>`)。
+- Produces:`DYNAMIC_PLUGIN_CATALOG["management-tools-plugin"] = ("langharness_core.plugins.tools.management", "management-tools-plugin-factory", SPEC_TOOL)`;`dynamic.core` 贡献 id:`management-tools-plugin-template`(target `agent`,注册名同名)与 `management-tools-plugin-instance`(target `agent_instance`,注册名 `management-tools-plugin-agent@agent-<id>`)。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -1222,7 +1222,7 @@ def test_dynamic_templates_install_without_instantiating() -> None:
         assert descriptor.instance == descriptor.name
         assert descriptor.scope == "agent"
         assert descriptor.scope_parent == "root"
-        assert descriptor.module.startswith("langharmess_core.plugins.")
+        assert descriptor.module.startswith("langharness_core.plugins.")
         assert descriptor.factory.endswith("-factory")
         assert descriptor.specification.startswith("agent.plugin.")
 ```
@@ -1234,13 +1234,13 @@ Expected: FAIL——`dynamic_ids == EXPECTED_DYNAMIC_CONTRIBUTIONS` 多出/缺�
 
 - [ ] **Step 3: 最小实现**
 
-`src/langharmess_core/plugin.py`:
+`src/langharness_core/plugin.py`:
 
 1. `DYNAMIC_PLUGIN_CATALOG` 在 `"interrupt-before-plugin"` 条目之后插入:
 
 ```python
     "management-tools-plugin": (
-        "langharmess_core.plugins.tools.management",
+        "langharness_core.plugins.tools.management",
         "management-tools-plugin-factory",
         SPEC_TOOL,
     ),
@@ -1284,7 +1284,7 @@ Expected: 全绿。
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/langharmess_core/plugin.py tests/test_core_descriptors.py
+git add src/langharness_core/plugin.py tests/test_core_descriptors.py
 git commit -m "feat: register management tools in the dynamic catalog"
 ```
 
@@ -1304,11 +1304,11 @@ git commit -m "feat: register management tools in the dynamic catalog"
 `tests/test_dynamic_plugin_e2e.py`:
 
 1. 导入调整:第 12 行现有
-   `from langharmess_plugin.coordinator import RuntimeMutationCoordinator`
+   `from langharness_plugin.coordinator import RuntimeMutationCoordinator`
    替换为:
 
 ```python
-from langharmess_plugin.coordinator import (
+from langharness_plugin.coordinator import (
     RuntimeMutationCoordinator,
     RuntimeMutationError,
 )
@@ -1322,13 +1322,13 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from langharmess_core.contracts import SPEC_AGENT_LOOP, SPEC_LLM, SPEC_TOOL
-from langharmess_core.plugin import (
+from langharness_core.contracts import SPEC_AGENT_LOOP, SPEC_LLM, SPEC_TOOL
+from langharness_core.plugin import (
     agent_loop_descriptor,
     agent_loop_template_descriptor,
     dynamic_package,
 )
-from langharmess_plugin.contracts import DynamicPluginManager
+from langharness_plugin.contracts import DynamicPluginManager
 ```
 
 2. 在 `tool_names` 之后追加常量与 helper:
@@ -1376,7 +1376,7 @@ def make_loop_manager() -> PluginManager:
                 PluginDescriptor(
                     name="tools-template",
                     version="1.0.0",
-                    module="langharmess_core.plugins.tools.tools",
+                    module="langharness_core.plugins.tools.tools",
                     factory="tools-plugin-factory",
                     instance="tools-template",
                     specification=SPEC_TOOL,
@@ -1385,7 +1385,7 @@ def make_loop_manager() -> PluginManager:
                 PluginDescriptor(
                     name="llm-template",
                     version="1.0.0",
-                    module="langharmess_core.plugins.llm.llm",
+                    module="langharness_core.plugins.llm.llm",
                     factory="llm-plugin-factory",
                     instance="llm-template",
                     specification=SPEC_LLM,
@@ -1406,7 +1406,7 @@ def materialize_loop(manager: PluginManager) -> None:
         PluginDescriptor(
             name="llm-a",
             version="1.0.0",
-            module="langharmess_core.plugins.llm.llm",
+            module="langharness_core.plugins.llm.llm",
             factory="llm-plugin-factory",
             instance="llm-a",
             specification=SPEC_LLM,

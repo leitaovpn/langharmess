@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import pytest
 
-from langharmess_core.plugins.agents.registry import AgentRegistryPlugin
+from langharness_core.plugins.agents.registry import AgentRegistryPlugin
 
 
 def make_plugin(tmp_path: Path) -> AgentRegistryPlugin:

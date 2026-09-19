@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from langharmess_api.contracts import (
+from langharness_api.contracts import (
     SPEC_API_SERVER,
     SPEC_AUTH,
     SPEC_DB,
@@ -15,13 +15,13 @@ from langharmess_api.contracts import (
     RateLimitProvider,
     RouteProvider,
 )
-from langharmess_api.plugins.auth.auth import AuthPlugin
-from langharmess_api.plugins.db.db import DBPlugin
-from langharmess_api.plugins.rate_limit.rate_limit import (
+from langharness_api.plugins.auth.auth import AuthPlugin
+from langharness_api.plugins.db.db import DBPlugin
+from langharness_api.plugins.rate_limit.rate_limit import (
     RateLimitPlugin,
 )
-from langharmess_api.plugins.routes.health import HealthRoutePlugin
-from langharmess_api.plugins.server.app import APIServerService
+from langharness_api.plugins.routes.health import HealthRoutePlugin
+from langharness_api.plugins.server.app import APIServerService
 
 
 def test_spec_constants() -> None:
@@ -48,7 +48,7 @@ def test_api_server_service_builds_app() -> None:
         get_logger=lambda: SimpleNamespace(info=messages.append)
     )
     app = service.build_app()
-    assert app.title == "langharmess_api"
+    assert app.title == "langharness_api"
     assert app.state.configs is configs
     assert app.state.log is service._log_provider
     assert messages == ["API server app built"]

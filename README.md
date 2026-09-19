@@ -1,4 +1,4 @@
-# langharmess-core
+# langharness-core
 
 Plugin-driven LangChain agent using Pelix/iPOPO.
 
@@ -10,7 +10,7 @@ Installing the Python package exposes the CLI directly:
 
 ```bash
 python -m pip install .
-langharmess --help
+langharness --help
 ```
 
 Build a native package on the target operating system:
@@ -32,17 +32,17 @@ Install one generated artifact with:
 scripts/install.sh dist/<artifact>
 ```
 
-Set `LANG_HARMESS_MODEL`, `LANG_HARMESS_API_KEY`, and
-`LANG_HARMESS_BASE_URL` before starting `langharmess`.
+Set `LANG_HARNESS_MODEL`, `LANG_HARNESS_API_KEY`, and
+`LANG_HARNESS_BASE_URL` before starting `langharness`.
 
 The default configuration and separate CLI/server logs are created under
-`~/.langharmess`:
+`~/.langharness`:
 
 ```text
-~/.langharmess/
-├── langharmess.toml
-├── langharmess_cli.log
-└── langharmess_server.log
+~/.langharness/
+├── langharness.toml
+├── langharness_cli.log
+└── langharness_server.log
 ```
 
 The configuration template is:
@@ -70,7 +70,7 @@ Optionally select a configured model provider and override the common data
 directory:
 
 ```bash
-langharmess --provider demo --dir /data/langharmess
+langharness --provider demo --dir /data/langharness
 ```
 
 `--dir` controls the location of the TOML file and both log files.
@@ -118,7 +118,7 @@ instead of silently targeting the wrong scope.
 `list` and `config` aggregate every scope when the scope argument is
 omitted. `history` and `rollback` require a configuration scope — they no
 longer default to `api`. The same operations are available non-interactively
-via `langharmess plugins <action> ... --scope <scope>` (and `langharmess
+via `langharness plugins <action> ... --scope <scope>` (and `langharness
 scope` prints the tree as JSON).
 
 ### `/scope`

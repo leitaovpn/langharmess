@@ -6,7 +6,7 @@ set -euo pipefail
 # Usage: scripts/zip_project.sh [output.zip]
 
 PROJECT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-OUTPUT=${1:-"$PROJECT_ROOT/dist/langharmess-$(date +%Y%m%d-%H%M%S)-src.zip"}
+OUTPUT=${1:-"$PROJECT_ROOT/dist/langharness-$(date +%Y%m%d-%H%M%S)-src.zip"}
 
 cd "$PROJECT_ROOT"
 

@@ -20,7 +20,7 @@
 
 - 每响应结束时**只发一次**,值为该响应内多次模型调用的累加和;无 usage 时完全不发(向后兼容)。
 - 生产端:LLM 插件开启 `stream_usage`(`plugin.model.stream_usage` 属性,默认 true),每个模型调用的末块经 langgraph messages 流携带 `usage_metadata`;`astream` 只从 **messages 分支**提取(updates 分支的 chunk 拼接会重复求和),提取器为 `_extract_usage`(usage_metadata 优先,回退 `response_metadata.token_usage`,全零返回 None)。
-- 逃生阀(三级):插件属性 / `/stream` 请求体可选 `stream_usage` 字段 / CLI env `LANG_HARMESS_STREAM_USAGE=false`。
+- 逃生阀(三级):插件属性 / `/stream` 请求体可选 `stream_usage` 字段 / CLI env `LANG_HARNESS_STREAM_USAGE=false`。
 
 ## 渲染器协议扩展
 
@@ -42,9 +42,9 @@ def get_status_text(self) -> str: ...         # 空闲态 bottom_toolbar 文案
 
 ## i18n
 
-`src/langharmess_cli/i18n.py` 纯模块:`LOCALES = ("en", "zh")`、`STRINGS` 双表、`tr(locale, key, **fmt)`(未知 locale/key 回退 en)、`get_locale()` 读 env `LANG_HARMESS_LOCALE`。配置机制仍是插件属性:渲染器与 shell 插件各加 `@Property("_locale", "plugin.ui.locale", "en")`,`__main__` 解析 env + `--locale` 后写入描述符 properties 并传给 runner。
+`src/langharness_cli/i18n.py` 纯模块:`LOCALES = ("en", "zh")`、`STRINGS` 双表、`tr(locale, key, **fmt)`(未知 locale/key 回退 en)、`get_locale()` 读 env `LANG_HARNESS_LOCALE`。配置机制仍是插件属性:渲染器与 shell 插件各加 `@Property("_locale", "plugin.ui.locale", "en")`,`__main__` 解析 env + `--locale` 后写入描述符 properties 并传给 runner。
 
 ## 验收要点
 
 - `pytest --cov-fail-under=95`(141 用例,96.15%)、ruff/mypy/pyright 全绿;`tests/test_e2e.py` 未改且通过
-- 手动:tty 下流式渲染平滑、工具行状态转换、工具栏 token 累计;`LANG_HARMESS_LOCALE=zh` 全中文;管道输出纯文本且正文不重复;`LANG_HARMESS_STREAM_USAGE=false` 逃生阀生效
+- 手动:tty 下流式渲染平滑、工具行状态转换、工具栏 token 累计;`LANG_HARNESS_LOCALE=zh` 全中文;管道输出纯文本且正文不重复;`LANG_HARNESS_STREAM_USAGE=false` 逃生阀生效

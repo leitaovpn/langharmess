@@ -6,7 +6,7 @@ from typing import Any
 
 from pelix.ipopo.decorators import ComponentFactory, Provides
 
-from langharmess_plugin.contracts import ToolExportTarget
+from langharness_plugin.contracts import ToolExportTarget
 
 
 @ComponentFactory("dynamic-echo-factory")

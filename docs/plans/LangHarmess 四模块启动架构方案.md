@@ -2,20 +2,20 @@
 
 ## Summary
 
-采用“进程内微内核 + iPOPO 服务总线 + Python entry points”的架构，新增一个 `langharmess` 启动编排包。现有包保持不重命名，职责映射为：
+采用“进程内微内核 + iPOPO 服务总线 + Python entry points”的架构，新增一个 `langharness` 启动编排包。现有包保持不重命名，职责映射为：
 
-- `langharmess`：新增的 init/启动模块
-- `langharmess_cli`：ui 模块，继续使用当前终端交互 UI
-- `langharmess_api`：server 模块，REST API、鉴权、限流、token 统计
-- `langharmess_core`：agent 模块，管理多个 agent loop
+- `langharness`：新增的 init/启动模块
+- `langharness_cli`：ui 模块，继续使用当前终端交互 UI
+- `langharness_api`：server 模块，REST API、鉴权、限流、token 统计
+- `langharness_core`：agent 模块，管理多个 agent loop
 
 统一入口：
 
 ```bash
-langharmess --mode ui|all|server \
+langharness --mode ui|all|server \
   --server-ip 127.0.0.1 \
   --server-port 11534 \
-  --config-dir ~/.langharmess
+  --config-dir ~/.langharness
 ```
 
 默认 `--mode all`、默认 `server-ip=127.0.0.1`、默认 `server-port=11534`。同时支持 `--config_dir` 作为兼容别名。
@@ -24,61 +24,61 @@ langharmess --mode ui|all|server \
 
 ## Key Changes
 
-### 1. 新增 `langharmess` 启动模块
+### 1. 新增 `langharness` 启动模块
 
-- 新建 `src/langharmess/__main__.py` 作为统一入口。
+- 新建 `src/langharness/__main__.py` 作为统一入口。
 - 控制台脚本改为：
 
 ```toml
 [project.scripts]
-langharmess = "langharmess.__main__:main"
+langharness = "langharness.__main__:main"
 ```
 
-- 旧的 `langharmess_cli.__main__:main` 保留为兼容入口，但内部委托给新 bootstrap。
-- 打包脚本的 PyInstaller 入口和 `--collect-submodules` 增加 `langharmess`，并指向 `src/langharmess/__main__.py`。
+- 旧的 `langharness_cli.__main__:main` 保留为兼容入口，但内部委托给新 bootstrap。
+- 打包脚本的 PyInstaller 入口和 `--collect-submodules` 增加 `langharness`，并指向 `src/langharness/__main__.py`。
 
 ### 2. 先加载 config entry point
 
 新增独立配置入口组：
 
 ```toml
-[project.entry-points."langharmess.config"]
-config = "langharmess_config.plugin:builtin_package"
+[project.entry-points."langharness.config"]
+config = "langharness_config.plugin:builtin_package"
 ```
 
 启动流程：
 
 1. 解析全局参数 `--mode`、`--server-ip`、`--server-port`、`--config-dir`。
-2. 读取 `entry_points(group="langharmess.config")`。
+2. 读取 `entry_points(group="langharness.config")`。
 3. `EntryPoint.load()` 得到 `builtin_package`，调用后获得 `PluginPackage`。
 4. 用最小 `PluginManager` 安装 config 插件，获取 `SPEC_CONFIGS` 服务。
-5. 读取 `{config-dir}/langharmess.toml`。
+5. 读取 `{config-dir}/langharness.toml`。
 6. 根据 mode 组装 ui/server/agent/log 插件。
 
-### 3. `langharmess.toml` 增加模块选择配置
+### 3. `langharness.toml` 增加模块选择配置
 
 ```toml
 [plugins.ui]
-builtin_package = "langharmess_cli.plugin:builtin_package"
-sdk_package = "langharmess_api.sdk:package"
+builtin_package = "langharness_cli.plugin:builtin_package"
+sdk_package = "langharness_api.sdk:package"
 
 [plugins.server]
-builtin_package = "langharmess_api.plugin:builtin_package"
+builtin_package = "langharness_api.plugin:builtin_package"
 
 [plugins.agent]
-builtin_package = "langharmess_core.plugin:builtin_package"
+builtin_package = "langharness_core.plugin:builtin_package"
 
 [plugins.log]
-builtin_package = "langharmess_logging.plugin:builtin_package"
+builtin_package = "langharness_logging.plugin:builtin_package"
 ```
 
 所有 `builtin_package`、`sdk_package` 都按 `module:attr` 形式加载，用统一的 `importlib` loader：
 
-- `load("langharmess_api.plugin:builtin_package")`
+- `load("langharness_api.plugin:builtin_package")`
 - 调用返回对象，校验是否为 `PluginPackage`
 - 校验失败时明确报告 `config-dir`、section 和 import 路径
 
-当前内置包已有 `langharmess_cli.plugin:builtin_package`、`langharmess_api.plugin:builtin_package`、`langharmess_core.plugin:builtin_package`、`langharmess_logging.plugin:builtin_package`。需要新增 `langharmess_api.sdk:package`，封装现有 httpx 客户端为 UI 可替换的 SDK 服务。
+当前内置包已有 `langharness_cli.plugin:builtin_package`、`langharness_api.plugin:builtin_package`、`langharness_core.plugin:builtin_package`、`langharness_logging.plugin:builtin_package`。需要新增 `langharness_api.sdk:package`，封装现有 httpx 客户端为 UI 可替换的 SDK 服务。
 
 ### 4. 进程模型与 mode 行为
 
@@ -95,7 +95,7 @@ builtin_package = "langharmess_logging.plugin:builtin_package"
 - `--mode all`
   - UI 作为前台进程
   - 若目标 server 已存在则复用；否则拉起一个 server 子进程
-  - 守护由 bootstrap 调用 `langharmess.api_guard.APIGuard` 执行，base url、host、port、config-dir 由统一启动参数注入
+  - 守护由 bootstrap 调用 `langharness.api_guard.APIGuard` 执行，base url、host、port、config-dir 由统一启动参数注入
   - 等效于“ui 模式 + server 守护”
 
 - 连接地址统一由 `--server-ip`/`--server-port` 拼接（通配 bind 地址映射为 `127.0.0.1`）；CLI 子命令不再接受自己的 `--base-url`，base_url 由 bootstrap 注入 ui 模块。
@@ -157,10 +157,10 @@ server.set_agent(agent)
 
 ### 当前实现的主要问题
 
-1. 当前有 `langharmess_cli` 和 `langharmess_api` 两个入口，没有统一 `--mode`。
+1. 当前有 `langharness_cli` 和 `langharness_api` 两个入口，没有统一 `--mode`。
 2. CLI 通过 `APIGuard` 隐式拉起 server，host/port 硬编码为 `8000`。
 3. config 加载是硬编码 descriptor，不是先通过 entry point 发现 config 包。
-4. ui/server/agent 的插件包是硬编码组装，无法从 `langharmess.toml` 替换。
+4. ui/server/agent 的插件包是硬编码组装，无法从 `langharness.toml` 替换。
 5. server 和 agent 没有 `set_agent` 边界，loop 替换耦合在 API 路由内部。
 6. 缺少明确的“多 UI 共享一个 server”进程生命周期协议。
 
@@ -197,8 +197,8 @@ server.set_agent(agent)
 
 ### 单元测试
 
-- config entry point 只加载 `langharmess.config`，不混入 `langharmess.plugins`。
-- `langharmess.toml` 缺少 `[plugins.*]` 时使用内置默认值并给出日志。
+- config entry point 只加载 `langharness.config`，不混入 `langharness.plugins`。
+- `langharness.toml` 缺少 `[plugins.*]` 时使用内置默认值并给出日志。
 - `builtin_package` / `sdk_package` 的 `module:attr` 加载成功和失败路径。
 - `--mode` 默认 `all`，非法 mode 报错。
 - `--server-ip`、`--server-port`、`--config-dir` 的默认值和 `--config_dir` 别名。
@@ -208,9 +208,9 @@ server.set_agent(agent)
 
 ### 集成 / e2e
 
-- `langharmess --mode server --server-port 11534` 启动后，`/health` 和 `/plugins/discovered` 正常。
-- 已运行 server 时，启动两个 `langharmess --mode ui`，验证只存在一个 server 进程。
-- `langharmess --mode all` 启动后，UI 能访问自动拉起的 server。
+- `langharness --mode server --server-port 11534` 启动后，`/health` 和 `/plugins/discovered` 正常。
+- 已运行 server 时，启动两个 `langharness --mode ui`，验证只存在一个 server 进程。
+- `langharness --mode all` 启动后，UI 能访问自动拉起的 server。
 - 动态替换 agent loop：
   - 安装新 agent loop package
   - `agent_server.replace_loop_package(...)`
@@ -221,8 +221,8 @@ server.set_agent(agent)
 
 ## Assumptions
 
-- ui 复用当前 `langharmess_cli` 终端交互界面，不新增 Web UI。
-- 不重命名现有 `langharmess_cli`、`langharmess_api`、`langharmess_core`，只新增 `langharmess` 编排包。
+- ui 复用当前 `langharness_cli` 终端交互界面，不新增 Web UI。
+- 不重命名现有 `langharness_cli`、`langharness_api`、`langharness_core`，只新增 `langharness` 编排包。
 - config 和 ui/server/agent/log 的 `builtin_package`、`sdk_package` 均使用 Python import 路径。
 - 当前阶段 server 与 agent 同进程直接调用，消息总线只作为后续演进，不在本期实现。
-- 统一 CLI 默认 server port 改为 `11534`；旧 `python -m langharmess_api` 和旧 `langharmess_cli` 入口保留兼容。
+- 统一 CLI 默认 server port 改为 `11534`；旧 `python -m langharness_api` 和旧 `langharness_cli` 入口保留兼容。

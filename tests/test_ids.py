@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from langharmess_core.common.ids import thread_key, validate_id
+from langharness_core.common.ids import thread_key, validate_id
 
 VALID_IDS = [
     "local_user",

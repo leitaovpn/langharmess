@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 PYTHON=${PYTHON:-"$ROOT/.venv/bin/python"}
-CLI=${CLI:-"$ROOT/.venv/bin/langharmess"}
+CLI=${CLI:-"$ROOT/.venv/bin/langharness"}
 SMOKE_DIR=${SMOKE_DIR:-"$ROOT/.tmp-cli-real-smoke"}
 SERVER_PORT=${SERVER_PORT:-11534}
 PROVIDER=${PROVIDER:-}
@@ -13,7 +13,7 @@ if [[ -z "$PROVIDER" ]]; then
   exit 2
 fi
 
-export LANG_HARMESS_DIR="$SMOKE_DIR"
+export LANG_HARNESS_DIR="$SMOKE_DIR"
 
 echo "== dynamic plugin lifecycle =="
 "$CLI" --dir "$SMOKE_DIR" plugins discover \

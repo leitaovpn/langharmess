@@ -11,10 +11,10 @@ from typing import Any
 
 import pytest
 
-import langharmess_cli.common.cli as main_module
-from langharmess_cli.common.runner import CLIRunner
-from langharmess_cli.contracts import CLICommandProvider, CommandSpec
-from langharmess_cli.plugins.commands.health import HealthCommandPlugin
+import langharness_cli.common.cli as main_module
+from langharness_cli.common.runner import CLIRunner
+from langharness_cli.contracts import CLICommandProvider, CommandSpec
+from langharness_cli.plugins.commands.health import HealthCommandPlugin
 
 
 def test_command_spec_defaults() -> None:
@@ -58,8 +58,8 @@ def test_health_command_provider_conforms() -> None:
 def test_api_server_entrypoint_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
     import uvicorn
 
-    import langharmess_api.__main__ as api_main_module
-    import langharmess_api.common.server as server_module
+    import langharness_api.__main__ as api_main_module
+    import langharness_api.common.server as server_module
 
     app = object()
     captured = {}
@@ -68,7 +68,7 @@ def test_api_server_entrypoint_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> 
         target=target, **kwargs
     ))
     monkeypatch.setattr(
-        sys, "argv", ["langharmess_api", "--host", "0.0.0.0", "--port", "9123"]
+        sys, "argv", ["langharness_api", "--host", "0.0.0.0", "--port", "9123"]
     )
     assert api_main_module.main() == 0
     assert captured == {
@@ -82,7 +82,7 @@ def test_api_server_entrypoint_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> 
 def test_health_command_handler(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    import langharmess_cli.plugins.commands.health as health_module
+    import langharness_cli.plugins.commands.health as health_module
 
     class Response:
         status_code = 200
@@ -105,7 +105,7 @@ def test_health_command_handler(
 
 
 def test_main_runs_plugin_commands(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["langharmess", "health"])
+    monkeypatch.setattr(sys, "argv", ["langharness", "health"])
 
     command = CommandSpec(name="health", help="check", handler=lambda args: 9)
     manager = SimpleNamespace(
@@ -130,10 +130,10 @@ def test_main_runs_plugin_commands(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_main_runs_interactive_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["langharmess"])
-    monkeypatch.setenv("LANG_HARMESS_MODEL", "env-model")
-    monkeypatch.setenv("LANG_HARMESS_API_KEY", "env-key")
-    monkeypatch.setenv("LANG_HARMESS_BASE_URL", "https://models.example/v1")
+    monkeypatch.setattr(sys, "argv", ["langharness"])
+    monkeypatch.setenv("LANG_HARNESS_MODEL", "env-model")
+    monkeypatch.setenv("LANG_HARNESS_API_KEY", "env-key")
+    monkeypatch.setenv("LANG_HARNESS_BASE_URL", "https://models.example/v1")
 
     provider = SimpleNamespace(
         get_commands=lambda: [],
@@ -193,7 +193,7 @@ def test_main_warns_when_removed_base_url_flag_is_used(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(
-        sys, "argv", ["langharmess", "interactive", "--base-url", "http://api:9000"]
+        sys, "argv", ["langharness", "interactive", "--base-url", "http://api:9000"]
     )
     provider = SimpleNamespace(
         get_commands=lambda: [], get_interactive_commands=lambda: []
@@ -248,7 +248,7 @@ def test_interactive_options_parse_identity_flags() -> None:
 def test_interactive_options_default_to_local_user(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("LANG_HARMESS_USER_ID", raising=False)
+    monkeypatch.delenv("LANG_HARNESS_USER_ID", raising=False)
     options = main_module._interactive_options([])
     assert options["user_id"] == "local_user"
     assert options["agent_id"] is None
@@ -259,7 +259,7 @@ def test_interactive_options_default_to_local_user(
 def test_interactive_options_read_user_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LANG_HARMESS_USER_ID", "env_user")
+    monkeypatch.setenv("LANG_HARNESS_USER_ID", "env_user")
     assert main_module._interactive_options([])["user_id"] == "env_user"
 
 
@@ -270,7 +270,7 @@ def test_main_forwards_identity_flags_to_resolution(
         sys,
         "argv",
         [
-            "langharmess",
+            "langharness",
             "interactive",
             "--user-id",
             "alice",
@@ -325,8 +325,8 @@ def test_main_forwards_identity_flags_to_resolution(
 def test_main_passes_locale_flag_to_plugins_and_runner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("LANG_HARMESS_LOCALE", raising=False)
-    monkeypatch.setattr(sys, "argv", ["langharmess", "interactive", "--locale", "zh"])
+    monkeypatch.delenv("LANG_HARNESS_LOCALE", raising=False)
+    monkeypatch.setattr(sys, "argv", ["langharness", "interactive", "--locale", "zh"])
     installed = []
     manager = SimpleNamespace(
         start=lambda: None,
@@ -354,7 +354,7 @@ def test_main_passes_locale_flag_to_plugins_and_runner(
 
 
 def test_main_installs_shell_command_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["langharmess"])
+    monkeypatch.setattr(sys, "argv", ["langharness"])
     installed = []
     manager = SimpleNamespace(
         start=lambda: None,
@@ -388,7 +388,7 @@ def test_main_uses_selected_provider_and_directory(
         sys,
         "argv",
         [
-            "langharmess",
+            "langharness",
             "--provider",
             "demo",
             "--dir",
@@ -440,14 +440,14 @@ def test_main_uses_selected_provider_and_directory(
     assert captured["model_base_url"] == "https://provider.example/v1"
     assert captured["commands"] == []
     assert log_messages == ["CLI started"]
-    assert "LANG_HARMESS_DIR" not in os.environ
+    assert "LANG_HARNESS_DIR" not in os.environ
 
 
 def test_main_uses_default_provider_when_not_specified(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
     monkeypatch.setattr(
-        sys, "argv", ["langharmess", "--dir", str(tmp_path), "interactive"]
+        sys, "argv", ["langharness", "--dir", str(tmp_path), "interactive"]
     )
     configs = SimpleNamespace(
         get_default_provider=lambda: {
@@ -486,7 +486,7 @@ def test_main_errors_when_default_provider_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
 ) -> None:
     monkeypatch.setattr(
-        sys, "argv", ["langharmess", "--dir", str(tmp_path), "interactive"]
+        sys, "argv", ["langharness", "--dir", str(tmp_path), "interactive"]
     )
 
     def missing_default() -> dict[str, str]:
@@ -523,7 +523,7 @@ def test_main_rejects_reserved_default_provider_name(
     monkeypatch.setattr(
         sys,
         "argv",
-        ["langharmess", "--provider", "default", "--dir", str(tmp_path), "interactive"],
+        ["langharness", "--provider", "default", "--dir", str(tmp_path), "interactive"],
     )
 
     def reserved(name: str) -> dict[str, str]:
@@ -547,9 +547,9 @@ def test_main_rejects_reserved_default_provider_name(
 def test_main_survives_broken_provider_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from langharmess_config.plugins.configs import ConfigsPlugin
+    from langharness_config.plugins.configs import ConfigsPlugin
 
-    monkeypatch.setattr(sys, "argv", ["langharmess"])
+    monkeypatch.setattr(sys, "argv", ["langharness"])
 
     configs = ConfigsPlugin()
     configs._providers = [

@@ -93,7 +93,7 @@ async def main() -> None:
     llm_url = f"http://127.0.0.1:{llm_port}/v1"
 
     tmp = tempfile.mkdtemp(prefix="lh-chunks-")
-    (Path(tmp) / "langharmess.toml").write_text(
+    (Path(tmp) / "langharness.toml").write_text(
         "\n".join(
             [
                 "[providers.fake]",
@@ -106,7 +106,7 @@ async def main() -> None:
         )
     )
     env = os.environ.copy()
-    env["LANG_HARMESS_DIR"] = tmp
+    env["LANG_HARNESS_DIR"] = tmp
     env["PYTHONPATH"] = str(ROOT / "src")
     port = free_port()
     base = f"http://127.0.0.1:{port}"
@@ -115,7 +115,7 @@ async def main() -> None:
             PYTHON,
             "-m",
             "uvicorn",
-            "langharmess_api.common.server:create_app",
+            "langharness_api.common.server:create_app",
             "--factory",
             "--host",
             "127.0.0.1",

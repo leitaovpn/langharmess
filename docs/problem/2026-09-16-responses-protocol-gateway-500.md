@@ -5,7 +5,7 @@
 
 ## 现象
 
-`~/.langharmess/langharmess.toml` 中 `chatgpt-5` provider 配置为
+`~/.langharness/langharness.toml` 中 `chatgpt-5` provider 配置为
 `protocol="responses"` + `base_url="…/compatible-mode/v1"` + `model="qwen-max"`。
 真实 CLI 运行中每个请求都失败：
 
@@ -22,7 +22,7 @@ Event 对象时漏填了必填的 `object` 字段。
 ## 最小复现
 
 裸 openai SDK，不涉及任何本项目代码（`docs/problem/repro/repro_bare_sdk.py`，
-需在含 `langharmess.toml` 的目录下运行）：
+需在含 `langharness.toml` 的目录下运行）：
 
 ```python
 client = AsyncOpenAI(api_key=…, base_url=…/compatible-mode/v1)
@@ -35,7 +35,7 @@ await client.chat.completions.create(model="qwen-max", …)        # → 正常�
 - 同一网关同一模型的 `/chat/completions` 正常。
 
 本项目侧请求体经 dump 验证是干净的（`model` + `input` 消息数组），
-问题不在 langharmess / langchain-openai 的请求构造。
+问题不在 langharness / langchain-openai 的请求构造。
 
 ## 结论与影响
 

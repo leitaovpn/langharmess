@@ -16,7 +16,7 @@
 
 ## 现状
 
-- `AgentRegistryProvider`(`langharmess_core/plugins/agents/registry.py`,
+- `AgentRegistryProvider`(`langharness_core/plugins/agents/registry.py`,
   server 作用域)提供 `list_agents` / `get_agent` / `create_agent` /
   `update_agent` / `delete_agent`;`create_agent` 后 `agent-directory` 会为
   新 agent 物化 scope 与 loop(既有机制)。
@@ -25,7 +25,7 @@
   服务并创建 `ToolExportAdapter`(`invoke_export(operation, arguments)`
   分发);适配器按 `target_scope` 落 `agent`(所有 loop)或注册作用域
   (`agent_instance`)。
-- 包发现走 `langharmess.plugins` 入口点(`dynamic-core` 已有先例)。
+- 包发现走 `langharness.plugins` 入口点(`dynamic-core` 已有先例)。
 - `ToolExport.destructive` 字段已声明但无消费方;本方案只做标记。
 
 ## 词汇表
@@ -38,7 +38,7 @@
 
 ### 1. 导出服务 `agent-operations-export`
 
-新文件 `src/langharmess_core/plugins/agents/export.py`:
+新文件 `src/langharness_core/plugins/agents/export.py`:
 
 - `@ComponentFactory("agent-operations-export-factory")`
   `@Provides(ToolExportTarget)`(`plugin.tool_export.target` 规格),
@@ -61,7 +61,7 @@
 
 ### 2. 包声明 `agent.tools`
 
-`src/langharmess_core/plugin.py` 新增 `agent_tools_package()`:
+`src/langharness_core/plugin.py` 新增 `agent_tools_package()`:
 
 ```python
 PluginPackage(
@@ -74,7 +74,7 @@ PluginPackage(
             PluginDescriptor(
                 name="agent-operations-export",
                 version="1.0.0",
-                module="langharmess_core.plugins.agents.export",
+                module="langharness_core.plugins.agents.export",
                 factory="agent-operations-export-factory",
                 instance="agent-operations-export",
                 specification=SPEC_TOOL_EXPORT_TARGET,
@@ -121,10 +121,10 @@ schemas(定义在 export.py,与分发同文件):
   + 可选 `confirm: Literal["DISABLE"]`;`model_validator` 强制
   `enabled is False → confirm == "DISABLE"`,否则校验失败
 
-`pyproject.toml` 的 `[project.entry-points."langharmess.plugins"]` 增加:
+`pyproject.toml` 的 `[project.entry-points."langharness.plugins"]` 增加:
 
 ```toml
-agent-tools = "langharmess_core.plugin:agent_tools_package"
+agent-tools = "langharness_core.plugin:agent_tools_package"
 ```
 
 ### 3. 动态发现与注册链路(框架既有)
@@ -163,8 +163,8 @@ agent-tools = "langharmess_core.plugin:agent_tools_package"
 
 ## 涉及文件
 
-- 新:`src/langharmess_core/plugins/agents/export.py`(导出服务 + 4 schemas)
-- 改:`src/langharmess_core/plugin.py`(`agent_tools_package`)
+- 新:`src/langharness_core/plugins/agents/export.py`(导出服务 + 4 schemas)
+- 改:`src/langharness_core/plugin.py`(`agent_tools_package`)
 - 改:`pyproject.toml`(entry point `agent-tools`)
 - 新/改:单元与 e2e 测试(`test_agent_tools.py` 新、
   `test_dynamic_plugin_e2e.py` 追加、`test_packaging.py` 更新)

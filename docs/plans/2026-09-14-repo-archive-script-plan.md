@@ -376,18 +376,18 @@ git commit -m "archive_repo.sh 补齐 CLI 契约与原子替换：默认输出�
 - [ ] **Step 1: 在真实仓库运行（默认输出）**
 
 Run: `scripts/archive_repo.sh`
-Expected: 打印 `archive: <仓库根>/dist/langharmess-main-<时间戳>.zip`、`entries: N files`、`size: X`
+Expected: 打印 `archive: <仓库根>/dist/langharness-main-<时间戳>.zip`、`entries: N files`、`size: X`
 
 - [ ] **Step 2: 校验条目数与完整性**
 
-Run: `unzip -t dist/langharmess-main-*.zip && unzip -Z1 dist/langharmess-main-*.zip | grep -v '/\.git/' | wc -l && git ls-files | wc -l`
+Run: `unzip -t dist/langharness-main-*.zip && unzip -Z1 dist/langharness-main-*.zip | grep -v '/\.git/' | wc -l && git ls-files | wc -l`
 Expected: `unzip -t` 无错误；两个计数相等（跟踪文件数 140）；`.git/` 条目存在
 
 - [ ] **Step 3: 解压回验 git 可用性**
 
 Run:
 ```bash
-rm -rf /tmp/archive-check && mkdir -p /tmp/archive-check && unzip -q dist/langharmess-main-*.zip -d /tmp/archive-check && git -C /tmp/archive-check/langharmess-main log --oneline -3 && git -C /tmp/archive-check/langharmess-main status --porcelain | head
+rm -rf /tmp/archive-check && mkdir -p /tmp/archive-check && unzip -q dist/langharness-main-*.zip -d /tmp/archive-check && git -C /tmp/archive-check/langharness-main log --oneline -3 && git -C /tmp/archive-check/langharness-main status --porcelain | head
 ```
 Expected: `git log` 显示最近三条提交；`git status` 干净（当前工作区干净，打包的即工作区状态）
 

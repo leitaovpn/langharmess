@@ -8,8 +8,8 @@ import sys
 
 import pytest
 
-import langharmess.api_guard as api_guard_module
-from langharmess.api_guard import APIGuard
+import langharness.api_guard as api_guard_module
+from langharness.api_guard import APIGuard
 
 
 def test_api_guard_is_running_accepts_client_errors(
@@ -63,7 +63,7 @@ def test_api_guard_starts_server(monkeypatch: pytest.MonkeyPatch) -> None:
         [
                 sys.executable,
                 "-m",
-                "langharmess",
+                "langharness",
                 "--mode",
                 "server",
                 "--server-ip",
@@ -77,7 +77,7 @@ def test_api_guard_starts_server(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_api_guard_uses_frozen_executable_to_start_server(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import langharmess.__main__ as bootstrap_main_module
+    import langharness.__main__ as bootstrap_main_module
 
     calls = []
     monkeypatch.setattr(api_guard_module.sys, "frozen", True, raising=False)

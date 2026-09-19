@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from langharmess_core.contracts import (
+from langharness_core.contracts import (
     SPEC_AGENT_LOOP,
     SPEC_LLM,
     SPEC_MIDDLEWARE,

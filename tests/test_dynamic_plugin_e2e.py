@@ -13,13 +13,13 @@ from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import BaseModel
 
-from langharmess_core.contracts import (
+from langharness_core.contracts import (
     SPEC_AGENT_LOOP,
     SPEC_AGENT_REGISTRY,
     SPEC_LLM,
     SPEC_TOOL,
 )
-from langharmess_core.plugin import (
+from langharness_core.plugin import (
     agent_loop_descriptor,
     agent_loop_template_descriptor,
     agent_registry_descriptor,
@@ -27,20 +27,20 @@ from langharmess_core.plugin import (
     dynamic_package,
     tool_export_adapter_template_descriptor,
 )
-from langharmess_plugin.contracts import (
+from langharness_plugin.contracts import (
     SPEC_TOOL_EXPORT_TARGET,
     DynamicPluginManager,
 )
-from langharmess_plugin.coordinator import (
+from langharness_plugin.coordinator import (
     RuntimeMutationCoordinator,
     RuntimeMutationError,
 )
-from langharmess_plugin.discovery import PluginDiscovery
-from langharmess_plugin.package import PluginContribution, PluginPackage, ToolExport
-from langharmess_plugin.plugin_manager import PluginManager
-from langharmess_plugin.registry import PluginDescriptor, PluginRegistry
-from langharmess_plugin.state_store import InMemoryRuntimeStateStore
-from langharmess_scope import ScopeId
+from langharness_plugin.discovery import PluginDiscovery
+from langharness_plugin.package import PluginContribution, PluginPackage, ToolExport
+from langharness_plugin.plugin_manager import PluginManager
+from langharness_plugin.registry import PluginDescriptor, PluginRegistry
+from langharness_plugin.state_store import InMemoryRuntimeStateStore
+from langharness_scope import ScopeId
 
 
 class EchoArgs(BaseModel):
@@ -126,7 +126,7 @@ def make_manager() -> PluginManager:
                 PluginDescriptor(
                     name="tools-template",
                     version="1.0.0",
-                    module="langharmess_core.plugins.tools.tools",
+                    module="langharness_core.plugins.tools.tools",
                     factory="tools-plugin-factory",
                     instance="tools-template",
                     specification=SPEC_TOOL,
@@ -297,7 +297,7 @@ def make_loop_manager() -> PluginManager:
                 PluginDescriptor(
                     name="tools-template",
                     version="1.0.0",
-                    module="langharmess_core.plugins.tools.tools",
+                    module="langharness_core.plugins.tools.tools",
                     factory="tools-plugin-factory",
                     instance="tools-template",
                     specification=SPEC_TOOL,
@@ -306,7 +306,7 @@ def make_loop_manager() -> PluginManager:
                 PluginDescriptor(
                     name="llm-template",
                     version="1.0.0",
-                    module="langharmess_core.plugins.llm.llm",
+                    module="langharness_core.plugins.llm.llm",
                     factory="llm-plugin-factory",
                     instance="llm-template",
                     specification=SPEC_LLM,
@@ -327,7 +327,7 @@ def materialize_loop(manager: PluginManager) -> None:
         PluginDescriptor(
             name="llm-a",
             version="1.0.0",
-            module="langharmess_core.plugins.llm.llm",
+            module="langharness_core.plugins.llm.llm",
             factory="llm-plugin-factory",
             instance="llm-a",
             specification=SPEC_LLM,

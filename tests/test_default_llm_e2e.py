@@ -16,16 +16,16 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from langharmess_config.plugin import config_descriptors
-from langharmess_core.contracts import SPEC_AGENT_DIRECTORY, SPEC_LLM
-from langharmess_core.plugin import (
+from langharness_config.plugin import config_descriptors
+from langharness_core.contracts import SPEC_AGENT_DIRECTORY, SPEC_LLM
+from langharness_core.plugin import (
     agent_directory_descriptor,
     agent_loop_template_descriptor,
     agent_plugin_template_descriptor,
     agent_registry_descriptor,
 )
-from langharmess_plugin.plugin_manager import PluginManager
-from langharmess_plugin.registry import PluginRegistry
+from langharness_plugin.plugin_manager import PluginManager
+from langharness_plugin.registry import PluginRegistry
 
 DEFAULT_TOML = """
 [providers.default]
@@ -80,7 +80,7 @@ def _write_agent(path: Any) -> None:
 
 
 def _manager(tmp_path: Any) -> PluginManager:
-    (tmp_path / "langharmess.toml").write_text(DEFAULT_TOML, encoding="utf-8")
+    (tmp_path / "langharness.toml").write_text(DEFAULT_TOML, encoding="utf-8")
     _write_agent(tmp_path / "agents.json")
     registry = PluginRegistry(
         [
