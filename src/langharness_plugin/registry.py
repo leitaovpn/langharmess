@@ -9,6 +9,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Literal, Mapping
 
+from langharness_plugin.errors import AmbiguousPluginError, PluginIdentityConflictError
 from langharness_scope import ScopeId
 
 SWAP_POLICIES = ("hot", "restart")
@@ -208,34 +209,50 @@ def plugin_metadata(**kwargs: Any) -> Any:
 
 
 class PluginRegistry:
-    """In-memory registry with JSON persistence.
-
-    NOTE: legacy name-keyed registry; replaced by the factory-keyed catalog
-    in the next step of the redesign.
-    """
+    """Validated catalog of plugin definitions, keyed by factory."""
 
     def __init__(
-        self, descriptors: list[PluginDescriptor] | tuple[PluginDescriptor, ...] = ()
+        self,
+        descriptors: list[PluginDescriptor] | tuple[PluginDescriptor, ...] = (),
     ) -> None:
         self._descriptors: dict[str, PluginDescriptor] = {}
         for descriptor in descriptors:
             self.add(descriptor)
 
     def add(self, descriptor: PluginDescriptor) -> None:
-        if descriptor.name in self._descriptors:
-            raise ValueError(f"Plugin {descriptor.name!r} is already registered")
-        self._descriptors[descriptor.name] = descriptor
+        validate_descriptor(descriptor)
+        existing = self._descriptors.get(descriptor.factory)
+        if existing is not None:
+            raise PluginIdentityConflictError(
+                f"Factory {descriptor.factory!r} is already registered by "
+                f"module {existing.module!r}"
+            )
+        self._descriptors[descriptor.factory] = descriptor
 
-    def get(self, name: str) -> PluginDescriptor | None:
-        return self._descriptors.get(name)
+    def get(self, factory: str) -> PluginDescriptor | None:
+        return self._descriptors.get(factory)
+
+    def get_by_name(self, name: str) -> PluginDescriptor:
+        matches = [
+            descriptor
+            for descriptor in self._descriptors.values()
+            if descriptor.name == name
+        ]
+        if not matches:
+            raise KeyError(name)
+        if len(matches) > 1:
+            raise AmbiguousPluginError(
+                name, sorted(descriptor.factory for descriptor in matches)
+            )
+        return matches[0]
 
     def list(self) -> list[PluginDescriptor]:
-        return [self._descriptors[name] for name in sorted(self._descriptors)]
+        return [self._descriptors[factory] for factory in sorted(self._descriptors)]
 
-    def remove(self, name: str) -> PluginDescriptor:
-        if name not in self._descriptors:
-            raise KeyError(name)
-        return self._descriptors.pop(name)
+    def remove(self, factory: str) -> PluginDescriptor:
+        if factory not in self._descriptors:
+            raise KeyError(factory)
+        return self._descriptors.pop(factory)
 
     def save(self, path: Path) -> None:
         data = {
@@ -249,7 +266,6 @@ class PluginRegistry:
         raw = json.loads(path.read_text(encoding="utf-8"))
         if raw.get("version") != 1:
             raise ValueError("Unsupported plugin registry version")
-        descriptors = [
-            PluginDescriptor.from_dict(item) for item in raw.get("plugins", [])
-        ]
-        return cls(descriptors)
+        return cls(
+            [PluginDescriptor.from_dict(item) for item in raw.get("plugins", [])]
+        )

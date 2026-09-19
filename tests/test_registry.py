@@ -157,3 +157,66 @@ class TestPluginMetadata:
         )
         assert metadata.module is None
         assert SWAP_POLICIES == ("hot", "restart")
+
+
+class TestPluginRegistry:
+    def test_registry_keyed_by_factory_allows_duplicate_names(self) -> None:
+        from langharness_plugin.registry import PluginRegistry
+
+        registry = PluginRegistry(
+            [
+                descriptor(factory="f-a", module="m.a"),
+                descriptor(factory="f-b", module="m.b"),
+            ]
+        )
+        assert registry.get("f-a") is not None
+        assert registry.get("f-b") is not None
+        assert len(registry.list()) == 2
+
+    def test_registry_rejects_duplicate_factory(self) -> None:
+        from langharness_plugin.errors import PluginIdentityConflictError
+        from langharness_plugin.registry import PluginRegistry
+
+        registry = PluginRegistry([descriptor(factory="f", module="m.a")])
+        with pytest.raises(PluginIdentityConflictError, match="f"):
+            registry.add(descriptor(factory="f", module="m.b"))
+
+    def test_registry_get_by_name_raises_ambiguity(self) -> None:
+        from langharness_plugin.errors import AmbiguousPluginError
+        from langharness_plugin.registry import PluginRegistry
+
+        registry = PluginRegistry(
+            [
+                descriptor(factory="f-a", module="m.a"),
+                descriptor(factory="f-b", module="m.b"),
+            ]
+        )
+        with pytest.raises(AmbiguousPluginError) as caught:
+            registry.get_by_name("llm")
+        assert set(caught.value.candidates) == {"f-a", "f-b"}
+
+    def test_registry_get_by_name_unique_returns_descriptor(self) -> None:
+        from langharness_plugin.registry import PluginRegistry
+
+        registry = PluginRegistry([descriptor(factory="f-a", module="m.a")])
+        assert registry.get_by_name("llm").factory == "f-a"
+        with pytest.raises(KeyError):
+            registry.get_by_name("missing")
+
+    def test_registry_remove_by_factory(self) -> None:
+        from langharness_plugin.registry import PluginRegistry
+
+        registry = PluginRegistry([descriptor(factory="f-a", module="m.a")])
+        removed = registry.remove("f-a")
+        assert removed.factory == "f-a"
+        assert registry.get("f-a") is None
+        with pytest.raises(KeyError):
+            registry.remove("f-a")
+
+    def test_registry_add_validates_descriptor(self) -> None:
+        from langharness_plugin.registry import PluginRegistry
+
+        registry = PluginRegistry()
+        with pytest.raises(ValueError, match="non-empty"):
+            registry.add(descriptor(description="  "))
+
