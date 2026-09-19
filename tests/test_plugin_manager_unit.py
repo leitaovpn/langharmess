@@ -1,4 +1,4 @@
-"""Unit tests for PluginManager error and mock-backed branches."""
+"""Unit tests for PluginManager start, discovery, and scope APIs."""
 # mypy: ignore-errors
 # pyright: reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
 
@@ -8,137 +8,135 @@ from unittest.mock import Mock
 
 import pytest
 
+from langharness_plugin.errors import ScopeHasChildrenError, ScopeHasInstancesError
 from langharness_plugin.plugin_manager import PluginManager
-from langharness_plugin.registry import PluginDescriptor, PluginRegistry
+from langharness_plugin.registry import PluginRegistry, plugin_metadata
+from langharness_scope import ROOT_SCOPE_ID, ScopeId
+
+DESCRIPTION = (
+    "Test plugin. Implements test.spec. Use in unit tests only. "
+    "No properties. Uninstall when tests finish."
+)
 
 
-def descriptor(name: str, enabled: bool = True) -> PluginDescriptor:
-    return PluginDescriptor(
-        name=name,
-        version="1.0.0",
-        module=f"module.{name}",
-        factory=f"{name}-factory",
-        instance=name,
-        specification=f"test.plugin.{name}",
-        enabled=enabled,
+class EntryPoint:
+    def __init__(self, target, name: str = "dynamic") -> None:
+        self.target = target
+        self.name = name
+        self.value = f"{name}:load"
+
+    def load(self):
+        return self.target
+
+
+@plugin_metadata(
+    name="echo",
+    version="1.0.0",
+    factory="echo-factory",
+    specification="test.echo",
+    description=DESCRIPTION,
+)
+class Echo:
+    pass
+
+
+def manager_with(entry_points=()) -> PluginManager:
+    manager = PluginManager(
+        PluginRegistry(),
+        discovery=lambda: [EntryPoint(item, f"ep-{i}") for i, item in enumerate(entry_points)],
     )
-
-
-def make_started_manager() -> PluginManager:
-    manager = PluginManager(PluginRegistry())
     manager._framework = Mock()
     manager._context = Mock()
     manager._ipopo = Mock()
     return manager
 
 
-def test_manager_not_started_errors_and_stop_is_noop() -> None:
-    manager = PluginManager(PluginRegistry())
-    assert manager.started is False
-    manager.stop()
+class TestLifecycle:
+    def test_not_started_errors_and_stop_is_noop(self) -> None:
+        manager = PluginManager(PluginRegistry())
+        assert manager.started is False
+        manager.stop()
+        with pytest.raises(RuntimeError, match="not started"):
+            manager.discover()
 
-    with pytest.raises(RuntimeError, match="not started"):
-        manager.install_plugin(descriptor("llm"))
-    with pytest.raises(RuntimeError, match="not started"):
-        manager.get_service("agent.plugin.llm")
-    with pytest.raises(RuntimeError, match="not started"):
-        manager.get_services("agent.plugin.llm")
-    with pytest.raises(RuntimeError, match="not started"):
-        manager.service_properties("agent.plugin.llm")
+    def test_start_twice_raises(self) -> None:
+        manager = PluginManager(PluginRegistry())
+        manager._framework = Mock()
+        with pytest.raises(RuntimeError, match="already started"):
+            manager.start()
 
 
-def test_manager_start_twice_raises() -> None:
-    manager = PluginManager(PluginRegistry())
-    manager._framework = Mock()
-    with pytest.raises(RuntimeError, match="already started"):
+class TestDiscovery:
+    def test_discover_builds_catalog_without_installing(self) -> None:
+        manager = manager_with([Echo])
+        snapshot = manager.discover()
+        assert len(snapshot.descriptors) == 1
+        assert snapshot.descriptors[0].factory == "echo-factory"
+        assert manager._discovered == {
+            (Echo.__module__, "echo-factory"): snapshot.descriptors[0]
+        }
+        manager._context.install_bundle.assert_not_called()
+
+    def test_rediscover_replaces_catalog(self) -> None:
+        manager = manager_with([Echo])
+        manager.discover()
+        manager.discover()
+        assert len(manager._discovered) == 1
+
+    def test_discovery_warnings_surface_in_snapshot(self) -> None:
+        manager = manager_with([42])
+        snapshot = manager.discover()
+        assert snapshot.descriptors == ()
+        assert snapshot.warnings
+
+
+class TestScopes:
+    def test_builtin_scopes_are_seeded_on_real_start(self) -> None:
+        manager = PluginManager(PluginRegistry())
         manager.start()
+        try:
+            scopes = manager.list_scope()
+            assert {scope.id for scope in scopes} >= {
+                ROOT_SCOPE_ID,
+                ScopeId("ui"),
+                ScopeId("server"),
+                ScopeId("agent"),
+            }
+        finally:
+            manager.stop()
 
+    def test_add_scope_requires_existing_parent(self) -> None:
+        manager = manager_with()
+        with pytest.raises(Exception):
+            manager.add_scope(
+                ScopeId("agent:a"), name="A", parent_id=ScopeId("missing")
+            )
+        manager.add_scope(ScopeId("agent"), name="Agent", parent_id=ROOT_SCOPE_ID)
+        manager.add_scope(ScopeId("agent:a"), name="A", parent_id=ScopeId("agent"))
+        assert manager.scope_tree.get(ScopeId("agent:a")) is not None
 
-def test_install_unbound_and_uninstall_paths() -> None:
-    manager = make_started_manager()
-    manager._context.install_bundle.return_value = Mock()
-    item = descriptor("disabled", enabled=False)
+    def test_remove_scope_rejects_children_and_instances(self) -> None:
+        manager = manager_with()
+        manager.add_scope(ScopeId("agent"), name="Agent", parent_id=ROOT_SCOPE_ID)
+        manager.add_scope(ScopeId("agent:a"), name="A", parent_id=ScopeId("agent"))
+        with pytest.raises(ScopeHasChildrenError):
+            manager.remove_scope(ScopeId("agent"))
 
-    manager.install_plugin(item)
-    assert manager.installed_names() == {"disabled"}
-    manager._ipopo.instantiate.assert_not_called()
+        manager._instances["uuid-1"] = Mock(scope_id=ScopeId("agent:a"))
+        manager._registration_instances[("m", "f", ScopeId("agent:a"))] = {"uuid-1"}
+        with pytest.raises(ScopeHasInstancesError):
+            manager.remove_scope(ScopeId("agent:a"))
 
-    manager.uninstall_plugin("disabled")
-    assert manager.installed_names() == set()
-    manager._context.install_bundle.return_value.stop.assert_called_once()
-    manager._context.install_bundle.return_value.uninstall.assert_called_once()
+    def test_remove_scope_recursive_deletes_instances(self) -> None:
+        from langharness_plugin.registry import PluginInstanceSnapshot
 
-
-def test_install_bound_duplicate_and_rebind_paths() -> None:
-    manager = make_started_manager()
-    manager._context.install_bundle.return_value = Mock()
-    item = descriptor("llm")
-
-    manager.install_plugin(item)
-    manager._ipopo.instantiate.assert_called_once_with("llm-factory", "llm", None)
-
-    with pytest.raises(ValueError, match="already installed"):
-        manager.install_plugin(item)
-    with pytest.raises(ValueError, match="already bound"):
-        manager.bind_plugin("llm")
-
-    manager.unbind_plugin("llm")
-    manager._ipopo.kill.assert_called_once_with("llm")
-
-    manager.bind_plugin("llm")
-    assert manager._ipopo.instantiate.call_count == 2
-
-
-def test_missing_plugin_lifecycle_errors() -> None:
-    manager = make_started_manager()
-    with pytest.raises(KeyError):
-        manager.uninstall_plugin("missing")
-    with pytest.raises(KeyError):
-        manager.bind_plugin("missing")
-    with pytest.raises(KeyError):
-        manager.unbind_plugin("missing")
-    with pytest.raises(KeyError):
-        manager._get_descriptor("missing")
-
-
-def test_unbind_not_bound_raises() -> None:
-    manager = make_started_manager()
-    manager._context.install_bundle.return_value = Mock()
-    item = descriptor("disabled", enabled=False)
-    manager.install_plugin(item)
-
-    with pytest.raises(ValueError, match="not bound"):
-        manager.unbind_plugin("disabled")
-
-
-def test_service_queries_with_mock_context() -> None:
-    manager = make_started_manager()
-    manager._context.get_service_reference.return_value = None
-    assert manager.get_service("missing") is None
-
-    manager._context.get_all_service_references.return_value = None
-    assert manager.get_services("missing") == []
-    assert manager.service_properties("missing") == []
-
-
-def test_replace_plugin_replaces_descriptor_and_component() -> None:
-    manager = make_started_manager()
-    manager._context.install_bundle.return_value = Mock()
-    old = descriptor("llm")
-    manager.install_plugin(old)
-    replacement = descriptor("llm")
-    replacement.properties = {"plugin.model.name": "new-model"}
-
-    manager.replace_plugin(replacement)
-
-    assert manager.registry.get("llm") is replacement
-    assert manager.installed_names() == {"llm"}
-    assert manager._ipopo.instantiate.call_args_list[-1].args == (
-        "llm-factory",
-        "llm",
-        {"plugin.model.name": "new-model"},
-    )
-
-    calls = manager._ipopo.instantiate.call_count
-    manager.ensure_plugin(replacement)
-    assert manager._ipopo.instantiate.call_count == calls
+        manager = manager_with()
+        manager.add_scope(ScopeId("agent"), name="Agent", parent_id=ROOT_SCOPE_ID)
+        manager.add_scope(ScopeId("agent:a"), name="A", parent_id=ScopeId("agent"))
+        manager._instances["uuid-1"] = PluginInstanceSnapshot(
+            "uuid-1", "f", "m", ScopeId("agent:a"), {}, True, 0, "active"
+        )
+        manager._ipopo.kill.return_value = None
+        manager.remove_scope(ScopeId("agent:a"), recursive=True)
+        assert manager._instances == {}
+        manager._ipopo.kill.assert_called_once_with("uuid-1")
