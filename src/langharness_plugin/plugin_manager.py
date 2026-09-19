@@ -249,6 +249,174 @@ class PluginManager:
             (snapshot.module, snapshot.factory, snapshot.scope_id), set()
         ).discard(instance)
 
+    # ------------------------------------------------------------- definitions
+
+    def install_descriptor(
+        self,
+        descriptor: PluginDescriptor,
+        *,
+        source: DescriptorSource = "assembly",
+    ) -> PluginDefinitionSnapshot:
+        with self._lock:
+            self._require_started()
+            return self._install_definition(descriptor, source=source)
+
+    def _install_definition(
+        self,
+        descriptor: PluginDescriptor,
+        *,
+        source: DescriptorSource,
+        persist: bool = True,
+    ) -> PluginDefinitionSnapshot:
+        validate_descriptor(descriptor)
+        key = (descriptor.module, descriptor.factory)
+        if key in self._plugins:
+            raise PluginAlreadyInstalledError(
+                f"Plugin definition {descriptor.factory!r} from "
+                f"{descriptor.module!r} is already installed"
+            )
+        existing = self.registry.get(descriptor.factory)
+        if existing is not None and existing.module != descriptor.module:
+            raise PluginIdentityConflictError(
+                f"Factory {descriptor.factory!r} is already registered by "
+                f"module {existing.module!r}; cannot install from "
+                f"{descriptor.module!r}"
+            )
+        bundle = self._install_bundle(descriptor.module)
+        self._module_refs.setdefault(descriptor.module, set()).add(key)
+        self.registry.add(descriptor)
+        self._sources[key] = source
+        snapshot = PluginDefinitionSnapshot(
+            descriptor, True, descriptor.module, 0, ()
+        )
+        self._plugins[key] = snapshot
+        if persist:
+            try:
+                self._persist_state()
+            except Exception:
+                self._rollback_definition(key, bundle)
+                raise
+            self._record_history(
+                "install_definition",
+                factory=descriptor.factory,
+                module=descriptor.module,
+            )
+        return snapshot
+
+    def _install_bundle(self, module: str) -> Any:
+        bundle = self._bundles.get(module)
+        if bundle is not None:
+            return bundle
+        if self._context is None:
+            raise RuntimeError("PluginManager is not started")
+        bundle = self._context.install_bundle(module)
+        bundle.start()
+        self._bundles[module] = bundle
+        return bundle
+
+    def _rollback_definition(self, key: tuple[str, str], bundle: Any) -> None:
+        self._plugins.pop(key, None)
+        self._sources.pop(key, None)
+        self.registry.remove(key[1])
+        self._module_refs.get(key[0], set()).discard(key)
+        self._unload_bundle_if_unused(key[0], _rollback_bundle=bundle)
+
+    def _unload_bundle_if_unused(
+        self, module: str, *, _rollback_bundle: Any | None = None
+    ) -> None:
+        refs = self._module_refs.get(module, set())
+        if refs:
+            return
+        bundle = self._bundles.pop(module, None) or _rollback_bundle
+        if bundle is None:
+            return
+        try:
+            bundle.stop()
+            bundle.uninstall()
+        except Exception:
+            pass
+
+    def install_plugin(
+        self, factory: str, *, module: str | None = None
+    ) -> PluginDefinitionSnapshot:
+        with self._lock:
+            self._require_started()
+            matches = [
+                descriptor
+                for descriptor in self._discovered.values()
+                if descriptor.factory == factory
+            ]
+            if not matches:
+                raise PluginNotFoundError(
+                    f"Plugin factory {factory!r} is not discovered"
+                )
+            if module is not None:
+                matches = [
+                    descriptor for descriptor in matches if descriptor.module == module
+                ]
+                if not matches:
+                    raise PluginIdentityConflictError(
+                        f"No discovered plugin with factory {factory!r} "
+                        f"in module {module!r}"
+                    )
+            if len(matches) > 1:
+                raise PluginIdentityConflictError(
+                    f"Factory {factory!r} is discovered in multiple modules: "
+                    f"{sorted(item.module for item in matches)}; pass module="
+                )
+            return self._install_definition(matches[0], source="discovered")
+
+    def uninstall_plugin(self, factory: str, *, module: str | None = None) -> None:
+        with self._lock:
+            self._require_started()
+            key = self._definition_key(factory, module)
+            affected = [
+                snapshot
+                for snapshot in self._instances.values()
+                if (snapshot.module, snapshot.factory) == key
+            ]
+            if affected:
+                raise PluginHasInstancesError(
+                    f"Plugin {factory!r} still has {len(affected)} instance(s); "
+                    "delete them first"
+                )
+            self.registry.remove(factory)
+            self._plugins.pop(key)
+            self._sources.pop(key, None)
+            self._module_refs.get(key[0], set()).discard(key)
+            self._unload_bundle_if_unused(key[0])
+            self._persist_state()
+            self._record_history(
+                "uninstall_definition", factory=factory, module=key[0]
+            )
+
+    def _definition_key(
+        self, factory: str, module: str | None
+    ) -> tuple[str, str]:
+        definition = self.registry.get(factory)
+        if definition is None:
+            raise PluginNotFoundError(f"Plugin factory {factory!r} is not installed")
+        if module is not None and definition.module != module:
+            raise PluginIdentityConflictError(
+                f"Factory {factory!r} is installed from {definition.module!r}, "
+                f"not {module!r}"
+            )
+        return (definition.module, factory)
+
+    def list_plugin(self) -> tuple[PluginDefinitionSnapshot, ...]:
+        return tuple(
+            sorted(self._plugins.values(), key=lambda item: item.descriptor.factory)
+        )
+
+    def show_plugin(
+        self, factory: str, *, module: str | None = None
+    ) -> PluginDefinitionSnapshot:
+        key = self._definition_key(factory, module)
+        snapshot = self._plugins.get(key)
+        if snapshot is None:
+            raise PluginNotFoundError(f"Plugin factory {factory!r} is not installed")
+        return snapshot
+
     # ------------------------------------------------------------ service helpers
 
     def scope_filter(self, scope_id: ScopeId) -> str:

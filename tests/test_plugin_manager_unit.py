@@ -140,3 +140,94 @@ class TestScopes:
         manager.remove_scope(ScopeId("agent:a"), recursive=True)
         assert manager._instances == {}
         manager._ipopo.kill.assert_called_once_with("uuid-1")
+
+
+class TestDefinitions:
+    def make_definition_manager(self) -> tuple[PluginManager, Any]:
+        manager = manager_with([Echo])
+        manager.discover()
+        manager._context.install_bundle.return_value = Mock()
+        return manager, manager._context.install_bundle.return_value
+
+    def test_install_plugin_from_discovery(self) -> None:
+        manager, bundle = self.make_definition_manager()
+        snapshot = manager.install_plugin("echo-factory")
+        assert snapshot.descriptor.factory == "echo-factory"
+        assert snapshot.installed is True
+        bundle.start.assert_called_once()
+        assert manager.registry.get("echo-factory") is not None
+
+    def test_install_plugin_unknown_factory_raises(self) -> None:
+        from langharness_plugin.errors import PluginNotFoundError
+
+        manager, _ = self.make_definition_manager()
+        with pytest.raises(PluginNotFoundError, match="unknown-factory"):
+            manager.install_plugin("unknown-factory")
+
+    def test_install_descriptor_identity_conflict(self) -> None:
+        from dataclasses import replace
+
+        from langharness_plugin.errors import PluginIdentityConflictError
+
+        manager, _ = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        other = replace(
+            manager.registry.get("echo-factory"), module="other.module"
+        )
+        with pytest.raises(PluginIdentityConflictError):
+            manager.install_descriptor(other)
+
+    def test_double_install_raises(self) -> None:
+        from langharness_plugin.errors import PluginAlreadyInstalledError
+
+        manager, _ = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        with pytest.raises(PluginAlreadyInstalledError):
+            manager.install_plugin("echo-factory")
+
+    def test_bundle_shared_by_two_definitions_in_one_module(self) -> None:
+        from dataclasses import replace
+
+        manager, bundle = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        second = replace(
+            manager.registry.get("echo-factory"), factory="echo2-factory"
+        )
+        manager.install_descriptor(second)
+        assert manager._context.install_bundle.call_count == 1
+        assert manager._bundles[Echo.__module__] is bundle
+
+    def test_uninstall_with_instances_raises(self) -> None:
+        from langharness_plugin.errors import PluginHasInstancesError
+        from langharness_plugin.registry import PluginInstanceSnapshot
+
+        manager, _ = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        manager._instances["uuid-1"] = PluginInstanceSnapshot(
+            "uuid-1", "echo-factory", Echo.__module__, ROOT_SCOPE_ID, {}, True, 0, "active"
+        )
+        manager._registration_instances[
+            (Echo.__module__, "echo-factory", ROOT_SCOPE_ID)
+        ] = {"uuid-1"}
+        with pytest.raises(PluginHasInstancesError):
+            manager.uninstall_plugin("echo-factory")
+
+    def test_uninstall_releases_bundle_when_module_unused(self) -> None:
+        manager, bundle = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        manager.uninstall_plugin("echo-factory")
+        bundle.stop.assert_called_once()
+        bundle.uninstall.assert_called_once()
+        assert manager._bundles == {}
+
+    def test_list_and_show_plugin(self) -> None:
+        from langharness_plugin.errors import PluginNotFoundError
+
+        manager, _ = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        assert len(manager.list_plugin()) == 1
+        shown = manager.show_plugin("echo-factory")
+        assert shown.descriptor.name == "echo"
+        assert shown.instance_count == 0
+        with pytest.raises(PluginNotFoundError):
+            manager.show_plugin("missing-factory")
