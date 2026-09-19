@@ -42,7 +42,7 @@ from langharness_core.contracts import (
 )
 from langharness_plugin.plugin_manager import PluginManager
 from langharness_plugin.registry import PluginDescriptor, PluginRegistry
-from langharness_scope import ROOT_SCOPE_ID, ScopeId
+from langharness_scope import ROOT_SCOPE_ID
 
 DESCRIPTION = (
     "E2E test plugin. Implements a test specification. Properties vary per "

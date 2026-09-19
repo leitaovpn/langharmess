@@ -10,8 +10,8 @@ from langharness_plugin.discovery import PluginDiscovery
 from langharness_plugin.package import PluginContribution, PluginPackage
 from langharness_plugin.plugin_manager import PluginManager
 from langharness_plugin.registry import PluginDescriptor
-from langharness_plugin.state_store import PersistedPluginRegistration
 from langharness_plugin.scope_const import AGENT_SCOPE_ID, SERVER_SCOPE_ID, UI_SCOPE_ID
+from langharness_plugin.state_store import PersistedPluginRegistration
 from langharness_scope import ROOT_SCOPE_ID, Scope, ScopeId
 
 TARGET_SCOPES = {

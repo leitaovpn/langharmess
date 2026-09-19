@@ -148,7 +148,7 @@ def test_scope_and_plugin_full_lifecycle_with_best_and_aggregate_shadowing() -> 
             ranking=1,
             properties={"plugin.model.instance": agent_model},
         )
-        root_tools = manager.create_instance(
+        manager.create_instance(
             "tools-plugin-factory",
             "langharness_core.plugins.tools.tools",
             ScopeId("root"),

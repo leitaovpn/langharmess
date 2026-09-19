@@ -5,16 +5,14 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping, cast
+from collections.abc import Mapping
+from typing import Any, cast
 
 import pytest
 
 from langharness_core.contracts import (
     SPEC_AGENT_DIRECTORY,
     SPEC_AGENT_LOOP,
-    SPEC_LLM,
-    SPEC_NAME,
-    SPEC_TOOL,
     AgentDirectoryProvider,
 )
 from langharness_core.plugins.agents.directory import AgentDirectoryPlugin

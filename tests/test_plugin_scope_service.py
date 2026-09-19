@@ -1,6 +1,6 @@
 """Unit tests for the scoped plugin registrar service."""
 # mypy: ignore-errors
-# pyright: reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from langharness_plugin.contracts import (
 from langharness_plugin.plugin_manager import PluginManager
 from langharness_plugin.registry import PluginDescriptor, PluginRegistry
 from langharness_plugin.validation import contract_for, service_contract
-from langharness_scope import ROOT_SCOPE_ID, ScopeId
+from langharness_scope import ROOT_SCOPE_ID
 
 DESCRIPTION = (
     "Scoped test plugin. Implements test.scope.service. Properties: "

@@ -2,12 +2,12 @@
 # mypy: ignore-errors
 # pyright: reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
 
+from langharness.bootstrap import TARGET_SCOPES
 from langharness_api.plugin import builtin_package as api_package
 from langharness_cli.plugin import builtin_package as cli_package
 from langharness_config.plugin import builtin_package as config_package
 from langharness_core.plugin import builtin_package as core_package
 from langharness_logging.plugin import builtin_package as log_package
-from langharness.bootstrap import TARGET_SCOPES
 from langharness_scope import ROOT_SCOPE_ID, ScopeId
 
 

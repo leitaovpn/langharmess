@@ -8,6 +8,11 @@ from typing import cast
 
 from fastapi import FastAPI
 
+from langharness.bootstrap import (
+    DEFAULT_PACKAGE_PATHS,
+    _assembly_requests,
+    load_package,
+)
 from langharness_api.contracts import SPEC_API_SERVER
 from langharness_core.contracts import SPEC_AGENT_DIRECTORY
 from langharness_plugin.config_store import agent_scope_configs
@@ -19,12 +24,6 @@ from langharness_plugin.registry import PluginRegistry
 from langharness_plugin.state_store import (
     SqlitePluginHistoryStore,
     SqliteRuntimeStateStore,
-)
-
-from langharness.bootstrap import (
-    DEFAULT_PACKAGE_PATHS,
-    _assembly_requests,
-    load_package,
 )
 
 _MANAGER: PluginManager | None = None

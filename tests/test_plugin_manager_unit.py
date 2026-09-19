@@ -1,9 +1,10 @@
 """Unit tests for PluginManager start, discovery, and scope APIs."""
 # mypy: ignore-errors
-# pyright: reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
@@ -379,3 +380,291 @@ class TestPersistence:
         assert manager.scope_tree.get(ScopeId("server")) is not None
         assert manager.scope_tree.get(ScopeId("agent:a")) is not None
         assert manager.scope_tree.get(ScopeId("agent:a")).parent_id == ScopeId("agent")
+
+
+class TestErrorPaths:
+    def make_definition_manager(self) -> PluginManager:
+        manager = manager_with([Echo])
+        manager.discover()
+        manager._context.install_bundle.return_value = Mock()
+        manager._ipopo.instantiate.return_value = Mock()
+        return manager
+
+    def test_create_instance_persistence_failure_rolls_back(self) -> None:
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+            PluginStateConflictError,
+            RuntimeStateSnapshot,
+        )
+
+        manager = self.make_definition_manager()
+        store = InMemoryRuntimeStateStore()
+        store.save(RuntimeStateSnapshot(0, (), (), (), ()), expected_version=0)
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        manager.install_plugin("echo-factory")
+        manager._state_version = 0  # stale after the install persisted
+        with pytest.raises(PluginStateConflictError):
+            manager.create_instance(
+                "echo-factory", Echo.__module__, ROOT_SCOPE_ID
+            )
+        assert manager.list_instance() == ()
+        manager._ipopo.kill.assert_called_once()
+
+    def test_update_instance_persistence_failure_keeps_old_snapshot(self) -> None:
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+            PluginStateConflictError,
+        )
+
+        manager = self.make_definition_manager()
+        store = InMemoryRuntimeStateStore()
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        manager.install_plugin("echo-factory")
+        snapshot = manager.create_instance(
+            "echo-factory", Echo.__module__, ROOT_SCOPE_ID,
+            properties={"plugin.mode": "fast"},
+        )
+        manager._state_version = 0  # stale
+        with pytest.raises(PluginStateConflictError):
+            manager.update_instance(
+                snapshot.instance, properties={"plugin.mode": "slow"}
+            )
+        kept = manager.get_instance(snapshot.instance)
+        assert kept.properties["plugin.mode"] == "fast"
+
+    def test_delete_instance_persistence_failure_restores_component(self) -> None:
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+            PluginStateConflictError,
+        )
+
+        manager = self.make_definition_manager()
+        store = InMemoryRuntimeStateStore()
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        manager.install_plugin("echo-factory")
+        snapshot = manager.create_instance(
+            "echo-factory", Echo.__module__, ROOT_SCOPE_ID
+        )
+        manager._ipopo.instantiate.reset_mock()
+        manager._state_version = 0  # stale
+        with pytest.raises(PluginStateConflictError):
+            manager.delete_instance(snapshot.instance)
+        assert manager.get_instance(snapshot.instance) is not None
+        manager._ipopo.instantiate.assert_called_once()
+
+    def test_restore_disabled_instance_stays_disabled(self) -> None:
+        from langharness_plugin.registry import PluginInstanceRecord
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+            RuntimeStateSnapshot,
+        )
+
+        manager = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        store = InMemoryRuntimeStateStore()
+        record = PluginInstanceRecord(
+            "uuid-x", "echo-factory", Echo.__module__, ROOT_SCOPE_ID, {},
+            enabled=False, status="disabled",
+        )
+        store.save(
+            RuntimeStateSnapshot(0, (), (), (record,), ()), expected_version=0
+        )
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        restored = manager.restore()
+        assert restored[0].status == "disabled"
+        manager._ipopo.instantiate.assert_not_called()
+
+    def test_restore_failed_instantiation_marks_failed(self) -> None:
+        from langharness_plugin.registry import PluginInstanceRecord
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+            RuntimeStateSnapshot,
+        )
+
+        manager = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        manager._ipopo.instantiate.side_effect = RuntimeError("boom")
+        store = InMemoryRuntimeStateStore()
+        record = PluginInstanceRecord(
+            "uuid-x", "echo-factory", Echo.__module__, ROOT_SCOPE_ID, {}
+        )
+        store.save(
+            RuntimeStateSnapshot(0, (), (), (record,), ()), expected_version=0
+        )
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        restored = manager.restore()
+        assert restored[0].status == "failed"
+
+    def test_restore_rejects_orphan_scopes(self) -> None:
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+            RuntimeStateSnapshot,
+        )
+
+        manager = self.make_definition_manager()
+        store = InMemoryRuntimeStateStore()
+        store.save(
+            RuntimeStateSnapshot(
+                0,
+                ({"id": "orphan", "parent_id": "missing", "name": "O"},),
+                (), (), (),
+            ),
+            expected_version=0,
+        )
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        with pytest.raises(RuntimeError, match="orphan"):
+            manager.restore()
+
+    def test_restore_drops_agent_scoped_instances_and_persists(self) -> None:
+        from langharness_plugin.registry import PluginInstanceRecord
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+            RuntimeStateSnapshot,
+        )
+
+        manager = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        store = InMemoryRuntimeStateStore()
+        record = PluginInstanceRecord(
+            "uuid-x", "echo-factory", Echo.__module__, ScopeId("agent:a"), {}
+        )
+        store.save(
+            RuntimeStateSnapshot(0, (), (), (record,), ()), expected_version=0
+        )
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        assert manager.restore() == ()
+        assert manager.list_instance() == ()
+        # The derived agent instance was pruned from the persisted state.
+        assert store.load().instances == ()
+
+
+class TestRemainingBranches:
+    def make_definition_manager(self) -> PluginManager:
+        manager = manager_with([Echo])
+        manager.discover()
+        manager._context.install_bundle.return_value = Mock()
+        manager._ipopo.instantiate.return_value = Mock()
+        return manager
+
+    def test_install_plugin_with_wrong_module_raises_conflict(self) -> None:
+        from langharness_plugin.errors import PluginIdentityConflictError
+
+        manager = self.make_definition_manager()
+        with pytest.raises(PluginIdentityConflictError):
+            manager.install_plugin("echo-factory", module="wrong.module")
+
+    def test_uninstall_with_wrong_module_raises_conflict(self) -> None:
+        from langharness_plugin.errors import PluginIdentityConflictError
+
+        manager = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        with pytest.raises(PluginIdentityConflictError):
+            manager.uninstall_plugin("echo-factory", module="wrong.module")
+
+    def test_show_plugin_with_wrong_module_raises_conflict(self) -> None:
+        from langharness_plugin.errors import PluginIdentityConflictError
+
+        manager = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        with pytest.raises(PluginIdentityConflictError):
+            manager.show_plugin("echo-factory", module="wrong.module")
+
+    def test_update_instance_without_definition_raises_state_error(self) -> None:
+        from langharness_plugin.errors import InstanceStateError
+
+        manager = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        snapshot = manager.create_instance(
+            "echo-factory", Echo.__module__, ROOT_SCOPE_ID
+        )
+        # Simulate a definition that vanished without a clean uninstall.
+        manager._plugins.pop((Echo.__module__, "echo-factory"))
+        manager.registry.remove("echo-factory")
+        with pytest.raises(InstanceStateError):
+            manager.update_instance(snapshot.instance, properties={"x": "y"})
+
+    def test_ensure_instance_reconciles_changed_configuration(self) -> None:
+        manager = self.make_definition_manager()
+        manager.install_plugin("echo-factory")
+        first = manager.ensure_instance(
+            "echo-factory", Echo.__module__, ROOT_SCOPE_ID,
+            properties={"plugin.mode": "one"}, enabled=True,
+        )
+        second = manager.ensure_instance(
+            "echo-factory", Echo.__module__, ROOT_SCOPE_ID,
+            properties={"plugin.mode": "two"}, enabled=True,
+        )
+        assert second.instance == first.instance  # UUID preserved
+        assert second.properties["plugin.mode"] == "two"
+        # No-op when nothing changed.
+        third = manager.ensure_instance(
+            "echo-factory", Echo.__module__, ROOT_SCOPE_ID,
+            properties={"plugin.mode": "two"}, enabled=True,
+        )
+        assert third.instance == first.instance
+
+    def test_restore_marks_upgrade_available_for_newer_discovery(self) -> None:
+        from dataclasses import replace
+
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+            PersistedDescriptorRecord,
+            RuntimeStateSnapshot,
+        )
+
+        manager = self.make_definition_manager()
+        older = replace(
+            manager._discovered[(Echo.__module__, "echo-factory")],
+            version="0.9.0",
+        )
+        store = InMemoryRuntimeStateStore()
+        store.save(
+            RuntimeStateSnapshot(
+                0, (),
+                (PersistedDescriptorRecord(older, "discovered"),),
+                (), (),
+            ),
+            expected_version=0,
+        )
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        manager.restore()
+        definition = manager.show_plugin("echo-factory")
+        assert definition.status == "upgrade_available"
+
+    def test_restore_marks_missing_for_undiscovered_definitions(self) -> None:
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+            PersistedDescriptorRecord,
+            RuntimeStateSnapshot,
+        )
+
+        manager = self.make_definition_manager()
+        manager._discovered = {}  # nothing discovered
+        from langharness_plugin.registry import PluginDescriptor
+
+        gone = PluginDescriptor(
+            name="gone", version="1.0.0", module="gone.module",
+            factory="gone-factory", specification="test.spec",
+            description=DESCRIPTION,
+        )
+        store = InMemoryRuntimeStateStore()
+        store.save(
+            RuntimeStateSnapshot(
+                0, (),
+                (PersistedDescriptorRecord(gone, "discovered"),),
+                (), (),
+            ),
+            expected_version=0,
+        )
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        manager.restore()
+        assert manager.show_plugin("gone-factory").status == "missing"

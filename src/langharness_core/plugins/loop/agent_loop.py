@@ -41,11 +41,11 @@ from langharness_core.contracts import (
     ToolProvider,
     TransformersProvider,
 )
-from langharness_plugin.scoped_dependencies import ScopedDependencies
 from langharness_plugin.scope_policy import (
     resolve_scoped_aggregate,
     resolve_scoped_best,
 )
+from langharness_plugin.scoped_dependencies import ScopedDependencies
 from langharness_plugin.validation import ContractGuard
 
 LOGGER = logging.getLogger("langharness.agent")

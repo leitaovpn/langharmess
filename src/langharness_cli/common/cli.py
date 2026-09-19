@@ -84,8 +84,7 @@ def main(
     selected_descriptors = descriptors or (
         config_descriptors() + [log_descriptor()] + cli_descriptors()
     )
-    registry = PluginRegistry(selected_descriptors)
-    active_manager = manager or PluginManager(PluginRegistry())
+    active_manager = manager or PluginManager(PluginRegistry(selected_descriptors))
     owns_manager = manager is None
     if owns_manager:
         active_manager.start()

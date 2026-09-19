@@ -29,8 +29,8 @@ from langharness_core.plugin import (
 )
 from langharness_core.plugins.loop.agent_loop import PluginAgentLoop
 from langharness_plugin.plugin_manager import PluginManager
-from langharness_plugin.scope_const import SERVER_SCOPE_ID
 from langharness_plugin.registry import PluginRegistry
+from langharness_plugin.scope_const import SERVER_SCOPE_ID
 
 
 class StaticModel(BaseChatModel):

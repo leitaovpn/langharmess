@@ -13,12 +13,12 @@ from langharness_api.plugins.routes.stream import StreamRoutePlugin
 from langharness_api.plugins.server.app import APIServerService
 from langharness_plugin.plugin_manager import PluginManager
 from langharness_plugin.registry import PluginDescriptor, PluginRegistry
-from langharness_scope import ROOT_SCOPE_ID
 from langharness_plugin.validation import (
     ContractViolationError,
     Violation,
     service_contract,
 )
+from langharness_scope import ROOT_SCOPE_ID
 
 
 @service_contract("test.enforce.tool")

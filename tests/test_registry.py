@@ -1,6 +1,6 @@
 """Tests for the plugin identity model in registry.py."""
 # mypy: ignore-errors
-# pyright: reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
 
 from __future__ import annotations
 
@@ -10,11 +10,11 @@ import pytest
 
 from langharness_plugin.registry import (
     PLUGIN_METADATA_ATTR,
+    SWAP_POLICIES,
     PluginDescriptor,
     PluginInstanceRecord,
     PluginMetadata,
     PluginRegistrationKey,
-    SWAP_POLICIES,
     plugin_metadata,
     validate_descriptor,
 )
@@ -220,3 +220,27 @@ class TestPluginRegistry:
         with pytest.raises(ValueError, match="non-empty"):
             registry.add(descriptor(description="  "))
 
+
+
+class TestRegistryPersistence:
+    def test_save_and_load_round_trip(self, tmp_path) -> None:
+        from langharness_plugin.registry import PluginRegistry
+
+        registry = PluginRegistry(
+            [descriptor(factory="f-a", module="m.a")]
+        )
+        path = tmp_path / "registry.json"
+        registry.save(path)
+        loaded = PluginRegistry.load(path)
+        assert loaded.get("f-a") is not None
+        assert loaded.list() == registry.list()
+
+    def test_load_rejects_unsupported_version(self, tmp_path) -> None:
+        import json
+
+        from langharness_plugin.registry import PluginRegistry
+
+        path = tmp_path / "registry.json"
+        path.write_text(json.dumps({"version": 99, "plugins": []}))
+        with pytest.raises(ValueError, match="Unsupported"):
+            PluginRegistry.load(path)

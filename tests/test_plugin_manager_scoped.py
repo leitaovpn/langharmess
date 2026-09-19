@@ -1,6 +1,6 @@
 """Tests for scoped instance lifecycle on the rewritten PluginManager."""
 # mypy: ignore-errors
-# pyright: reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
 
 from __future__ import annotations
 

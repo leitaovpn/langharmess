@@ -76,7 +76,7 @@ PATH_PROPERTIES = {
     "agent-registry": ("plugin.agents.path", "agents.json"),
 }
 
-API_DEFAULTS: dict[str, dict[str, str]] = {
+API_DEFAULTS: dict[str, dict[str, Any]] = {
     "api-auth": {"plugin.token": "secret"},
     "api-rate-limit": {"plugin.limit": 100},
 }

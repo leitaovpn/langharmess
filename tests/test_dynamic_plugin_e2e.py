@@ -4,10 +4,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
@@ -15,7 +13,6 @@ from pydantic import BaseModel
 
 from langharness_core.contracts import (
     SPEC_AGENT_LOOP,
-    SPEC_AGENT_REGISTRY,
     SPEC_LLM,
     SPEC_TOOL,
 )
@@ -23,7 +20,6 @@ from langharness_core.plugin import (
     agent_loop_descriptor,
     agent_loop_properties,
     agent_loop_template_descriptor,
-    agent_registry_descriptor,
     agent_tools_package,
     dynamic_package,
     tool_export_adapter_template_descriptor,
@@ -34,7 +30,6 @@ from langharness_plugin.contracts import (
 )
 from langharness_plugin.coordinator import (
     RuntimeMutationCoordinator,
-    RuntimeMutationError,
 )
 from langharness_plugin.discovery import PluginDiscovery
 from langharness_plugin.package import PluginContribution, PluginPackage, ToolExport
@@ -44,7 +39,7 @@ from langharness_plugin.state_store import (
     InMemoryPluginHistoryStore,
     InMemoryRuntimeStateStore,
 )
-from langharness_scope import ROOT_SCOPE_ID, ScopeId
+from langharness_scope import ScopeId
 
 
 class EchoArgs(BaseModel):

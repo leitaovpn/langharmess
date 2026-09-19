@@ -1,6 +1,6 @@
 """Tests for package-based dynamic mutations over the instance model."""
 # mypy: ignore-errors
-# pyright: reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
 
 from __future__ import annotations
 
@@ -230,3 +230,90 @@ def test_restore_hydrates_registrations_and_instances() -> None:
     second_mutations.restore()
     assert second.registrations()[0].instance == registration.instance
     assert second.get_instance(registration.instance).status == "active"
+
+
+def test_install_rejects_builtin_packages() -> None:
+    from langharness_plugin.coordinator import RuntimeMutationError
+
+    mutations, manager = coordinator()
+    with pytest.raises(RuntimeMutationError, match="Built-in"):
+        mutations.install("builtin.core", "anything")
+
+
+def test_install_unknown_package_raises() -> None:
+    mutations, manager = coordinator()
+    with pytest.raises(KeyError):
+        mutations.install("unknown.package", "echo")
+
+
+def test_agent_instance_without_scope_raises() -> None:
+    from langharness_plugin.coordinator import RuntimeMutationError
+
+    agent_package = PluginPackage(
+        "agent.package", "1.0.0",
+        (PluginContribution("c", "agent_instance", descriptor()),),
+    )
+    mutations, _ = coordinator()
+    mutations._catalog["agent.package"] = agent_package
+    with pytest.raises(RuntimeMutationError, match="agent"):
+        mutations.install("agent.package", "c")
+
+
+def test_adapter_failure_rolls_back_the_instance() -> None:
+    from langharness_plugin.coordinator import RuntimeMutationError
+    from langharness_plugin.package import ToolExport
+
+    exporting = PluginPackage(
+        "export.package", "1.0.0",
+        (
+            PluginContribution(
+                "echo", "server", descriptor(),
+                tool_exports=(ToolExport("t", "d", "m", object),),
+            ),
+        ),
+    )
+    mutations, manager = coordinator()
+    mutations._catalog["export.package"] = exporting
+    manager.find_service = lambda spec, filter=None: None  # target unavailable
+    with pytest.raises(RuntimeMutationError, match="unavailable"):
+        mutations.install("export.package", "echo", scope_id=ScopeId("server"))
+    assert manager.list_instance() == ()
+    assert manager.registrations() == ()
+
+
+def test_upgrade_same_version_is_a_noop() -> None:
+    mutations, manager = coordinator()
+    registration = mutations.install(
+        "dynamic.package", "dynamic", scope_id=ScopeId("server")
+    )
+    assert mutations.upgrade("dynamic", scope_id=ScopeId("server")) is registration
+
+
+def test_scopes_returns_tree_snapshot() -> None:
+    mutations, manager = coordinator()
+    assert {item.id for item in mutations.scopes()} >= {ROOT_SCOPE_ID}
+
+
+def test_find_missing_contribution_raises() -> None:
+    mutations, manager = coordinator()
+    with pytest.raises(KeyError, match="missing"):
+        mutations._find("dynamic.package", "missing")
+
+
+def test_kill_adapters_tolerates_missing_instances() -> None:
+    mutations, manager = coordinator()
+    registration = mutations.install(
+        "dynamic.package", "dynamic", scope_id=ScopeId("server")
+    )
+    mutations._adapter_instances[registration.instance] = ["gone-uuid"]
+    mutations._kill_adapters(registration)  # must not raise
+    assert mutations._adapter_instances == {}
+
+
+def test_registration_name_falls_back_to_contribution_id() -> None:
+    mutations, manager = coordinator()
+    registration = mutations.install(
+        "dynamic.package", "dynamic", scope_id=ScopeId("server")
+    )
+    mutations._catalog = {}  # package unknown: name falls back
+    assert mutations._registration_name(registration) == "dynamic"

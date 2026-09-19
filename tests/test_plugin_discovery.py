@@ -1,6 +1,6 @@
 """Tests for class-based descriptor discovery and package validation."""
 # mypy: ignore-errors
-# pyright: reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
 
 from __future__ import annotations
 
@@ -203,3 +203,92 @@ def test_package_catalog_allows_same_factory_across_packages() -> None:
     result = discovery.scan()
     assert len(result.packages) == 2
     assert result.failures == ()
+
+
+def test_discover_raises_on_failures() -> None:
+    from langharness_plugin.discovery import PluginDiscoveryError
+
+    discovery = PluginDiscovery(lambda: entries(lambda: 42))
+    with pytest.raises(PluginDiscoveryError):
+        discovery.discover()
+
+
+def test_scan_reports_non_callable_entry_points() -> None:
+    discovery = PluginDiscovery(lambda: entries(42))
+    result = discovery.scan()
+    assert result.packages == ()
+    assert result.failures
+    assert "callable" in result.failures[0].detail
+
+
+def test_scan_reports_non_package_results() -> None:
+    discovery = PluginDiscovery(lambda: entries(lambda: "not-a-package"))
+    result = discovery.scan()
+    assert result.packages == ()
+    assert result.failures
+
+
+def test_scan_reports_empty_package_identity() -> None:
+    package = PluginPackage("", "", ())
+    discovery = PluginDiscovery(lambda: entries(lambda: package))
+    result = discovery.scan()
+    assert result.failures
+
+
+def test_scan_reports_duplicate_contribution_ids() -> None:
+    package = PluginPackage(
+        "p", "1.0.0",
+        (
+            PluginContribution("dup", "server", static_descriptor(factory="f-a")),
+            PluginContribution("dup", "server", static_descriptor(factory="f-b")),
+        ),
+    )
+    discovery = PluginDiscovery(lambda: entries(lambda: package))
+    result = discovery.scan()
+    assert result.failures
+
+
+def test_scan_reports_invalid_targets() -> None:
+    package = PluginPackage(
+        "p", "1.0.0", (PluginContribution("c", "nowhere", static_descriptor()),)
+    )
+    discovery = PluginDiscovery(lambda: entries(lambda: package))
+    result = discovery.scan()
+    assert result.failures
+
+
+def test_scan_reports_tool_exports_with_wrong_specification() -> None:
+    from langharness_plugin.package import ToolExport
+
+    package = PluginPackage(
+        "p", "1.0.0",
+        (
+            PluginContribution(
+                "c", "server", static_descriptor(),
+                tool_exports=(ToolExport("t", "d", "m", object),),
+            ),
+        ),
+    )
+    discovery = PluginDiscovery(lambda: entries(lambda: package))
+    result = discovery.scan()
+    assert result.failures
+
+
+def test_scan_reports_duplicate_package_ids() -> None:
+    package = PluginPackage(
+        "p", "1.0.0", (PluginContribution("c", "server", static_descriptor()),)
+    )
+    discovery = PluginDiscovery(lambda: entries(lambda: package, lambda: package))
+    with pytest.raises(Exception, match="[Dd]uplicate"):
+        discovery.scan()
+
+
+def test_scan_reports_invalid_descriptors_as_failures() -> None:
+    bad = static_descriptor(description="")
+    package = PluginPackage(
+        "p", "1.0.0", (PluginContribution("c", "server", bad),)
+    )
+    discovery = PluginDiscovery(lambda: entries(lambda: package))
+    result = discovery.scan()
+    assert result.packages == ()
+    assert result.failures
