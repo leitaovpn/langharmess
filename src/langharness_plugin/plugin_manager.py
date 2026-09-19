@@ -772,8 +772,25 @@ class PluginManager:
     def apply_config(
         self, overrides: dict[str, dict[str, Any]]
     ) -> dict[str, list[str]]:
-        """Placeholder until the instance update path lands (Task 9/13)."""
-        return {"applied": [], "restart_required": []}
+        """Replace stored plugin configs; instances update in place by UUID."""
+        applied: list[str] = []
+        for name, override in overrides.items():
+            try:
+                descriptor = self.registry.get_by_name(name)
+            except KeyError as exc:
+                raise ValueError(f"Unknown plugin: {name}") from exc
+            for snapshot in self._instances.values():
+                if snapshot.factory != descriptor.factory:
+                    continue
+                enabled = bool(override.get("enabled", True))
+                self._user_properties[snapshot.instance] = {}
+                self.update_instance(
+                    snapshot.instance,
+                    properties=dict(override.get("properties") or {}),
+                    enabled=enabled,
+                )
+            applied.append(name)
+        return {"applied": applied, "restart_required": []}
 
     # ------------------------------------------------------------ persistence
 
