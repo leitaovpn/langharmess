@@ -944,6 +944,10 @@ class PluginManager:
                  instance_record.scope_id), set()
             ).add(instance_record.instance)
             restored.append(snapshot)
+        self._provenance = {
+            registration.instance: registration
+            for registration in loaded.registrations
+        }
         return tuple(restored)
 
     def _restore_scopes(self, scopes: tuple[dict[str, str | None], ...]) -> None:
