@@ -775,12 +775,68 @@ class PluginManager:
         """Placeholder until the instance update path lands (Task 9/13)."""
         return {"applied": [], "restart_required": []}
 
-    # ------------------------------------------------------------- persistence
-    # bind_state/restore/_persist_state/_record_history land in a later task.
+    # ------------------------------------------------------------ persistence
+
+    def bind_state(
+        self, store: RuntimeStateStore, history: PluginHistoryStore
+    ) -> None:
+        self._state_store = store
+        self._history = history
+
+    def registrations(self) -> tuple[PersistedPluginRegistration, ...]:
+        return tuple(self._provenance.values())
+
+    def attach_provenance(self, registration: PersistedPluginRegistration) -> None:
+        self._provenance[registration.instance] = registration
+
+    def detach_provenance(self, instance: str) -> None:
+        self._provenance.pop(instance, None)
 
     def _persist_state(self) -> None:
         if self._state_store is None:
             return
+        scopes = self.scope_tree.snapshot().scopes
+        descriptors = tuple(
+            PersistedDescriptorRecord(
+                descriptor,
+                self._sources.get(
+                    (descriptor.module, descriptor.factory), "assembly"
+                ),
+            )
+            for descriptor in self.registry.list()
+        )
+        instances = tuple(
+            PluginInstanceRecord(
+                snapshot.instance,
+                snapshot.factory,
+                snapshot.module,
+                snapshot.scope_id,
+                dict(snapshot.properties),
+                snapshot.enabled,
+                snapshot.ranking,
+                snapshot.status,
+            )
+            for snapshot in self._instances.values()
+        )
+        snapshot = RuntimeStateSnapshot(
+            self._state_version,
+            tuple(
+                {
+                    "id": str(scope.id),
+                    "parent_id": (
+                        str(scope.parent_id) if scope.parent_id is not None else None
+                    ),
+                    "name": scope.name,
+                }
+                for scope in scopes
+            ),
+            descriptors,
+            instances,
+            tuple(self._provenance.values()),
+        )
+        self._state_version = self._state_store.save(
+            snapshot, expected_version=self._state_version
+        )
 
     def _record_history(
         self,
@@ -794,3 +850,130 @@ class PluginManager:
     ) -> None:
         if self._history is None:
             return
+        try:
+            self._history.append(
+                HistoryEntry(
+                    datetime.now(UTC).isoformat(),
+                    action,
+                    factory,
+                    module,
+                    scope_id,
+                    instance,
+                    dict(detail or {}),
+                )
+            )
+        except Exception:
+            LOGGER.warning("Could not append lifecycle history for %s", action)
+
+    def restore(self) -> tuple[PluginInstanceSnapshot, ...]:
+        """Rebuild persisted scopes, definitions, and instances after restart."""
+        if self._state_store is None:
+            return ()
+        loaded = self._state_store.load()
+        if loaded is None:
+            return ()
+        self._state_version = loaded.version
+        self._restore_scopes(loaded.scopes)
+        for record in loaded.descriptors:
+            descriptor = record.descriptor
+            key = (descriptor.module, descriptor.factory)
+            if key in self._plugins:
+                continue
+            if record.source == "assembly":
+                self._install_definition(descriptor, source="assembly", persist=False)
+                continue
+            discovered = self._discovered.get(key)
+            status: DefinitionStatus = "installed"
+            if discovered is None:
+                status = "missing"
+            elif discovered.version != descriptor.version:
+                status = "upgrade_available"
+            self._install_definition(descriptor, source="discovered", persist=False)
+            self._plugins[key] = replace(self._plugins[key], status=status)
+        restored: list[PluginInstanceSnapshot] = []
+        for instance_record in loaded.instances:
+            key = (instance_record.module, instance_record.factory)
+            definition = self._plugins.get(key)
+            if definition is None:
+                snapshot = PluginInstanceSnapshot(
+                    instance_record.instance, instance_record.factory,
+                    instance_record.module, instance_record.scope_id,
+                    instance_record.properties, instance_record.enabled,
+                    instance_record.ranking, "missing",
+                )
+                self._instances[instance_record.instance] = snapshot
+                restored.append(snapshot)
+                continue
+            if not instance_record.enabled:
+                snapshot = PluginInstanceSnapshot(
+                    instance_record.instance, instance_record.factory,
+                    instance_record.module, instance_record.scope_id,
+                    instance_record.properties, False,
+                    instance_record.ranking, "disabled",
+                )
+                self._instances[instance_record.instance] = snapshot
+                restored.append(snapshot)
+                continue
+            try:
+                effective = self._rehydrate_properties(
+                    instance_record, definition.descriptor
+                )
+                self._instantiate_uuid(
+                    definition.descriptor, instance_record.instance, effective
+                )
+                snapshot = PluginInstanceSnapshot(
+                    instance_record.instance, instance_record.factory,
+                    instance_record.module, instance_record.scope_id,
+                    effective, True, instance_record.ranking, "active",
+                )
+            except Exception:
+                snapshot = PluginInstanceSnapshot(
+                    instance_record.instance, instance_record.factory,
+                    instance_record.module, instance_record.scope_id,
+                    instance_record.properties, instance_record.enabled,
+                    instance_record.ranking, "failed",
+                )
+            self._instances[instance_record.instance] = snapshot
+            self._user_properties[instance_record.instance] = {
+                item: value
+                for item, value in instance_record.properties.items()
+                if item not in _RUNTIME_KEYS
+            }
+            self._registration_instances.setdefault(
+                (instance_record.module, instance_record.factory,
+                 instance_record.scope_id), set()
+            ).add(instance_record.instance)
+            restored.append(snapshot)
+        return tuple(restored)
+
+    def _restore_scopes(self, scopes: tuple[dict[str, str | None], ...]) -> None:
+        pending = {
+            ScopeId(str(item["id"])): item
+            for item in scopes
+            if item["id"] != str(ROOT_SCOPE_ID)
+            and self.scope_tree.get(ScopeId(str(item["id"]))) is None
+        }
+        while pending:
+            progressed = False
+            for scope_id, item in tuple(pending.items()):
+                parent = ScopeId(str(item["parent_id"] or str(ROOT_SCOPE_ID)))
+                if self.scope_tree.get(parent) is None:
+                    continue
+                self.scope_tree.create(scope_id, str(item["name"]), parent)
+                pending.pop(scope_id)
+                progressed = True
+            if not progressed:
+                raise RuntimeError("Persisted scope tree contains an orphan")
+
+    def _rehydrate_properties(
+        self, record: PluginInstanceRecord, descriptor: PluginDescriptor
+    ) -> dict[str, Any]:
+        """Recompute deterministic scope metadata over persisted user config."""
+        user = {
+            key: value for key, value in record.properties.items()
+            if key not in _RUNTIME_KEYS
+        }
+        return self._effective_properties(
+            descriptor, record.scope_id, user,
+            ranking=record.ranking, instance_uuid=record.instance,
+        )

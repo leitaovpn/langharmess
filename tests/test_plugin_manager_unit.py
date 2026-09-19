@@ -231,3 +231,142 @@ class TestDefinitions:
         assert shown.instance_count == 0
         with pytest.raises(PluginNotFoundError):
             manager.show_plugin("missing-factory")
+
+
+class TestPersistence:
+    def make_definition_manager(self) -> PluginManager:
+        manager = manager_with([Echo])
+        manager.discover()
+        manager._context.install_bundle.return_value = Mock()
+        manager._ipopo.instantiate.return_value = Mock()
+        return manager
+
+    def test_bind_state_persists_after_mutation(self) -> None:
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+        )
+
+        manager = self.make_definition_manager()
+        store = InMemoryRuntimeStateStore()
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        manager.install_plugin("echo-factory")
+        loaded = store.load()
+        assert loaded is not None
+        assert loaded.descriptors[0].descriptor.factory == "echo-factory"
+        assert loaded.descriptors[0].source == "discovered"
+
+    def test_persistence_failure_rolls_back_definition(self) -> None:
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+            PluginStateConflictError,
+            RuntimeStateSnapshot,
+        )
+
+        manager = self.make_definition_manager()
+        store = InMemoryRuntimeStateStore()
+        store.save(RuntimeStateSnapshot(0, (), (), (), ()), expected_version=0)
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        manager._state_version = 0  # stale version forces CAS conflict
+        with pytest.raises(PluginStateConflictError):
+            manager.install_plugin("echo-factory")
+        assert manager.registry.get("echo-factory") is None
+        assert manager._bundles == {}
+        manager._context.install_bundle.return_value.stop.assert_called_once()
+
+    def test_history_records_uninstall(self) -> None:
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+        )
+
+        manager = self.make_definition_manager()
+        history = InMemoryPluginHistoryStore()
+        manager.bind_state(InMemoryRuntimeStateStore(), history)
+        manager.install_plugin("echo-factory")
+        manager.uninstall_plugin("echo-factory")
+        actions = [entry.action for entry in history.entries()]
+        assert "install_definition" in actions
+        assert "uninstall_definition" in actions
+
+    def test_restore_rebuilds_instances_with_persisted_uuid(self) -> None:
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+        )
+
+        manager = self.make_definition_manager()
+        store = InMemoryRuntimeStateStore()
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        manager.install_plugin("echo-factory")
+        snapshot = manager.create_instance(
+            "echo-factory", Echo.__module__, ROOT_SCOPE_ID,
+            properties={"plugin.mode": "fast"},
+        )
+
+        second = manager_with([Echo])
+        second.discover()
+        second._context.install_bundle.return_value = Mock()
+        second._ipopo.instantiate.return_value = Mock()
+        second.bind_state(store, InMemoryPluginHistoryStore())
+        restored = second.restore()
+        assert [item.instance for item in restored] == [snapshot.instance]
+        second._ipopo.instantiate.assert_called_once()
+        _, instance_name, properties = second._ipopo.instantiate.call_args.args
+        assert instance_name == snapshot.instance
+        assert properties["plugin.scope_id"] == "root"
+        assert properties["plugin.mode"] == "fast"
+        assert second.get_instance(snapshot.instance).status == "active"
+
+    def test_restore_marks_missing_definition_instance(self) -> None:
+        from langharness_plugin.registry import PluginInstanceRecord
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+            RuntimeStateSnapshot,
+        )
+
+        manager = self.make_definition_manager()
+        store = InMemoryRuntimeStateStore()
+        record = PluginInstanceRecord(
+            "uuid-x", "gone-factory", "gone.module", ROOT_SCOPE_ID, {}
+        )
+        store.save(
+            RuntimeStateSnapshot(0, (), (), (record,), ()), expected_version=0
+        )
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        restored = manager.restore()
+        assert len(restored) == 1
+        assert restored[0].status == "missing"
+        assert manager.get_instance("uuid-x").status == "missing"
+
+    def test_restore_rebuilds_persisted_scopes(self) -> None:
+        from langharness_plugin.state_store import (
+            InMemoryPluginHistoryStore,
+            InMemoryRuntimeStateStore,
+            RuntimeStateSnapshot,
+        )
+
+        manager = self.make_definition_manager()
+        store = InMemoryRuntimeStateStore()
+        store.save(
+            RuntimeStateSnapshot(
+                0,
+                (
+                    {"id": "root", "parent_id": None, "name": "root"},
+                    {"id": "server", "parent_id": "root", "name": "Server"},
+                    {"id": "agent:a", "parent_id": "agent", "name": "A"},
+                    {"id": "agent", "parent_id": "root", "name": "Agent"},
+                ),
+                (),
+                (),
+                (),
+            ),
+            expected_version=0,
+        )
+        manager.bind_state(store, InMemoryPluginHistoryStore())
+        manager.restore()
+        assert manager.scope_tree.get(ScopeId("server")) is not None
+        assert manager.scope_tree.get(ScopeId("agent:a")) is not None
+        assert manager.scope_tree.get(ScopeId("agent:a")).parent_id == ScopeId("agent")
